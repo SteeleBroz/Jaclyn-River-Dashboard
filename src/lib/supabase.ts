@@ -47,3 +47,12 @@ export type CalendarEvent = {
   time?: string
   created_at: string
 }
+
+export type WeeklyNote = {
+  id: number
+  content: string
+  author: string
+  week_start: string
+  created_at: string
+  seen: boolean
+}

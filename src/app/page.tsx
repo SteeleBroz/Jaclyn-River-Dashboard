@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { supabase, Folder, Task, CalendarEvent, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
+import { supabase, Folder, Task, CalendarEvent, WeeklyNote, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday','overflow'] as const
 const DAY_LABELS: Record<string, string> = {
@@ -32,7 +32,8 @@ const getCurrentWeekDates = () => {
   
   return {
     dates: weekDates,
-    weekRange: `${weekStart} - ${weekEnd}`
+    weekRange: `${weekStart} - ${weekEnd}`,
+    weekStartDate: startOfWeek.toISOString().split('T')[0]
   }
 }
 
@@ -40,6 +41,7 @@ export default function Home() {
   const [folders, setFolders] = useState<Folder[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
+  const [weeklyNotes, setWeeklyNotes] = useState<WeeklyNote[]>([])
   const [activeFolder, setActiveFolder] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'jaclyn' | 'river' | 'digest' | 'sendouts'>('jaclyn')
   const [currentMonth, setCurrentMonth] = useState(new Date())
@@ -57,10 +59,11 @@ export default function Home() {
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setSyncing(true)
     try {
-      const [{ data: f }, { data: t }, { data: e }] = await Promise.all([
+      const [{ data: f }, { data: t }, { data: e }, { data: n }] = await Promise.all([
         supabase.from(FOLDERS_TABLE).select('*').order('id'),
         supabase.from(TASKS_TABLE).select('*'),
-        supabase.from('posts').select('*').eq('platform', 'calendar').order('scheduled_for')
+        supabase.from('posts').select('*').eq('platform', 'calendar').order('scheduled_for'),
+        supabase.from('posts').select('*').eq('platform', 'weekly-notes').order('created_at', { ascending: false })
       ])
       if (f) setFolders(f)
       if (t) {
@@ -87,6 +90,18 @@ export default function Home() {
           created_at: post.created_at
         }))
         setEvents(mappedEvents)
+      }
+      if (n) {
+        // Map posts table to weekly notes
+        const mappedNotes = n.map(post => ({
+          id: post.id,
+          content: post.content || '',
+          author: post.folder || '',
+          week_start: post.title || '',
+          created_at: post.created_at,
+          seen: post.status === 'seen'
+        }))
+        setWeeklyNotes(mappedNotes)
       }
     } catch (error) {
       console.error('Error fetching data:', error)
@@ -238,6 +253,61 @@ export default function Home() {
     }
   }
 
+  const getWeeklyNotes = (author: string) => {
+    return weeklyNotes
+      .filter(note => note.author === author && note.week_start === weekStartDate)
+      .slice(0, 4) // Show max 4 recent notes
+  }
+
+  const addWeeklyNote = async (author: string) => {
+    const content = prompt('Add note:')
+    if (!content?.trim()) return
+    
+    const { data } = await supabase.from('posts').insert({
+      title: weekStartDate,
+      content: content.trim(),
+      folder: author,
+      platform: 'weekly-notes',
+      status: 'pending'
+    }).select().single()
+    
+    if (data) {
+      const mappedNote = {
+        id: data.id,
+        content: data.content || '',
+        author: data.folder || '',
+        week_start: data.title || '',
+        created_at: data.created_at,
+        seen: false
+      }
+      setWeeklyNotes(prev => [mappedNote, ...prev])
+    }
+  }
+
+  const markNoteSeen = async (note: WeeklyNote) => {
+    const newStatus = note.seen ? 'pending' : 'seen'
+    await supabase.from('posts').update({ status: newStatus }).eq('id', note.id)
+    setWeeklyNotes(prev => prev.map(n => n.id === note.id ? { ...n, seen: !n.seen } : n))
+  }
+
+  const deleteWeeklyNote = async (noteId: number) => {
+    if (!confirm('Delete this note?')) return
+    await supabase.from('posts').delete().eq('id', noteId)
+    setWeeklyNotes(prev => prev.filter(n => n.id !== noteId))
+  }
+
+  const formatNoteTime = (timestamp: string) => {
+    const date = new Date(timestamp)
+    return date.toLocaleString('en-US', { 
+      timeZone: 'America/New_York',
+      month: 'short', 
+      day: 'numeric', 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    })
+  }
+
   const saveTask = async (task: Task) => {
     const { id, created_at, owner, completed, notes, day_of_week, board, sort_order, ...updates } = task
     // Map dashboard fields back to database schema
@@ -273,7 +343,7 @@ export default function Home() {
   const toggleCollapse = (key: string) =>
     setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
 
-  const { dates: weekDates, weekRange } = getCurrentWeekDates()
+  const { dates: weekDates, weekRange, weekStartDate } = getCurrentWeekDates()
 
   const getUpcomingEvents = () => {
     const today = new Date().toISOString().split('T')[0]
@@ -409,6 +479,60 @@ export default function Home() {
     </div>
   )
 
+  const renderWeeklyNotes = (author: string) => {
+    const notes = getWeeklyNotes(author)
+    
+    return (
+      <div className="bg-[#1a1a2e] rounded-lg p-3 mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-medium text-gray-300">Weekly Notes</h3>
+          <button
+            onClick={() => addWeeklyNote(author)}
+            className="text-xs text-gray-400 hover:text-white transition-colors"
+          >
+            + Add note
+          </button>
+        </div>
+        
+        <div className="space-y-2 max-h-32 overflow-y-auto">
+          {notes.map(note => (
+            <div key={note.id} className="flex items-start gap-2 p-2 bg-[#16213e] rounded text-xs">
+              <input
+                type="checkbox"
+                checked={note.seen}
+                onChange={() => markNoteSeen(note)}
+                className="w-3 h-3 mt-0.5 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0 shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                    note.author === 'jaclyn' ? 'bg-pink-900 text-pink-200' : 'bg-blue-900 text-blue-200'
+                  }`}>
+                    {note.author}
+                  </span>
+                  <span className="text-gray-500 text-xs">{formatNoteTime(note.created_at)}</span>
+                  <button
+                    onClick={() => deleteWeeklyNote(note.id)}
+                    className="text-gray-500 hover:text-red-400 transition-colors ml-auto"
+                    title="Delete note"
+                  >
+                    ×
+                  </button>
+                </div>
+                <p className={`text-gray-200 text-xs leading-relaxed ${note.seen ? 'opacity-60' : ''}`}>
+                  {note.content}
+                </p>
+              </div>
+            </div>
+          ))}
+          {notes.length === 0 && (
+            <div className="text-xs text-gray-500 italic py-2">No notes this week</div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   const renderWeeklyBoard = (board: 'jaclyn' | 'river') => (
     <div className="bg-[#16213e] rounded-xl p-4">
       <div className="flex items-center justify-between mb-4">
@@ -423,6 +547,9 @@ export default function Home() {
           </button>
         </div>
       </div>
+
+      {/* Weekly Notes Section */}
+      {renderWeeklyNotes(board)}
 
       <div className="space-y-3">
         {DAYS.map(day => {
