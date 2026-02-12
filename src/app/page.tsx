@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase, Folder, Task, CalendarEvent, WeeklyNote, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday','overflow'] as const
@@ -38,11 +39,11 @@ const getCurrentWeekDates = () => {
 }
 
 export default function Home() {
+  const router = useRouter()
   const [folders, setFolders] = useState<Folder[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [weeklyNotes, setWeeklyNotes] = useState<WeeklyNote[]>([])
-  const [activeFolder, setActiveFolder] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'jaclyn' | 'river' | 'digest' | 'sendouts'>('jaclyn')
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day' | 'year'>('month')
@@ -388,12 +389,8 @@ export default function Home() {
     setEditingTask(null)
   }
 
-  const filteredTasks = activeFolder
-    ? tasks.filter(t => t.folder === activeFolder)
-    : tasks
-
   const boardTasks = (board: string, day: string) => {
-    let t = filteredTasks.filter(t => t.board === board && t.day_of_week === day)
+    let t = tasks.filter(t => t.board === board && t.day_of_week === day)
     if (hideCompleted[board]) t = t.filter(t => !t.completed)
     return t
   }
@@ -1018,10 +1015,8 @@ export default function Home() {
         {folders.map(f => (
           <button
             key={f.id}
-            onClick={() => setActiveFolder(activeFolder === f.name ? null : f.name)}
-            className={`snap-start shrink-0 px-4 py-2 rounded-full text-white text-sm font-medium transition-all ${
-              activeFolder === f.name ? 'ring-2 ring-white ring-offset-2 ring-offset-[#1a1a2e] scale-105' : 'opacity-80 hover:opacity-100'
-            }`}
+            onClick={() => router.push(`/folder/${f.name.toLowerCase().replace(/\s+/g, '-')}`)}
+            className="snap-start shrink-0 px-4 py-2 rounded-full text-white text-sm font-medium transition-all opacity-80 hover:opacity-100 hover:scale-105"
             style={{ backgroundColor: f.color }}
           >
             {f.name}
