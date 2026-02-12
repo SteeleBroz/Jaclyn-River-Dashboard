@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { supabase, Folder, Task } from '@/lib/supabase'
+import { supabase, Folder, Task, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday','overflow'] as const
 const DAY_LABELS: Record<string, string> = {
@@ -23,8 +23,8 @@ export default function Home() {
 
   const fetchData = useCallback(async () => {
     const [{ data: f }, { data: t }] = await Promise.all([
-      supabase.from('folders').select('*').order('sort_order'),
-      supabase.from('tasks').select('*').order('sort_order')
+      supabase.from(FOLDERS_TABLE).select('*').order('sort_order'),
+      supabase.from(TASKS_TABLE).select('*').order('sort_order')
     ])
     if (f) setFolders(f)
     if (t) setTasks(t)
@@ -35,14 +35,14 @@ export default function Home() {
 
   const toggleComplete = async (task: Task) => {
     const updated = !task.completed
-    await supabase.from('tasks').update({ completed: updated }).eq('id', task.id)
+    await supabase.from(TASKS_TABLE).update({ completed: updated }).eq('id', task.id)
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: updated } : t))
   }
 
   const addTask = async (board: string, day: string) => {
     const title = prompt('Task title:')
     if (!title?.trim()) return
-    const { data } = await supabase.from('tasks').insert({
+    const { data } = await supabase.from(TASKS_TABLE).insert({
       title: title.trim(), day_of_week: day, board, owner: board, priority: 'none', sort_order: 0
     }).select().single()
     if (data) setTasks(prev => [...prev, data])
@@ -50,14 +50,14 @@ export default function Home() {
 
   const saveTask = async (task: Task) => {
     const { id, created_at, ...updates } = task
-    await supabase.from('tasks').update(updates).eq('id', id)
+    await supabase.from(TASKS_TABLE).update(updates).eq('id', id)
     setTasks(prev => prev.map(t => t.id === id ? task : t))
     setEditingTask(null)
   }
 
   const deleteTask = async (id: string) => {
     if (!confirm('Delete this task?')) return
-    await supabase.from('tasks').delete().eq('id', id)
+    await supabase.from(TASKS_TABLE).delete().eq('id', id)
     setTasks(prev => prev.filter(t => t.id !== id))
     setEditingTask(null)
   }

@@ -1,7 +1,8 @@
 -- Run this in Supabase SQL Editor (https://supabase.com/dashboard)
+-- Uses "dash_" prefix to avoid conflicting with existing tables
 
 -- Folders table
-CREATE TABLE IF NOT EXISTS folders (
+CREATE TABLE IF NOT EXISTS dash_folders (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
   color text NOT NULL,
@@ -10,7 +11,7 @@ CREATE TABLE IF NOT EXISTS folders (
 );
 
 -- Tasks table
-CREATE TABLE IF NOT EXISTS tasks (
+CREATE TABLE IF NOT EXISTS dash_tasks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   title text NOT NULL,
   day_of_week text NOT NULL,
@@ -18,22 +19,24 @@ CREATE TABLE IF NOT EXISTS tasks (
   priority text DEFAULT 'none',
   due_date date,
   notes text,
-  folder_id uuid REFERENCES folders(id),
+  folder_id uuid REFERENCES dash_folders(id),
   owner text NOT NULL,
   completed boolean DEFAULT false,
   sort_order integer DEFAULT 0,
   created_at timestamptz DEFAULT now()
 );
 
--- Disable RLS for now (private dashboard)
-ALTER TABLE folders ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
+-- Disable RLS (private dashboard)
+ALTER TABLE dash_folders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dash_tasks ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow all on folders" ON folders FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all on tasks" ON tasks FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow all on dash_folders" ON dash_folders;
+DROP POLICY IF EXISTS "Allow all on dash_tasks" ON dash_tasks;
+CREATE POLICY "Allow all on dash_folders" ON dash_folders FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on dash_tasks" ON dash_tasks FOR ALL USING (true) WITH CHECK (true);
 
 -- Seed folders
-INSERT INTO folders (name, color, sort_order) VALUES
+INSERT INTO dash_folders (name, color, sort_order) VALUES
   ('SteeleBroz', '#EF4444', 1),
   ('Personal', '#22C55E', 2),
   ('Stryker', '#06B6D4', 3),
@@ -42,4 +45,5 @@ INSERT INTO folders (name, color, sort_order) VALUES
   ('Missile', '#F97316', 6),
   ('Marriage', '#A855F7', 7),
   ('NP', '#3B82F6', 8),
-  ('SoFresh', '#F87171', 9);
+  ('SoFresh', '#F87171', 9)
+ON CONFLICT DO NOTHING;

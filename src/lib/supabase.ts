@@ -12,6 +12,9 @@ export type Folder = {
   sort_order: number
 }
 
+export const FOLDERS_TABLE = 'dash_folders'
+export const TASKS_TABLE = 'dash_tasks'
+
 export type Task = {
   id: string
   title: string
