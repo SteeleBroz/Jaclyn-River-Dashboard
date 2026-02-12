@@ -50,30 +50,74 @@ export default function Home() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
 
-  const fetchData = useCallback(async () => {
-    const [{ data: f }, { data: t }] = await Promise.all([
-      supabase.from(FOLDERS_TABLE).select('*').order('id'),
-      supabase.from(TASKS_TABLE).select('*')
-    ])
-    if (f) setFolders(f)
-    if (t) {
-      // Map existing schema to expected dashboard format
-      const mappedTasks = t.map(task => ({
-        ...task,
-        owner: task.assignee,
-        completed: !!task.completed_at,
-        notes: task.description,
-        day_of_week: 'monday', // Default for existing tasks
-        board: task.assignee === 'jaclyn' ? 'jaclyn' : 'river',
-        sort_order: 0
-      }))
-      setTasks(mappedTasks)
+  const fetchData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setSyncing(true)
+    try {
+      const [{ data: f }, { data: t }] = await Promise.all([
+        supabase.from(FOLDERS_TABLE).select('*').order('id'),
+        supabase.from(TASKS_TABLE).select('*')
+      ])
+      if (f) setFolders(f)
+      if (t) {
+        // Map existing schema to expected dashboard format
+        const mappedTasks = t.map(task => ({
+          ...task,
+          owner: task.assignee,
+          completed: !!task.completed_at,
+          notes: task.description,
+          day_of_week: 'monday', // Default for existing tasks
+          board: task.assignee === 'jaclyn' ? 'jaclyn' : 'river',
+          sort_order: 0
+        }))
+        setTasks(mappedTasks)
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error)
+    } finally {
+      setLoading(false)
+      setSyncing(false)
     }
-    setLoading(false)
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { 
+    fetchData()
+    
+    // Set up real-time subscriptions
+    const taskSubscription = supabase
+      .channel('tasks-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: TASKS_TABLE },
+        (payload) => {
+          console.log('Task change:', payload)
+          fetchData(true) // Refresh with sync indicator
+        }
+      )
+      .subscribe()
+
+    const folderSubscription = supabase
+      .channel('folders-changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: FOLDERS_TABLE },
+        (payload) => {
+          console.log('Folder change:', payload)
+          fetchData(true)
+        }
+      )
+      .subscribe()
+
+    // Backup periodic refresh every 30 seconds
+    const intervalRefresh = setInterval(() => {
+      fetchData(true)
+    }, 30000)
+
+    return () => {
+      taskSubscription.unsubscribe()
+      folderSubscription.unsubscribe()
+      clearInterval(intervalRefresh)
+    }
+  }, [fetchData])
 
   const toggleComplete = async (task: Task) => {
     const updated = !task.completed
@@ -323,9 +367,30 @@ export default function Home() {
 
   return (
     <main className="min-h-screen p-4 md:p-6 max-w-7xl mx-auto">
-      <h1 className="text-2xl md:text-3xl font-bold text-white mb-6 text-center">
-        Life Command Center
-      </h1>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex-1"></div>
+        <h1 className="text-2xl md:text-3xl font-bold text-white text-center">
+          Life Command Center
+        </h1>
+        <div className="flex-1 flex justify-end items-center gap-3">
+          {syncing && (
+            <div className="flex items-center gap-2 text-sm text-gray-400">
+              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+              <span>Syncing...</span>
+            </div>
+          )}
+          <button
+            onClick={() => fetchData(true)}
+            disabled={syncing}
+            className="p-2 text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+            title="Refresh data"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        </div>
+      </div>
 
       {/* Folder Tiles */}
       <div className="flex gap-2 overflow-x-auto pb-3 mb-6 snap-x snap-mandatory scrollbar-thin">
