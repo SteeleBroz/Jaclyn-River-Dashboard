@@ -6,26 +6,35 @@ export const supabase = createClient(
 )
 
 export type Folder = {
-  id: string
+  id: number
   name: string
+  description: string | null
+  voice_persona: string | null
   color: string
-  sort_order: number
+  created_at: string
 }
 
-export const FOLDERS_TABLE = 'dash_folders'
-export const TASKS_TABLE = 'dash_tasks'
+export const FOLDERS_TABLE = 'folders'
+export const TASKS_TABLE = 'tasks'
 
 export type Task = {
-  id: string
+  id: number
   title: string
-  day_of_week: string
-  board: string
+  description: string | null
+  folder: string
+  assignee: string
+  status: string
   priority: string
   due_date: string | null
-  notes: string | null
-  folder_id: string | null
-  owner: string
-  completed: boolean
-  sort_order: number
+  depends_on_task_id: number | null
   created_at: string
+  updated_at: string
+  completed_at: string | null
+  // Virtual fields for dashboard functionality
+  day_of_week?: string
+  board?: string
+  owner?: string
+  completed?: boolean
+  notes?: string
+  sort_order?: number
 }

@@ -23,11 +23,23 @@ export default function Home() {
 
   const fetchData = useCallback(async () => {
     const [{ data: f }, { data: t }] = await Promise.all([
-      supabase.from(FOLDERS_TABLE).select('*').order('sort_order'),
-      supabase.from(TASKS_TABLE).select('*').order('sort_order')
+      supabase.from(FOLDERS_TABLE).select('*').order('id'),
+      supabase.from(TASKS_TABLE).select('*')
     ])
     if (f) setFolders(f)
-    if (t) setTasks(t)
+    if (t) {
+      // Map existing schema to expected dashboard format
+      const mappedTasks = t.map(task => ({
+        ...task,
+        owner: task.assignee,
+        completed: !!task.completed_at,
+        notes: task.description,
+        day_of_week: 'monday', // Default for existing tasks
+        board: task.assignee === 'jaclyn' ? 'jaclyn' : 'river',
+        sort_order: 0
+      }))
+      setTasks(mappedTasks)
+    }
     setLoading(false)
   }, [])
 
@@ -35,27 +47,54 @@ export default function Home() {
 
   const toggleComplete = async (task: Task) => {
     const updated = !task.completed
-    await supabase.from(TASKS_TABLE).update({ completed: updated }).eq('id', task.id)
-    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: updated } : t))
+    const updateData = updated 
+      ? { completed_at: new Date().toISOString(), status: 'completed' }
+      : { completed_at: null, status: 'pending' }
+    await supabase.from(TASKS_TABLE).update(updateData).eq('id', task.id)
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: updated, completed_at: updateData.completed_at } : t))
   }
 
   const addTask = async (board: string, day: string) => {
     const title = prompt('Task title:')
     if (!title?.trim()) return
     const { data } = await supabase.from(TASKS_TABLE).insert({
-      title: title.trim(), day_of_week: day, board, owner: board, priority: 'none', sort_order: 0
+      title: title.trim(),
+      description: '',
+      folder: 'PERSONAL',
+      assignee: board,
+      status: 'pending',
+      priority: 'medium'
     }).select().single()
-    if (data) setTasks(prev => [...prev, data])
+    if (data) {
+      const mappedTask = {
+        ...data,
+        owner: data.assignee,
+        completed: false,
+        notes: data.description,
+        day_of_week: day,
+        board,
+        sort_order: 0
+      }
+      setTasks(prev => [...prev, mappedTask])
+    }
   }
 
   const saveTask = async (task: Task) => {
-    const { id, created_at, ...updates } = task
-    await supabase.from(TASKS_TABLE).update(updates).eq('id', id)
+    const { id, created_at, owner, completed, notes, day_of_week, board, sort_order, ...updates } = task
+    // Map dashboard fields back to database schema
+    const dbUpdates = {
+      ...updates,
+      assignee: owner,
+      description: notes,
+      completed_at: completed ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString()
+    }
+    await supabase.from(TASKS_TABLE).update(dbUpdates).eq('id', id)
     setTasks(prev => prev.map(t => t.id === id ? task : t))
     setEditingTask(null)
   }
 
-  const deleteTask = async (id: string) => {
+  const deleteTask = async (id: number) => {
     if (!confirm('Delete this task?')) return
     await supabase.from(TASKS_TABLE).delete().eq('id', id)
     setTasks(prev => prev.filter(t => t.id !== id))
@@ -63,7 +102,7 @@ export default function Home() {
   }
 
   const filteredTasks = activeFolder
-    ? tasks.filter(t => t.folder_id === activeFolder)
+    ? tasks.filter(t => t.folder === activeFolder)
     : tasks
 
   const boardTasks = (board: string, day: string) => {
@@ -92,9 +131,9 @@ export default function Home() {
         {folders.map(f => (
           <button
             key={f.id}
-            onClick={() => setActiveFolder(activeFolder === f.id ? null : f.id)}
+            onClick={() => setActiveFolder(activeFolder === f.name ? null : f.name)}
             className={`snap-start shrink-0 px-4 py-2 rounded-full text-white text-sm font-medium transition-all ${
-              activeFolder === f.id ? 'ring-2 ring-white ring-offset-2 ring-offset-[#1a1a2e] scale-105' : 'opacity-80 hover:opacity-100'
+              activeFolder === f.name ? 'ring-2 ring-white ring-offset-2 ring-offset-[#1a1a2e] scale-105' : 'opacity-80 hover:opacity-100'
             }`}
             style={{ backgroundColor: f.color }}
           >
@@ -164,10 +203,10 @@ export default function Home() {
                             >
                               {task.title}
                             </span>
-                            {task.folder_id && (
+                            {task.folder && (
                               <span
                                 className="w-2 h-2 rounded-full shrink-0"
-                                style={{ backgroundColor: folders.find(f => f.id === task.folder_id)?.color }}
+                                style={{ backgroundColor: folders.find(f => f.name === task.folder)?.color }}
                               />
                             )}
                           </div>
@@ -242,12 +281,12 @@ export default function Home() {
               <label className="text-xs text-gray-400 mb-1 block">Folder</label>
               <select
                 className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
-                value={editingTask.folder_id || ''}
-                onChange={e => setEditingTask({ ...editingTask, folder_id: e.target.value || null })}
+                value={editingTask.folder || ''}
+                onChange={e => setEditingTask({ ...editingTask, folder: e.target.value || '' })}
               >
                 <option value="">None</option>
                 {folders.map(f => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
+                  <option key={f.id} value={f.name}>{f.name}</option>
                 ))}
               </select>
             </div>
@@ -258,7 +297,7 @@ export default function Home() {
                 className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none resize-none"
                 rows={3}
                 value={editingTask.notes || ''}
-                onChange={e => setEditingTask({ ...editingTask, notes: e.target.value || null })}
+                onChange={e => setEditingTask({ ...editingTask, notes: e.target.value || '' })}
                 placeholder="Notes..."
               />
             </div>
