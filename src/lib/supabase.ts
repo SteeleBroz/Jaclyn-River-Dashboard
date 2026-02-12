@@ -38,3 +38,12 @@ export type Task = {
   notes?: string
   sort_order?: number
 }
+
+export type CalendarEvent = {
+  id: number
+  title: string
+  description: string | null
+  date: string
+  time?: string
+  created_at: string
+}

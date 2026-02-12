@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { supabase, Folder, Task, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
+import { supabase, Folder, Task, CalendarEvent, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday','overflow'] as const
 const DAY_LABELS: Record<string, string> = {
@@ -39,8 +39,10 @@ const getCurrentWeekDates = () => {
 export default function Home() {
   const [folders, setFolders] = useState<Folder[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
+  const [events, setEvents] = useState<CalendarEvent[]>([])
   const [activeFolder, setActiveFolder] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'jaclyn' | 'river' | 'digest' | 'sendouts'>('jaclyn')
+  const [currentMonth, setCurrentMonth] = useState(new Date())
   const [hideCompleted, setHideCompleted] = useState<Record<string, boolean>>({ 
     jaclyn: false, 
     river: false, 
@@ -55,9 +57,10 @@ export default function Home() {
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setSyncing(true)
     try {
-      const [{ data: f }, { data: t }] = await Promise.all([
+      const [{ data: f }, { data: t }, { data: e }] = await Promise.all([
         supabase.from(FOLDERS_TABLE).select('*').order('id'),
-        supabase.from(TASKS_TABLE).select('*')
+        supabase.from(TASKS_TABLE).select('*'),
+        supabase.from('posts').select('*').eq('platform', 'calendar').order('scheduled_for')
       ])
       if (f) setFolders(f)
       if (t) {
@@ -72,6 +75,18 @@ export default function Home() {
           sort_order: 0
         }))
         setTasks(mappedTasks)
+      }
+      if (e) {
+        // Map posts table to calendar events
+        const mappedEvents = e.map(post => ({
+          id: post.id,
+          title: post.title,
+          description: post.content,
+          date: post.scheduled_for?.split('T')[0] || new Date().toISOString().split('T')[0],
+          time: post.scheduled_for?.split('T')[1]?.substring(0, 5),
+          created_at: post.created_at
+        }))
+        setEvents(mappedEvents)
       }
     } catch (error) {
       console.error('Error fetching data:', error)
@@ -107,6 +122,17 @@ export default function Home() {
       )
       .subscribe()
 
+    const eventSubscription = supabase
+      .channel('events-changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'posts' },
+        (payload) => {
+          console.log('Event change:', payload)
+          fetchData(true)
+        }
+      )
+      .subscribe()
+
     // Backup periodic refresh every 30 seconds
     const intervalRefresh = setInterval(() => {
       fetchData(true)
@@ -115,6 +141,7 @@ export default function Home() {
     return () => {
       taskSubscription.unsubscribe()
       folderSubscription.unsubscribe()
+      eventSubscription.unsubscribe()
       clearInterval(intervalRefresh)
     }
   }, [fetchData])
@@ -178,6 +205,39 @@ export default function Home() {
     }
   }
 
+  const addEvent = async () => {
+    const title = prompt('Event title:')
+    if (!title?.trim()) return
+    const date = prompt('Date (YYYY-MM-DD):')
+    if (!date?.trim()) return
+    const time = prompt('Time (optional, HH:MM):')
+    
+    const scheduledFor = time?.trim() 
+      ? `${date}T${time}:00`
+      : `${date}T12:00:00`
+    
+    const { data } = await supabase.from('posts').insert({
+      title: title.trim(),
+      content: '',
+      folder: 'PERSONAL',
+      platform: 'calendar',
+      status: 'published',
+      scheduled_for: scheduledFor
+    }).select().single()
+    
+    if (data) {
+      const mappedEvent = {
+        id: data.id,
+        title: data.title,
+        description: data.content,
+        date: data.scheduled_for?.split('T')[0] || date,
+        time: data.scheduled_for?.split('T')[1]?.substring(0, 5),
+        created_at: data.created_at
+      }
+      setEvents(prev => [...prev, mappedEvent])
+    }
+  }
+
   const saveTask = async (task: Task) => {
     const { id, created_at, owner, completed, notes, day_of_week, board, sort_order, ...updates } = task
     // Map dashboard fields back to database schema
@@ -214,6 +274,79 @@ export default function Home() {
     setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
 
   const { dates: weekDates, weekRange } = getCurrentWeekDates()
+
+  const getUpcomingEvents = () => {
+    const today = new Date().toISOString().split('T')[0]
+    return events
+      .filter(event => event.date >= today)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .slice(0, 10)
+  }
+
+  const formatEventDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    const today = new Date()
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    
+    if (dateStr === today.toISOString().split('T')[0]) return 'Today'
+    if (dateStr === tomorrow.toISOString().split('T')[0]) return 'Tomorrow'
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })
+  }
+
+  const renderCalendarPanel = () => (
+    <div className="w-80 bg-[#16213e] rounded-xl p-4 h-fit">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-bold text-white">
+          {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+        </h3>
+        <div className="flex gap-1">
+          <button
+            onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
+            className="p-1 text-gray-400 hover:text-white transition-colors"
+          >
+            ‹
+          </button>
+          <button
+            onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
+            className="p-1 text-gray-400 hover:text-white transition-colors"
+          >
+            ›
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <h4 className="text-sm font-medium text-gray-300 mb-2">Upcoming Events</h4>
+        <div className="space-y-2 max-h-60 overflow-y-auto">
+          {getUpcomingEvents().map(event => (
+            <div key={event.id} className="p-2 bg-[#1a1a2e] rounded-lg">
+              <div className="font-medium text-white text-sm">{event.title}</div>
+              <div className="text-xs text-gray-400">
+                {formatEventDate(event.date)}
+                {event.time && ` • ${event.time}`}
+              </div>
+            </div>
+          ))}
+          {getUpcomingEvents().length === 0 && (
+            <div className="text-sm text-gray-500 italic">No upcoming events</div>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <button
+          onClick={addEvent}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-lg text-sm font-medium transition-colors"
+        >
+          Add Event
+        </button>
+        <button className="w-full bg-gray-700 hover:bg-gray-600 text-white py-2 px-3 rounded-lg text-sm font-medium transition-colors">
+          Full Calendar
+        </button>
+      </div>
+    </div>
+  )
 
   const getChecklistItems = (type: 'daily-digest' | 'send-outs') => {
     let items = tasks.filter(t => t.folder === type)
@@ -366,13 +499,11 @@ export default function Home() {
   )
 
   return (
-    <main className="min-h-screen p-4 md:p-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex-1"></div>
-        <h1 className="text-2xl md:text-3xl font-bold text-white text-center">
-          Life Command Center
-        </h1>
-        <div className="flex-1 flex justify-end items-center gap-3">
+    <main className="min-h-screen p-4 md:p-6 max-w-[1400px] mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-lg font-bold text-white">Command HQ</h1>
+        <div className="flex items-center gap-3">
           {syncing && (
             <div className="flex items-center gap-2 text-sm text-gray-400">
               <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
@@ -392,6 +523,15 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Quote of the Day */}
+      <div className="bg-[#16213e] rounded-xl p-4 mb-6">
+        <div className="text-center">
+          <div className="text-gray-400 text-sm italic mb-1">Quote of the Day</div>
+          <div className="text-white text-lg font-medium">"Focus on progress, not perfection."</div>
+          <div className="text-gray-500 text-xs mt-1">— Daily Wisdom</div>
+        </div>
+      </div>
+
       {/* Folder Tiles */}
       <div className="flex gap-2 overflow-x-auto pb-3 mb-6 snap-x snap-mandatory scrollbar-thin">
         {folders.map(f => (
@@ -408,8 +548,10 @@ export default function Home() {
         ))}
       </div>
 
-      {/* Main Workspace */}
-      <div className="space-y-6">
+      {/* Main Layout - Left Content + Right Calendar */}
+      <div className="flex gap-6">
+        {/* Main Workspace */}
+        <div className="flex-1 space-y-6">
         {/* Tab Navigation */}
         <div className="flex gap-1 bg-[#16213e] rounded-xl p-1">
           {[
@@ -437,6 +579,10 @@ export default function Home() {
         {activeTab === 'river' && renderWeeklyBoard('river')}
         {activeTab === 'digest' && renderChecklist('daily-digest', 'Daily Digest')}
         {activeTab === 'sendouts' && renderChecklist('send-outs', 'Send Outs')}
+        </div>
+
+        {/* Calendar Panel */}
+        {renderCalendarPanel()}
       </div>
 
       {/* Edit Modal */}
