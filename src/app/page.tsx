@@ -12,10 +12,35 @@ const PRIORITY_COLORS: Record<string, string> = {
   high: 'bg-red-500', medium: 'bg-yellow-500', low: 'bg-blue-500'
 }
 
+// Get current week dates in EST timezone
+const getCurrentWeekDates = () => {
+  const now = new Date()
+  const est = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  const currentDay = est.getDay()
+  const startOfWeek = new Date(est)
+  startOfWeek.setDate(est.getDate() - (currentDay === 0 ? 6 : currentDay - 1))
+  
+  const weekDates = []
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(startOfWeek)
+    date.setDate(startOfWeek.getDate() + i)
+    weekDates.push(date)
+  }
+  
+  const weekStart = weekDates[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })
+  const weekEnd = weekDates[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })
+  
+  return {
+    dates: weekDates,
+    weekRange: `${weekStart} - ${weekEnd}`
+  }
+}
+
 export default function Home() {
   const [folders, setFolders] = useState<Folder[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [activeFolder, setActiveFolder] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'jaclyn' | 'river' | 'digest' | 'sendouts'>('jaclyn')
   const [hideCompleted, setHideCompleted] = useState<Record<string, boolean>>({ jaclyn: false, river: false })
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [editingTask, setEditingTask] = useState<Task | null>(null)
@@ -114,9 +139,100 @@ export default function Home() {
   const toggleCollapse = (key: string) =>
     setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
 
+  const { dates: weekDates, weekRange } = getCurrentWeekDates()
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-xl text-gray-400 animate-pulse">Loading...</div>
+    </div>
+  )
+
+  const renderWeeklyBoard = (board: 'jaclyn' | 'river') => (
+    <div className="bg-[#16213e] rounded-xl p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold text-white capitalize">{board}</h2>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-400">{weekRange}</span>
+          <button
+            onClick={() => setHideCompleted(prev => ({ ...prev, [board]: !prev[board] }))}
+            className="text-xs text-gray-400 hover:text-white transition-colors"
+          >
+            {hideCompleted[board] ? 'Show' : 'Hide'} completed
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {DAYS.map(day => {
+          const isOverflow = day === 'overflow'
+          const dayIndex = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].indexOf(day)
+          const dateForDay = !isOverflow && dayIndex !== -1 ? weekDates[dayIndex] : null
+          const tasksForDay = boardTasks(board, day)
+          const isCollapsed = collapsed[`${board}-${day}`]
+
+          return (
+            <div key={day} className="bg-[#1a1a2e] rounded-lg overflow-hidden">
+              <button
+                onClick={() => toggleCollapse(`${board}-${day}`)}
+                className="w-full flex items-center justify-between p-3 hover:bg-[#202040] transition-colors"
+              >
+                <div className="text-left">
+                  <div className="font-medium text-white text-sm">{DAY_LABELS[day]}</div>
+                  {dateForDay && (
+                    <div className="text-xs text-gray-400">
+                      {dateForDay.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">{tasksForDay.length}</span>
+                  <span className={`transition-transform ${isCollapsed ? 'rotate-180' : ''}`}>▼</span>
+                </div>
+              </button>
+
+              {!isCollapsed && (
+                <div className="px-3 pb-3 space-y-2">
+                  {tasksForDay.map(task => (
+                    <div key={task.id} className="group flex items-center gap-3 p-2 hover:bg-[#252545] rounded-lg transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={task.completed}
+                        onChange={() => toggleComplete(task)}
+                        className="w-4 h-4 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                      />
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        {task.priority !== 'none' && (
+                          <div className={`w-2 h-2 rounded-full ${PRIORITY_COLORS[task.priority]}`} />
+                        )}
+                        <span
+                          onClick={() => setEditingTask(task)}
+                          className={`text-sm cursor-pointer flex-1 ${
+                            task.completed ? 'line-through text-gray-500' : 'text-gray-200'
+                          }`}
+                        >
+                          {task.title}
+                        </span>
+                        {task.folder && (
+                          <span
+                            className="w-2 h-2 rounded-full shrink-0"
+                            style={{ backgroundColor: folders.find(f => f.name === task.folder)?.color }}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => addTask(board, day)}
+                    className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1 transition-colors"
+                  >
+                    + Add item...
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 
@@ -142,89 +258,45 @@ export default function Home() {
         ))}
       </div>
 
-      {/* Boards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {['jaclyn', 'river'].map(board => (
-          <div key={board} className="bg-[#16213e] rounded-xl p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-white capitalize">{board}</h2>
-              <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={hideCompleted[board]}
-                  onChange={() => setHideCompleted(prev => ({ ...prev, [board]: !prev[board] }))}
-                  className="rounded"
-                />
-                Hide completed
-              </label>
-            </div>
+      {/* Main Workspace */}
+      <div className="space-y-6">
+        {/* Tab Navigation */}
+        <div className="flex gap-1 bg-[#16213e] rounded-xl p-1">
+          {[
+            { id: 'jaclyn', label: 'Jaclyn' },
+            { id: 'river', label: 'River' },
+            { id: 'digest', label: 'Daily Digest' },
+            { id: 'sendouts', label: 'Send Outs' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-all ${
+                activeTab === tab.id 
+                  ? 'bg-[#1a1a2e] text-white' 
+                  : 'text-gray-400 hover:text-white hover:bg-[#1a1a2e]/50'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-            <div className="space-y-1">
-              {DAYS.map(day => {
-                const key = `${board}-${day}`
-                const dayTasks = boardTasks(board, day)
-                const isCollapsed = collapsed[key]
-                return (
-                  <div key={key}>
-                    <button
-                      onClick={() => toggleCollapse(key)}
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-[#1a1a2e] hover:bg-[#1f2544] transition-colors"
-                    >
-                      <span className="text-sm font-medium text-gray-300">
-                        {DAY_LABELS[day]}
-                        <span className="ml-2 text-xs text-gray-500">({dayTasks.length})</span>
-                      </span>
-                      <svg className={`w-4 h-4 text-gray-500 transition-transform ${isCollapsed ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-
-                    {!isCollapsed && (
-                      <div className="pl-2 pr-1 py-1 space-y-1">
-                        {dayTasks.map(task => (
-                          <div
-                            key={task.id}
-                            className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[#1f2544] group transition-colors"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={task.completed}
-                              onChange={() => toggleComplete(task)}
-                              className="rounded shrink-0"
-                            />
-                            {task.priority !== 'none' && (
-                              <span className={`w-2 h-2 rounded-full shrink-0 ${PRIORITY_COLORS[task.priority]}`} />
-                            )}
-                            <span
-                              onClick={() => setEditingTask({ ...task })}
-                              className={`text-sm cursor-pointer flex-1 ${
-                                task.completed ? 'line-through text-gray-500' : 'text-gray-200'
-                              }`}
-                            >
-                              {task.title}
-                            </span>
-                            {task.folder && (
-                              <span
-                                className="w-2 h-2 rounded-full shrink-0"
-                                style={{ backgroundColor: folders.find(f => f.name === task.folder)?.color }}
-                              />
-                            )}
-                          </div>
-                        ))}
-                        <button
-                          onClick={() => addTask(board, day)}
-                          className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1 transition-colors"
-                        >
-                          + Add item...
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+        {/* Tab Content */}
+        {activeTab === 'jaclyn' && renderWeeklyBoard('jaclyn')}
+        {activeTab === 'river' && renderWeeklyBoard('river')}
+        {activeTab === 'digest' && (
+          <div className="bg-[#16213e] rounded-xl p-8 text-center">
+            <div className="text-gray-400 text-lg">Daily Digest</div>
+            <div className="text-gray-500 text-sm mt-2">Coming soon...</div>
           </div>
-        ))}
+        )}
+        {activeTab === 'sendouts' && (
+          <div className="bg-[#16213e] rounded-xl p-8 text-center">
+            <div className="text-gray-400 text-lg">Send Outs</div>
+            <div className="text-gray-500 text-sm mt-2">Coming soon...</div>
+          </div>
+        )}
       </div>
 
       {/* Edit Modal */}
