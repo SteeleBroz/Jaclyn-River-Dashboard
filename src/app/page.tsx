@@ -41,7 +41,12 @@ export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [activeFolder, setActiveFolder] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'jaclyn' | 'river' | 'digest' | 'sendouts'>('jaclyn')
-  const [hideCompleted, setHideCompleted] = useState<Record<string, boolean>>({ jaclyn: false, river: false })
+  const [hideCompleted, setHideCompleted] = useState<Record<string, boolean>>({ 
+    jaclyn: false, 
+    river: false, 
+    digest: false, 
+    sendouts: false 
+  })
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [loading, setLoading] = useState(true)
@@ -104,6 +109,31 @@ export default function Home() {
     }
   }
 
+  const addChecklistItem = async (type: 'daily-digest' | 'send-outs') => {
+    const title = prompt('Item:')
+    if (!title?.trim()) return
+    const { data } = await supabase.from(TASKS_TABLE).insert({
+      title: title.trim(),
+      description: '',
+      folder: type,
+      assignee: 'jaclyn',
+      status: 'pending',
+      priority: 'none'
+    }).select().single()
+    if (data) {
+      const mappedTask = {
+        ...data,
+        owner: data.assignee,
+        completed: false,
+        notes: data.description,
+        day_of_week: 'monday',
+        board: 'jaclyn',
+        sort_order: 0
+      }
+      setTasks(prev => [...prev, mappedTask])
+    }
+  }
+
   const saveTask = async (task: Task) => {
     const { id, created_at, owner, completed, notes, day_of_week, board, sort_order, ...updates } = task
     // Map dashboard fields back to database schema
@@ -140,6 +170,61 @@ export default function Home() {
     setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
 
   const { dates: weekDates, weekRange } = getCurrentWeekDates()
+
+  const getChecklistItems = (type: 'daily-digest' | 'send-outs') => {
+    let items = tasks.filter(t => t.folder === type)
+    if (hideCompleted[type === 'daily-digest' ? 'digest' : 'sendouts']) {
+      items = items.filter(t => !t.completed)
+    }
+    return items
+  }
+
+  const renderChecklist = (type: 'daily-digest' | 'send-outs', title: string) => {
+    const items = getChecklistItems(type)
+    const tabKey = type === 'daily-digest' ? 'digest' : 'sendouts'
+    
+    return (
+      <div className="bg-[#16213e] rounded-xl p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-white">{title}</h2>
+          <button
+            onClick={() => setHideCompleted(prev => ({ ...prev, [tabKey]: !prev[tabKey] }))}
+            className="text-xs text-gray-400 hover:text-white transition-colors"
+          >
+            {hideCompleted[tabKey] ? 'Show' : 'Hide'} completed
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          {items.map(item => (
+            <div key={item.id} className="flex items-center gap-3 p-2 hover:bg-[#1a1a2e] rounded-lg transition-colors group">
+              <input
+                type="checkbox"
+                checked={item.completed}
+                onChange={() => toggleComplete(item)}
+                className="w-4 h-4 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+              />
+              <span
+                onClick={() => setEditingTask(item)}
+                className={`text-sm cursor-pointer flex-1 ${
+                  item.completed ? 'line-through text-gray-500' : 'text-gray-200'
+                }`}
+              >
+                {item.title}
+              </span>
+            </div>
+          ))}
+          
+          <button
+            onClick={() => addChecklistItem(type)}
+            className="w-full text-left text-xs text-gray-500 hover:text-gray-300 px-2 py-2 transition-colors"
+          >
+            + Add item...
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
@@ -285,25 +370,17 @@ export default function Home() {
         {/* Tab Content */}
         {activeTab === 'jaclyn' && renderWeeklyBoard('jaclyn')}
         {activeTab === 'river' && renderWeeklyBoard('river')}
-        {activeTab === 'digest' && (
-          <div className="bg-[#16213e] rounded-xl p-8 text-center">
-            <div className="text-gray-400 text-lg">Daily Digest</div>
-            <div className="text-gray-500 text-sm mt-2">Coming soon...</div>
-          </div>
-        )}
-        {activeTab === 'sendouts' && (
-          <div className="bg-[#16213e] rounded-xl p-8 text-center">
-            <div className="text-gray-400 text-lg">Send Outs</div>
-            <div className="text-gray-500 text-sm mt-2">Coming soon...</div>
-          </div>
-        )}
+        {activeTab === 'digest' && renderChecklist('daily-digest', 'Daily Digest')}
+        {activeTab === 'sendouts' && renderChecklist('send-outs', 'Send Outs')}
       </div>
 
       {/* Edit Modal */}
       {editingTask && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setEditingTask(null)}>
           <div className="bg-[#16213e] rounded-xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white">Edit Task</h3>
+            <h3 className="text-lg font-bold text-white">
+              {editingTask.folder === 'daily-digest' || editingTask.folder === 'send-outs' ? 'Edit Item' : 'Edit Task'}
+            </h3>
 
             <input
               className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 focus:border-blue-500 outline-none"
@@ -312,56 +389,61 @@ export default function Home() {
               placeholder="Title"
             />
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">Priority</label>
-                <select
-                  className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
-                  value={editingTask.priority}
-                  onChange={e => setEditingTask({ ...editingTask, priority: e.target.value })}
-                >
-                  <option value="none">None</option>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">Owner</label>
-                <select
-                  className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
-                  value={editingTask.owner}
-                  onChange={e => setEditingTask({ ...editingTask, owner: e.target.value })}
-                >
-                  <option value="jaclyn">Jaclyn</option>
-                  <option value="river">River</option>
-                </select>
-              </div>
-            </div>
+            {/* Only show task-specific fields for regular tasks */}
+            {editingTask.folder !== 'daily-digest' && editingTask.folder !== 'send-outs' && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">Priority</label>
+                    <select
+                      className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                      value={editingTask.priority}
+                      onChange={e => setEditingTask({ ...editingTask, priority: e.target.value })}
+                    >
+                      <option value="none">None</option>
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">Owner</label>
+                    <select
+                      className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                      value={editingTask.owner}
+                      onChange={e => setEditingTask({ ...editingTask, owner: e.target.value })}
+                    >
+                      <option value="jaclyn">Jaclyn</option>
+                      <option value="river">River</option>
+                    </select>
+                  </div>
+                </div>
 
-            <div>
-              <label className="text-xs text-gray-400 mb-1 block">Due Date</label>
-              <input
-                type="date"
-                className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
-                value={editingTask.due_date || ''}
-                onChange={e => setEditingTask({ ...editingTask, due_date: e.target.value || null })}
-              />
-            </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Due Date</label>
+                  <input
+                    type="date"
+                    className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                    value={editingTask.due_date || ''}
+                    onChange={e => setEditingTask({ ...editingTask, due_date: e.target.value || null })}
+                  />
+                </div>
 
-            <div>
-              <label className="text-xs text-gray-400 mb-1 block">Folder</label>
-              <select
-                className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
-                value={editingTask.folder || ''}
-                onChange={e => setEditingTask({ ...editingTask, folder: e.target.value || '' })}
-              >
-                <option value="">None</option>
-                {folders.map(f => (
-                  <option key={f.id} value={f.name}>{f.name}</option>
-                ))}
-              </select>
-            </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Folder</label>
+                  <select
+                    className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                    value={editingTask.folder || ''}
+                    onChange={e => setEditingTask({ ...editingTask, folder: e.target.value || '' })}
+                  >
+                    <option value="">None</option>
+                    {folders.map(f => (
+                      <option key={f.id} value={f.name}>{f.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
 
             <div>
               <label className="text-xs text-gray-400 mb-1 block">Notes</label>
