@@ -58,6 +58,25 @@ export default function Home() {
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  
+  // Daily Digest state
+  const [dailyDigest, setDailyDigest] = useState<{
+    date: string;
+    item_world: string;
+    item_culture: string; 
+    item_prosports: string;
+    item_tampa: string;
+    item_athlete: string;
+  } | null>(null)
+  const [savedDigestItems, setSavedDigestItems] = useState<{
+    id: number;
+    date_saved: string;
+    category: string;
+    text: string;
+    source_url?: string;
+    notes?: string;
+  }[]>([])
+  const [savedFilter, setSavedFilter] = useState<string>('All')
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setSyncing(true)
@@ -114,8 +133,63 @@ export default function Home() {
     }
   }, [])
 
+  // Daily Digest functions
+  const fetchDigestData = useCallback(async () => {
+    try {
+      // Fetch today's digest
+      const today = new Date().toISOString().split('T')[0]
+      const { data: digestData } = await supabase
+        .from('daily_digest_today')
+        .select('*')
+        .eq('date', today)
+        .single()
+      
+      if (digestData) {
+        setDailyDigest(digestData)
+      }
+      
+      // Fetch saved items
+      const { data: savedData } = await supabase
+        .from('saved_digest_items')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50)
+      
+      if (savedData) {
+        setSavedDigestItems(savedData)
+      }
+    } catch (error) {
+      console.warn('Daily digest data not available:', error)
+      // Fail silently - digest feature is optional
+    }
+  }, [])
+
+  const saveDigestItem = async (text: string, category: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('saved_digest_items')
+        .insert({
+          text,
+          category,
+          date_saved: new Date().toISOString().split('T')[0]
+        })
+        .select()
+        .single()
+      
+      if (error) throw error
+      
+      if (data) {
+        setSavedDigestItems(prev => [data, ...prev])
+      }
+    } catch (error) {
+      console.error('Failed to save digest item:', error)
+      alert('Failed to save item. Please try again.')
+    }
+  }
+
   useEffect(() => { 
     fetchData()
+    fetchDigestData()
     
     // Set up real-time subscriptions
     const taskSubscription = supabase
@@ -884,6 +958,105 @@ export default function Home() {
     )
   }
 
+  const renderDailyDigest = () => {
+    const categories = [
+      { key: 'item_world', label: 'World', category: 'World' },
+      { key: 'item_culture', label: 'Culture/Entrepreneurship/Streetwear', category: 'Culture' },
+      { key: 'item_prosports', label: 'Pro Sports (NBA/MLB/NFL)', category: 'Pro Sports' },
+      { key: 'item_tampa', label: 'Tampa Local HS/MS Football & Baseball', category: 'Tampa Local' },
+      { key: 'item_athlete', label: 'Athlete Development', category: 'Athlete Dev' }
+    ]
+    
+    const filteredSavedItems = savedFilter === 'All' 
+      ? savedDigestItems 
+      : savedDigestItems.filter(item => item.category === savedFilter)
+    
+    return (
+      <div className="space-y-6">
+        {/* Today's RSS Digest */}
+        <div className="bg-[#16213e] rounded-xl p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-white">Daily Digest</h2>
+            <div className="text-xs text-gray-400">
+              {dailyDigest ? new Date(dailyDigest.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : 'Loading...'}
+            </div>
+          </div>
+
+          {dailyDigest ? (
+            <div className="space-y-3">
+              {categories.map(({ key, label, category }) => {
+                const text = dailyDigest[key as keyof typeof dailyDigest] as string
+                return (
+                  <div key={key} className="flex items-start gap-3 p-3 bg-[#1a1a2e] rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-gray-400 mb-1 font-medium">{label}</div>
+                      <div className="text-gray-200 text-sm leading-relaxed">{text}</div>
+                    </div>
+                    <button
+                      onClick={() => saveDigestItem(text, category)}
+                      className="text-yellow-500 hover:text-yellow-400 transition-colors p-1 shrink-0"
+                      title={`Save ${category} item`}
+                    >
+                      ⭐
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="text-center text-gray-400 py-8">
+              <div className="text-sm">Digest generates daily at 5:00 AM ET</div>
+              <div className="text-xs mt-1">Next update: {new Date().toLocaleDateString('en-US', { weekday: 'long' })}</div>
+            </div>
+          )}
+        </div>
+
+        {/* Saved Items */}
+        {savedDigestItems.length > 0 && (
+          <div className="bg-[#16213e] rounded-xl p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-md font-bold text-white">Saved</h3>
+              <select
+                value={savedFilter}
+                onChange={(e) => setSavedFilter(e.target.value)}
+                className="bg-[#1a1a2e] text-white rounded px-2 py-1 text-xs border border-gray-700 outline-none"
+              >
+                <option value="All">All Categories</option>
+                <option value="World">World</option>
+                <option value="Culture">Culture</option>
+                <option value="Pro Sports">Pro Sports</option>
+                <option value="Tampa Local">Tampa Local</option>
+                <option value="Athlete Dev">Athlete Dev</option>
+              </select>
+            </div>
+
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {filteredSavedItems.map(item => (
+                <div key={item.id} className="p-3 bg-[#1a1a2e] rounded-lg">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <span className="text-xs text-blue-400 font-medium">{item.category}</span>
+                    <span className="text-xs text-gray-500">
+                      {new Date(item.date_saved).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </span>
+                  </div>
+                  <div className="text-gray-200 text-sm leading-relaxed">{item.text}</div>
+                </div>
+              ))}
+              {filteredSavedItems.length === 0 && (
+                <div className="text-center text-gray-500 py-4 text-sm">
+                  No saved items in {savedFilter === 'All' ? 'any category' : savedFilter}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Existing Task Checklist */}
+        {renderChecklist('daily-digest', 'Task Checklist')}
+      </div>
+    )
+  }
+
   const renderWeeklyBoard = (board: 'jaclyn' | 'river') => (
     <div className="bg-[#16213e] rounded-xl p-4">
       <div className="flex items-center justify-between mb-4">
@@ -1054,7 +1227,7 @@ export default function Home() {
         {/* Tab Content */}
         {activeTab === 'jaclyn' && renderWeeklyBoard('jaclyn')}
         {activeTab === 'river' && renderWeeklyBoard('river')}
-        {activeTab === 'digest' && renderChecklist('daily-digest', 'Daily Digest')}
+        {activeTab === 'digest' && renderDailyDigest()}
         {activeTab === 'sendouts' && renderChecklist('send-outs', 'Send Outs')}
         </div>
 
