@@ -1484,16 +1484,13 @@ export default function Home() {
             >
               ◀
             </button>
-            <div className="flex flex-col">
-              <span 
-                className="text-sm text-gray-400 cursor-pointer hover:text-white transition-colors" 
-                onClick={goToCurrentWeek}
-                title="Go to current week"
-              >
-                {weekRange}
-              </span>
-              <span className="text-xs text-red-400">DEBUG: {weekStartDate}</span>
-            </div>
+            <span 
+              className="text-sm text-gray-400 cursor-pointer hover:text-white transition-colors" 
+              onClick={goToCurrentWeek}
+              title="Go to current week"
+            >
+              {weekRange}
+            </span>
             <button
               onClick={() => navigateWeek('next')}
               className="text-gray-400 hover:text-white transition-colors p-1"
