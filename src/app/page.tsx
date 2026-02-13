@@ -13,13 +13,13 @@ const PRIORITY_COLORS: Record<string, string> = {
   high: 'bg-red-500', medium: 'bg-yellow-500', low: 'bg-blue-500'
 }
 
-// Get current week dates in EST timezone
-const getCurrentWeekDates = () => {
-  const now = new Date()
-  const est = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
-  const currentDay = est.getDay()
-  const startOfWeek = new Date(est)
-  startOfWeek.setDate(est.getDate() - (currentDay === 0 ? 6 : currentDay - 1))
+// Get week dates for a specific date in NY timezone
+const getWeekDates = (referenceDate: Date) => {
+  // Convert reference date to NY timezone
+  const nyDate = new Date(referenceDate.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  const currentDay = nyDate.getDay()
+  const startOfWeek = new Date(nyDate)
+  startOfWeek.setDate(nyDate.getDate() - (currentDay === 0 ? 6 : currentDay - 1)) // Monday start
   
   const weekDates = []
   for (let i = 0; i < 7; i++) {
@@ -34,7 +34,7 @@ const getCurrentWeekDates = () => {
   return {
     dates: weekDates,
     weekRange: `${weekStart} - ${weekEnd}`,
-    weekStartDate: startOfWeek.toISOString().split('T')[0]
+    weekStartDate: startOfWeek.toISOString().split('T')[0] // Monday as YYYY-MM-DD
   }
 }
 
@@ -103,13 +103,21 @@ export default function Home() {
     date_saved: string;
   }[]>([])
   const [hideSent, setHideSent] = useState<boolean>(true)
+  
+  // Week navigation state
+  const [selectedWeek, setSelectedWeek] = useState<Date>(new Date())
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setSyncing(true)
     try {
+      const { weekStartDate } = getWeekDates(selectedWeek)
+      console.log('Fetching tasks for week starting:', weekStartDate)
+      
       const [{ data: f }, { data: t }, { data: e }, { data: n }] = await Promise.all([
         supabase.from(FOLDERS_TABLE).select('*').order('id'),
-        supabase.from(TASKS_TABLE).select('*'),
+        supabase.from(TASKS_TABLE)
+          .select('*')
+          .or(`week_start.eq.${weekStartDate},week_start.is.null`), // Include existing tasks without week_start
         supabase.from('posts').select('*').eq('platform', 'calendar').order('scheduled_for'),
         supabase.from('posts').select('*').eq('platform', 'weekly-notes').order('created_at', { ascending: false })
       ])
@@ -121,9 +129,10 @@ export default function Home() {
           owner: task.assignee,
           completed: !!task.completed_at,
           notes: task.description,
-          day_of_week: 'monday', // Default for existing tasks
+          day_of_week: task.day_of_week || 'monday', // Use stored value or default
           board: task.assignee === 'jaclyn' ? 'jaclyn' : 'river',
-          sort_order: 0
+          sort_order: 0,
+          week_start: task.week_start || weekStartDate // Assign current week to legacy tasks
         }))
         setTasks(mappedTasks)
       }
@@ -158,6 +167,19 @@ export default function Home() {
       setSyncing(false)
     }
   }, [])
+
+  // Week navigation functions
+  const navigateWeek = (direction: 'prev' | 'next') => {
+    setSelectedWeek(prev => {
+      const newWeek = new Date(prev)
+      newWeek.setDate(prev.getDate() + (direction === 'next' ? 7 : -7))
+      return newWeek
+    })
+  }
+
+  const goToCurrentWeek = () => {
+    setSelectedWeek(new Date())
+  }
 
   // Date helpers for America/New_York timezone
   const getTodayNY = () => {
@@ -425,6 +447,11 @@ export default function Home() {
     }
   }, [fetchData])
 
+  // Refetch when selectedWeek changes
+  useEffect(() => {
+    fetchData(true)
+  }, [selectedWeek, fetchData])
+
   const toggleComplete = async (task: Task) => {
     const updated = !task.completed
     const updateData = updated 
@@ -437,21 +464,28 @@ export default function Home() {
   const addTask = async (board: string, day: string) => {
     const title = prompt('Task title:')
     if (!title?.trim()) return
+    
+    const { weekStartDate } = getWeekDates(selectedWeek)
+    
     const { data } = await supabase.from(TASKS_TABLE).insert({
       title: title.trim(),
       description: '',
       folder: 'PERSONAL',
       assignee: board,
       status: 'pending',
-      priority: 'medium'
+      priority: 'medium',
+      week_start: weekStartDate,
+      day_of_week: day
     }).select().single()
+    
     if (data) {
       const mappedTask = {
         ...data,
         owner: data.assignee,
         completed: false,
         notes: data.description,
-        day_of_week: day,
+        day_of_week: data.day_of_week,
+        week_start: data.week_start,
         board,
         sort_order: 0
       }
@@ -629,14 +663,16 @@ export default function Home() {
   }
 
   const saveTask = async (task: Task) => {
-    const { id, created_at, owner, completed, notes, day_of_week, board, sort_order, ...updates } = task
+    const { id, created_at, owner, completed, notes, board, sort_order, ...updates } = task
     // Map dashboard fields back to database schema
     const dbUpdates = {
       ...updates,
       assignee: owner,
       description: notes,
       completed_at: completed ? new Date().toISOString() : null,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      day_of_week: task.day_of_week, // Persist day_of_week
+      week_start: task.week_start     // Persist week_start
     }
     await supabase.from(TASKS_TABLE).update(dbUpdates).eq('id', id)
     setTasks(prev => prev.map(t => t.id === id ? task : t))
@@ -659,7 +695,7 @@ export default function Home() {
   const toggleCollapse = (key: string) =>
     setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
 
-  const { dates: weekDates, weekRange, weekStartDate } = getCurrentWeekDates()
+  const { dates: weekDates, weekRange, weekStartDate } = getWeekDates(selectedWeek)
 
   const getThisWeekEvents = () => {
     const startDate = weekDates[0].toISOString().split('T')[0]
@@ -1416,7 +1452,29 @@ export default function Home() {
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold text-white capitalize">{board}</h2>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-400">{weekRange}</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigateWeek('prev')}
+              className="text-gray-400 hover:text-white transition-colors p-1"
+              title="Previous week"
+            >
+              ◀
+            </button>
+            <span 
+              className="text-sm text-gray-400 cursor-pointer hover:text-white transition-colors" 
+              onClick={goToCurrentWeek}
+              title="Go to current week"
+            >
+              {weekRange}
+            </span>
+            <button
+              onClick={() => navigateWeek('next')}
+              className="text-gray-400 hover:text-white transition-colors p-1"
+              title="Next week"
+            >
+              ▶
+            </button>
+          </div>
           <button
             onClick={() => setHideCompleted(prev => ({ ...prev, [board]: !prev[board] }))}
             className="text-xs text-gray-400 hover:text-white transition-colors"

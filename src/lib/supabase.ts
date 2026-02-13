@@ -30,8 +30,9 @@ export type Task = {
   created_at: string
   updated_at: string
   completed_at: string | null
+  week_start?: string | null  // New field for week navigation
+  day_of_week?: string | null // Now persisted, not just virtual
   // Virtual fields for dashboard functionality
-  day_of_week?: string
   board?: string
   owner?: string
   completed?: boolean
