@@ -955,10 +955,7 @@ export default function Home() {
         {/* Calendar Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <div>
-              <h2 className="text-xl font-bold text-white">Calendar</h2>
-              <div className="text-xs text-yellow-400">Phase 2 active | TodayNY: {getTodayNY()}</div>
-            </div>
+            <h2 className="text-xl font-bold text-white">Calendar</h2>
             <div className="flex gap-1 bg-[#1a1a2e] rounded-lg p-1">
               {(['month', 'week', 'day', 'year'] as const).map(view => (
                 <button
@@ -1030,9 +1027,6 @@ export default function Home() {
                     >
                       <div className={`text-sm mb-1 ${isToday(day) ? 'font-bold text-blue-400' : isPastDay(day.toISOString().split('T')[0]) ? 'text-gray-500' : 'text-gray-300'}`}>
                         {day.getDate()}
-                        {day.getDate() === 12 && (
-                          <div className="text-xs text-red-400">isPastDay={isPastDay(day.toISOString().split('T')[0]).toString()}</div>
-                        )}
                       </div>
                       <div className="space-y-1">
                         {dayEvents.slice(0, 3).map(event => (
@@ -1044,9 +1038,6 @@ export default function Home() {
                           >
                             <span className={isPastEvent(event) ? 'line-through opacity-70' : ''}>
                               {event.time && `${event.time} `}{event.title}
-                              {event.title.includes('Stryker Game') && (
-                                <div className="text-xs text-red-400">isPastEvent={isPastEvent(event).toString()}</div>
-                              )}
                             </span>
                           </div>
                         ))}
