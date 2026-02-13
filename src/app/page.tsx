@@ -1652,7 +1652,7 @@ export default function Home() {
   return (
     <main className="min-h-screen p-4 md:p-6 max-w-[1400px] mx-auto">
       {/* Header */}
-      <div className="text-center mb-6">
+      <div className="text-center mb-4">
         <div className="text-gray-500 text-xs font-light uppercase tracking-widest">
           FAMILY · WEALTH · LOVE · CONNECTION · HEALTH · PEACE · HAPPINESS
         </div>
@@ -1681,31 +1681,22 @@ export default function Home() {
       </div>
 
       {/* Vision Statement */}
-      <div className="bg-[#16213e] rounded-xl p-4 mb-6">
+      <div className="bg-[#16213e] rounded-xl p-3 mb-4">
         <div className="text-center">
-          <div className="text-gray-400 text-xs italic mb-4">Vision Statement</div>
-          <div className="flex items-center gap-3 md:gap-4">
-            {/* Left Column - Fixed width */}
-            <div className="w-12 md:w-15 flex justify-center flex-shrink-0">
-              <img 
-                src="/wealth-icon.svg" 
-                alt="Success" 
-                className="w-10 h-10 md:w-12 md:h-12 opacity-60" 
-              />
-            </div>
-            
-            {/* Center Column - Flexible */}
-            <div className="flex-1 text-white text-sm leading-relaxed px-1 md:px-2 min-w-0">
-              I am building forever financial freedom and a multi-millionaire life rooted in love, connection, calm, health, and joy. I am becoming the strongest, healthiest, most aligned version of myself so I can lead my boys and my family to become the strongest, healthiest, happiest versions of themselves.
-            </div>
-            
-            {/* Right Column - Fixed width */}
-            <div className="w-12 md:w-15 flex justify-center flex-shrink-0">
+          <div className="text-gray-400 text-xs italic mb-3">Vision Statement</div>
+          <div className="flex items-center gap-4">
+            {/* Left - Family Photo */}
+            <div className="flex justify-center flex-shrink-0">
               <img 
                 src="/family-photo.jpg" 
                 alt="Family" 
-                className="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover" 
+                className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover" 
               />
+            </div>
+            
+            {/* Right - Vision Text */}
+            <div className="flex-1 text-white text-sm leading-relaxed min-w-0">
+              I am building forever financial freedom and a multi-millionaire life rooted in love, connection, calm, health, and joy. I am becoming the strongest, healthiest, most aligned version of myself so I can lead my boys and my family to become the strongest, healthiest, happiest versions of themselves.
             </div>
           </div>
         </div>
