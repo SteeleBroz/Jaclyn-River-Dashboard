@@ -841,10 +841,26 @@ export default function Home() {
         throw updateResult.error
       } else {
         setDebugInfo(prev => `${prev}\nStatus: SUCCESS\nDB Result: ${updateResult.data?.scheduled_for || 'none'}`)
+        
+        // Update local editing event state immediately
+        if (updateResult.data) {
+          const newDate = updateResult.data.scheduled_for.split('T')[0]
+          const newTime = updateResult.data.scheduled_for.split('T')[1]?.substring(0, 5)
+          
+          setEditingEvent((prev) => prev ? {
+            ...prev,
+            date: newDate,
+            time: newTime || prev.time,
+            // Keep all other fields the same
+          } : null)
+        }
       }
 
-      // Re-fetch events to confirm DB value changes
-      fetchData(true)
+      // Force immediate re-fetch and UI update
+      await fetchData(true)
+      
+      // Force re-render by updating events state timestamp
+      setEvents(prev => [...prev])
     } catch (error) {
       console.error('Tomorrow button error:', error)
       setDebugInfo(prev => `${prev}\nFailed: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -881,9 +897,24 @@ export default function Home() {
         .single()
 
       if (updateResult.error) throw updateResult.error
+      
+      // Update local editing event state immediately
+      if (updateResult.data) {
+        const newDate = updateResult.data.scheduled_for.split('T')[0]
+        const newTime = updateResult.data.scheduled_for.split('T')[1]?.substring(0, 5)
+        
+        setEditingEvent((prev) => prev ? {
+          ...prev,
+          date: newDate,
+          time: newTime || prev.time,
+        } : null)
+      }
 
-      // Re-fetch events to confirm DB value changes
-      fetchData(true)
+      // Force immediate re-fetch and UI update
+      await fetchData(true)
+      
+      // Force re-render by updating events state timestamp
+      setEvents(prev => [...prev])
     } catch (error) {
       console.error('Next Week button error:', error)
       alert(`Next Week failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
