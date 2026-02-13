@@ -290,25 +290,7 @@ export default function Home() {
     })
   }
 
-  const isPastEvent = (event: CalendarEvent) => {
-    const now = new Date()
-    const currentNY = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
-    
-    // Create event datetime in NY timezone
-    let eventDateTime: Date
-    if (event.time) {
-      // Event has specific time
-      eventDateTime = new Date(`${event.date}T${event.time}:00`)
-    } else {
-      // No time specified, treat as end of day (23:59)
-      eventDateTime = new Date(`${event.date}T23:59:00`)
-    }
-    
-    // Convert event time to NY timezone for comparison
-    const eventNY = new Date(eventDateTime.toLocaleString('en-US', { timeZone: 'America/New_York' }))
-    
-    return currentNY > eventNY
-  }
+  // Duplicate isPastEvent function removed
 
   // Daily Digest functions
   const fetchDigestData = useCallback(async () => {
@@ -973,7 +955,10 @@ export default function Home() {
         {/* Calendar Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <h2 className="text-xl font-bold text-white">Calendar</h2>
+            <div>
+              <h2 className="text-xl font-bold text-white">Calendar</h2>
+              <div className="text-xs text-yellow-400">Phase 2 active | TodayNY: {getTodayNY()}</div>
+            </div>
             <div className="flex gap-1 bg-[#1a1a2e] rounded-lg p-1">
               {(['month', 'week', 'day', 'year'] as const).map(view => (
                 <button
@@ -1045,6 +1030,9 @@ export default function Home() {
                     >
                       <div className={`text-sm mb-1 ${isToday(day) ? 'font-bold text-blue-400' : 'text-gray-300'}`}>
                         {day.getDate()}
+                        {day.getDate() === 12 && (
+                          <div className="text-xs text-red-400">isPastDay={isPastDay(day.toISOString().split('T')[0]).toString()}</div>
+                        )}
                       </div>
                       <div className="space-y-1">
                         {dayEvents.slice(0, 3).map(event => (
@@ -1056,6 +1044,9 @@ export default function Home() {
                           >
                             <span className={isPastEvent(event) ? 'line-through opacity-70' : ''}>
                               {event.time && `${event.time} `}{event.title}
+                              {event.title.includes('Stryker Game') && (
+                                <div className="text-xs text-red-400">isPastEvent={isPastEvent(event).toString()}</div>
+                              )}
                             </span>
                           </div>
                         ))}
