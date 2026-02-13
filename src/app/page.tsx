@@ -115,6 +115,9 @@ export default function Home() {
   // Hide past events state
   const [hidePastEvents, setHidePastEvents] = useState<boolean>(true)
   
+  // Mobile move debugging state
+  const [moveStatus, setMoveStatus] = useState<string>('')
+  
   // Week navigation state - persist across page refreshes
   const [selectedWeek, setSelectedWeek] = useState<Date>(() => {
     if (typeof window !== 'undefined') {
@@ -800,16 +803,31 @@ export default function Home() {
 
   // Mobile event move functions
   const moveEventToTomorrow = async (event: CalendarEvent) => {
-    // Get current NY date
-    const currentNYDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-    
-    // Calculate tomorrow in NY timezone
-    const nyToday = new Date(currentNYDate + 'T12:00:00')
-    const nyTomorrow = new Date(nyToday)
-    nyTomorrow.setDate(nyToday.getDate() + 1)
-    const targetDateStr = nyTomorrow.toISOString().split('T')[0]
+    try {
+      // TEMP: Show tap indicator
+      setMoveStatus('Tomorrow tapped ✅')
+      
+      // Show saving state
+      setTimeout(() => setMoveStatus('Saving...'), 100)
+      
+      // Get current NY date
+      const currentNYDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+      
+      // Calculate tomorrow in NY timezone
+      const nyToday = new Date(currentNYDate + 'T12:00:00')
+      const nyTomorrow = new Date(nyToday)
+      nyTomorrow.setDate(nyToday.getDate() + 1)
+      const targetDateStr = nyTomorrow.toISOString().split('T')[0]
 
-    await moveEventToDate(event, targetDateStr)
+      await moveEventToDate(event, targetDateStr)
+      
+      // Clear status on success
+      setTimeout(() => setMoveStatus(''), 2000)
+    } catch (error) {
+      console.error('Tomorrow button error:', error)
+      setMoveStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      setTimeout(() => setMoveStatus(''), 5000)
+    }
   }
 
   const moveEventToNextWeek = async (event: CalendarEvent) => {
@@ -2273,28 +2291,49 @@ export default function Home() {
             </div>
 
             {/* Mobile-only Move Section */}
-            <div className="md:hidden border-t border-gray-700 pt-4">
+            <div className="md:hidden border-t border-gray-700 pt-4 pointer-events-auto">
               <label className="text-xs text-gray-400 mb-2 block">Move Event</label>
               <div className="flex gap-2">
                 <button
-                  onClick={() => moveEventToTomorrow(editingEvent)}
-                  className="flex-1 bg-[#1a1a2e] hover:bg-[#252545] text-white rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    moveEventToTomorrow(editingEvent)
+                  }}
+                  className="flex-1 bg-[#1a1a2e] hover:bg-[#252545] text-white rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600 touch-manipulation"
+                  style={{ touchAction: 'manipulation' }}
                 >
                   Tomorrow
                 </button>
                 <button
-                  onClick={() => moveEventToNextWeek(editingEvent)}
-                  className="flex-1 bg-[#1a1a2e] hover:bg-[#252545] text-white rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    moveEventToNextWeek(editingEvent)
+                  }}
+                  className="flex-1 bg-[#1a1a2e] hover:bg-[#252545] text-white rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600 touch-manipulation"
+                  style={{ touchAction: 'manipulation' }}
                 >
                   Next Week
                 </button>
                 <button
-                  onClick={() => openDatePicker(editingEvent)}
-                  className="flex-1 bg-[#1a1a2e] hover:bg-[#252545] text-white rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    openDatePicker(editingEvent)
+                  }}
+                  className="flex-1 bg-[#1a1a2e] hover:bg-[#252545] text-white rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600 touch-manipulation"
+                  style={{ touchAction: 'manipulation' }}
                 >
                   Pick Date
                 </button>
               </div>
+              {/* TEMP: Tap indicator */}
+              {moveStatus && (
+                <div className="mt-2 text-xs text-center text-green-400">
+                  {moveStatus}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 pt-2">
