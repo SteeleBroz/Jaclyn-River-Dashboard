@@ -1690,7 +1690,8 @@ export default function Home() {
               <img 
                 src="/family-photo.jpg" 
                 alt="Family" 
-                className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover" 
+                className="rounded-full object-cover" 
+                style={{ width: '68px', height: '68px' }}
               />
             </div>
             
