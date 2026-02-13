@@ -1982,7 +1982,7 @@ export default function Home() {
       {/* Temporary Build Stamp */}
       <div className="text-center py-4">
         <div className="text-xs text-gray-500">
-          Build: 87dee50
+          Build: 13ef44f44f90731d36c3774836dd50f38f73691e
         </div>
       </div>
 
