@@ -1979,13 +1979,6 @@ export default function Home() {
       {/* Full Calendar View */}
       {renderFullCalendar()}
 
-      {/* Temporary Build Stamp */}
-      <div className="text-center py-4">
-        <div className="text-xs text-gray-500">
-          Build: 7237332a269650d327c966f1b700bc9e5a6a47b5
-        </div>
-      </div>
-
       {/* Edit Modal */}
       {editingTask && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setEditingTask(null)}>
