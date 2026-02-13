@@ -798,6 +798,118 @@ export default function Home() {
     setWeeklyNotes(prev => prev.filter(n => n.id !== noteId))
   }
 
+  // Mobile event move functions
+  const moveEventToTomorrow = async (event: CalendarEvent) => {
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const targetDateStr = tomorrow.toISOString().split('T')[0]
+    await moveEventToDate(event, targetDateStr)
+  }
+
+  const moveEventToNextWeek = async (event: CalendarEvent) => {
+    const nextWeek = new Date(event.date)
+    nextWeek.setDate(nextWeek.getDate() + 7)
+    const targetDateStr = nextWeek.toISOString().split('T')[0]
+    await moveEventToDate(event, targetDateStr)
+  }
+
+  const openDatePicker = (event: CalendarEvent) => {
+    const newDate = prompt('Enter new date (YYYY-MM-DD):', event.date)
+    if (newDate && newDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      moveEventToDate(event, newDate)
+    }
+  }
+
+  const moveEventToDate = async (event: CalendarEvent, targetDateStr: string) => {
+    // Block moving to past dates
+    if (isPastDay(targetDateStr)) {
+      alert('Cannot move events to past dates.')
+      return
+    }
+
+    // If same date, do nothing
+    if (event.date === targetDateStr) {
+      return
+    }
+
+    try {
+      // Find the original event in DB to get exact scheduled_for timestamp
+      const { data: originalEvent, error: fetchError } = await supabase
+        .from('posts')
+        .select('scheduled_for')
+        .eq('id', event.id)
+        .single()
+
+      if (fetchError || !originalEvent) throw new Error('Failed to fetch original event')
+
+      // Parse original UTC timestamp
+      const originalUtc = new Date(originalEvent.scheduled_for)
+      
+      // Convert to NY time to extract local time components
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      })
+      
+      const nyTimeString = formatter.format(originalUtc) // "YYYY-MM-DD, HH:mm"
+      const [, timeOnly] = nyTimeString.split(', ') // Extract "HH:mm"
+      
+      // Create new date with target date + same NY local time
+      const [hours, minutes] = timeOnly.split(':').map(Number)
+      const targetDateObj = new Date(targetDateStr + 'T00:00:00Z')
+      targetDateObj.setUTCHours(hours + 5, minutes, 0, 0) // Add 5 hours to convert NY to UTC (EST)
+      
+      // Account for DST if needed
+      const isDst = (date: Date) => {
+        const jan = new Date(date.getFullYear(), 0, 1).getTimezoneOffset()
+        const jul = new Date(date.getFullYear(), 6, 1).getTimezoneOffset()
+        return Math.max(jan, jul) !== date.getTimezoneOffset()
+      }
+      
+      const targetIsDst = isDst(new Date(targetDateStr))
+      if (targetIsDst) {
+        targetDateObj.setUTCHours(targetDateObj.getUTCHours() - 1) // Subtract 1 hour for EDT
+      }
+
+      const utcIsoString = targetDateObj.toISOString()
+
+      // Update only scheduled_for in Supabase
+      const { error } = await supabase
+        .from('posts')
+        .update({ 
+          scheduled_for: utcIsoString
+        })
+        .eq('id', event.id)
+
+      if (error) throw error
+
+      // Update events in state
+      setEvents(prev => prev.map(e => 
+        e.id === event.id 
+          ? { 
+              ...e, 
+              date: targetDateStr,
+              time: timeOnly
+            }
+          : e
+      ))
+
+      // Update the editing event if it's the same event
+      if (editingEvent && editingEvent.id === event.id) {
+        setEditingEvent(prev => prev ? { ...prev, date: targetDateStr, time: timeOnly } : null)
+      }
+
+    } catch (error) {
+      console.error('Failed to move event:', error)
+      alert('Failed to move event. Please try again.')
+    }
+  }
+
   // Drag & Drop functionality for calendar events
   const [draggedEvent, setDraggedEvent] = useState<CalendarEvent | null>(null)
 
@@ -2151,6 +2263,31 @@ export default function Home() {
                 onChange={e => setEditingEvent({ ...editingEvent, description: e.target.value })}
                 placeholder="Event notes..."
               />
+            </div>
+
+            {/* Mobile-only Move Section */}
+            <div className="md:hidden border-t border-gray-700 pt-4">
+              <label className="text-xs text-gray-400 mb-2 block">Move Event</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => moveEventToTomorrow(editingEvent)}
+                  className="flex-1 bg-[#1a1a2e] hover:bg-[#252545] text-white rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600"
+                >
+                  Tomorrow
+                </button>
+                <button
+                  onClick={() => moveEventToNextWeek(editingEvent)}
+                  className="flex-1 bg-[#1a1a2e] hover:bg-[#252545] text-white rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600"
+                >
+                  Next Week
+                </button>
+                <button
+                  onClick={() => openDatePicker(editingEvent)}
+                  className="flex-1 bg-[#1a1a2e] hover:bg-[#252545] text-white rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600"
+                >
+                  Pick Date
+                </button>
+              </div>
             </div>
 
             <div className="flex gap-3 pt-2">
