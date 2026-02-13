@@ -59,3 +59,12 @@ export type WeeklyNote = {
   created_at: string
   seen: boolean
 }
+
+export type DashboardSettings = {
+  id: number
+  vision_statement: string
+  header_words: string
+  profile_image_url: string | null
+  created_at: string
+  updated_at: string
+}

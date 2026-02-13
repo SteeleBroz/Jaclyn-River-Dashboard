@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, Folder, Task, CalendarEvent, WeeklyNote, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
+import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday','overflow'] as const
 const DAY_LABELS: Record<string, string> = {
@@ -118,6 +118,18 @@ export default function Home() {
   // Temporary debug state for mobile
   const [debugInfo, setDebugInfo] = useState<string>('')
   
+  // Admin Mode state
+  const [adminMode, setAdminMode] = useState<boolean>(false)
+  const [dashboardSettings, setDashboardSettings] = useState<DashboardSettings | null>(null)
+  const [editingVision, setEditingVision] = useState<boolean>(false)
+  const [editingHeader, setEditingHeader] = useState<boolean>(false)
+  const [visionText, setVisionText] = useState<string>('')
+  const [headerWords, setHeaderWords] = useState<string>('')
+  const [uploadingImage, setUploadingImage] = useState<boolean>(false)
+  const headerWordsRef = useRef<HTMLDivElement>(null)
+  const tapCountRef = useRef<number>(0)
+  const tapTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
   // Week navigation state - persist across page refreshes
   const [selectedWeek, setSelectedWeek] = useState<Date>(() => {
     if (typeof window !== 'undefined') {
@@ -224,6 +236,172 @@ export default function Home() {
 
   const goToCurrentWeek = () => {
     setSelectedWeek(new Date())
+  }
+
+  // Dashboard Settings functions
+  const fetchDashboardSettings = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('dashboard_settings')
+        .select('*')
+        .eq('id', 1)
+        .single()
+      
+      if (error) {
+        console.warn('Dashboard settings not available:', error)
+        // Set default values if table doesn't exist yet
+        setDashboardSettings({
+          id: 1,
+          vision_statement: 'Living with purpose, intention, love, and calm. Building wealth, deep connections, and time freedom while raising boys into confident, disciplined men.',
+          header_words: 'FAMILY · WEALTH · LOVE · CONNECTION · HEALTH · PEACE · HAPPINESS',
+          profile_image_url: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        return
+      }
+      
+      if (data) {
+        setDashboardSettings(data)
+        setVisionText(data.vision_statement)
+        setHeaderWords(data.header_words)
+      }
+    } catch (error) {
+      console.warn('Failed to fetch dashboard settings:', error)
+    }
+  }, [])
+
+  // Admin Mode functions
+  const handleHeaderWordsClick = () => {
+    tapCountRef.current += 1
+    
+    // Clear existing timeout
+    if (tapTimeoutRef.current) {
+      clearTimeout(tapTimeoutRef.current)
+    }
+    
+    // Set timeout to reset tap count
+    tapTimeoutRef.current = setTimeout(() => {
+      tapCountRef.current = 0
+    }, 500) // 500ms window for triple-tap
+    
+    // Check for triple-tap
+    if (tapCountRef.current >= 3) {
+      setAdminMode(!adminMode)
+      tapCountRef.current = 0
+      if (tapTimeoutRef.current) {
+        clearTimeout(tapTimeoutRef.current)
+      }
+    }
+  }
+
+  const saveVisionStatement = async () => {
+    if (!dashboardSettings) return
+    
+    try {
+      const { error } = await supabase
+        .from('dashboard_settings')
+        .update({
+          vision_statement: visionText,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', 1)
+      
+      if (error) throw error
+      
+      setDashboardSettings(prev => prev ? { ...prev, vision_statement: visionText } : null)
+      setEditingVision(false)
+    } catch (error) {
+      console.error('Failed to save vision statement:', error)
+      alert('Failed to save vision statement. Please try again.')
+    }
+  }
+
+  const saveHeaderWords = async () => {
+    if (!dashboardSettings) return
+    
+    try {
+      const { error } = await supabase
+        .from('dashboard_settings')
+        .update({
+          header_words: headerWords,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', 1)
+      
+      if (error) throw error
+      
+      setDashboardSettings(prev => prev ? { ...prev, header_words: headerWords } : null)
+      setEditingHeader(false)
+    } catch (error) {
+      console.error('Failed to save header words:', error)
+      alert('Failed to save header words. Please try again.')
+    }
+  }
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file.')
+      return
+    }
+    
+    // Validate file size (2MB limit)
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Image size must be less than 2MB.')
+      return
+    }
+    
+    setUploadingImage(true)
+    
+    try {
+      // Generate unique filename
+      const timestamp = Date.now()
+      const extension = file.name.split('.').pop()
+      const filename = `profile/family-${timestamp}.${extension}`
+      
+      // Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('dashboard-assets')
+        .upload(filename, file, {
+          cacheControl: '3600',
+          upsert: false
+        })
+      
+      if (uploadError) throw uploadError
+      
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('dashboard-assets')
+        .getPublicUrl(filename)
+      
+      if (!urlData.publicUrl) throw new Error('Failed to get public URL')
+      
+      // Update dashboard settings
+      const { error: updateError } = await supabase
+        .from('dashboard_settings')
+        .update({
+          profile_image_url: urlData.publicUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', 1)
+      
+      if (updateError) throw updateError
+      
+      setDashboardSettings(prev => prev ? { 
+        ...prev, 
+        profile_image_url: urlData.publicUrl 
+      } : null)
+      
+    } catch (error) {
+      console.error('Failed to upload image:', error)
+      alert('Failed to upload image. Please try again.')
+    } finally {
+      setUploadingImage(false)
+    }
   }
 
   // Date helpers for America/New_York timezone
@@ -486,6 +664,7 @@ export default function Home() {
     fetchData()
     fetchDigestData()
     fetchSendOutsData()
+    fetchDashboardSettings()
     
     // Set up real-time subscriptions
     const taskSubscription = supabase
@@ -2054,10 +2233,28 @@ export default function Home() {
   return (
     <main className="min-h-screen p-3 md:p-6 max-w-[1400px] mx-auto">
       {/* Header */}
-      <div className="text-center mb-3 md:mb-4">
-        <div className="text-gray-500 text-xs font-light uppercase tracking-widest">
-          FAMILY · WEALTH · LOVE · CONNECTION · HEALTH · PEACE · HAPPINESS
+      <div className="text-center mb-3 md:mb-4 relative">
+        <div 
+          ref={headerWordsRef}
+          className="text-gray-500 text-xs font-light uppercase tracking-widest cursor-pointer select-none"
+          onClick={handleHeaderWordsClick}
+        >
+          {dashboardSettings?.header_words || 'FAMILY · WEALTH · LOVE · CONNECTION · HEALTH · PEACE · HAPPINESS'}
         </div>
+        
+        {/* Admin Mode Indicators */}
+        {adminMode && (
+          <div className="absolute top-0 right-0 flex items-center gap-2">
+            <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full">ADMIN</span>
+            <button
+              onClick={() => setEditingHeader(true)}
+              className="text-gray-400 hover:text-white transition-colors p-1"
+              title="Edit header words"
+            >
+              ⚙️
+            </button>
+          </div>
+        )}
       </div>
       
       <div className="flex items-center justify-between mb-4">
@@ -2083,26 +2280,59 @@ export default function Home() {
       </div>
 
       {/* Vision Statement */}
-      <div className="bg-[#16213e] rounded-xl p-2 md:p-3 mb-3 md:mb-4">
+      <div className="bg-[#16213e] rounded-xl p-2 md:p-3 mb-3 md:mb-4 relative">
         <div className="text-center">
           <div className="text-gray-400 text-xs italic mb-1 md:mb-3">Vision Statement</div>
           <div className="flex items-center gap-2 md:gap-4">
             {/* Left - Family Photo */}
-            <div className="flex justify-center flex-shrink-0">
-              <img 
-                src="/family-photo.jpg" 
-                alt="Family" 
-                className="rounded-full object-cover" 
-                style={{ width: '60px', height: '60px' }}
-              />
+            <div className="flex justify-center flex-shrink-0 relative">
+              {dashboardSettings?.profile_image_url ? (
+                <img 
+                  src={dashboardSettings.profile_image_url} 
+                  alt="Family" 
+                  className="rounded-full object-cover" 
+                  style={{ width: '68px', height: '68px' }}
+                />
+              ) : (
+                <div className="rounded-full bg-gray-600 flex items-center justify-center" style={{ width: '68px', height: '68px' }}>
+                  <span className="text-gray-400 text-xs">👨‍👩‍👦‍👦</span>
+                </div>
+              )}
+              
+              {/* Admin Mode - Image Upload */}
+              {adminMode && (
+                <div className="absolute -bottom-1 -right-1">
+                  <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs transition-colors">
+                    {uploadingImage ? '⏳' : '📷'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                      disabled={uploadingImage}
+                    />
+                  </label>
+                </div>
+              )}
             </div>
             
             {/* Right - Vision Text */}
             <div className="flex-1 text-white text-xs md:text-sm leading-tight md:leading-relaxed min-w-0">
-              I am building forever financial freedom and a multi-millionaire life rooted in love, connection, calm, health, and joy. I am becoming the strongest, healthiest, most aligned version of myself so I can lead my boys and my family to become the strongest, healthiest, happiest versions of themselves.
+              {dashboardSettings?.vision_statement || 'Living with purpose, intention, love, and calm. Building wealth, deep connections, and time freedom while raising boys into confident, disciplined men.'}
             </div>
           </div>
         </div>
+        
+        {/* Admin Mode - Edit Vision Button */}
+        {adminMode && (
+          <button
+            onClick={() => setEditingVision(true)}
+            className="absolute top-2 right-2 text-gray-400 hover:text-white transition-colors p-1"
+            title="Edit vision statement"
+          >
+            ✏️
+          </button>
+        )}
       </div>
 
       {/* Folder Tiles */}
@@ -2394,6 +2624,84 @@ export default function Home() {
                 className="bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Vision Statement Modal */}
+      {editingVision && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setEditingVision(false)}>
+          <div className="bg-[#16213e] rounded-xl p-6 w-full max-w-lg space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white">Edit Vision Statement</h3>
+
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Vision Statement</label>
+              <textarea
+                className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-3 text-sm border border-gray-700 focus:border-blue-500 outline-none resize-none"
+                rows={6}
+                value={visionText}
+                onChange={e => setVisionText(e.target.value)}
+                placeholder="Enter your vision statement..."
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={saveVisionStatement}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium transition-colors"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  setVisionText(dashboardSettings?.vision_statement || '')
+                  setEditingVision(false)
+                }}
+                className="bg-gray-600/20 hover:bg-gray-600/40 text-gray-400 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Header Words Modal */}
+      {editingHeader && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setEditingHeader(false)}>
+          <div className="bg-[#16213e] rounded-xl p-6 w-full max-w-lg space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white">Edit Header Words</h3>
+
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Header Words (separated by ·)</label>
+              <input
+                className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-3 text-sm border border-gray-700 focus:border-blue-500 outline-none"
+                value={headerWords}
+                onChange={e => setHeaderWords(e.target.value)}
+                placeholder="FAMILY · WEALTH · LOVE · CONNECTION · HEALTH · PEACE · HAPPINESS"
+              />
+              <div className="text-xs text-gray-500 mt-1">
+                Tip: Use the · character to separate words (Alt+0183 or Option+Shift+9)
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={saveHeaderWords}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium transition-colors"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  setHeaderWords(dashboardSettings?.header_words || '')
+                  setEditingHeader(false)
+                }}
+                className="bg-gray-600/20 hover:bg-gray-600/40 text-gray-400 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+              >
+                Cancel
               </button>
             </div>
           </div>
