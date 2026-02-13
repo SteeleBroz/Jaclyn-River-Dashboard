@@ -236,7 +236,21 @@ export default function Home() {
     if (!dailyDigest) return
     
     try {
-      const readField = `read_${category.toLowerCase().replace(' ', '')}`
+      // Proper mapping from category to database field
+      const categoryToReadField: Record<string, string> = {
+        'World': 'read_world',
+        'Culture': 'read_culture',
+        'Pro Sports': 'read_prosports',
+        'Tampa Local': 'read_tampa',
+        'Athlete Dev': 'read_athlete'
+      }
+      
+      const readField = categoryToReadField[category]
+      if (!readField) {
+        console.error('Unknown category for read field:', category)
+        return
+      }
+      
       const { error } = await supabase
         .from('daily_digest_today')
         .update({ [readField]: isRead })
