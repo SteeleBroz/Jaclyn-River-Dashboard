@@ -1069,15 +1069,15 @@ export default function Home() {
     return (
       <div className="bg-[#16213e] rounded-xl p-3 md:p-6 mt-3 md:mt-6">
         {/* Calendar Header */}
-        <div className="flex items-center justify-between mb-3 md:mb-6">
-          <div className="flex items-center gap-2 md:gap-4">
-            <h2 className="text-lg md:text-xl font-bold text-white">Calendar</h2>
+        <div className="flex items-center justify-between mb-2 md:mb-6">
+          <div className="flex items-center gap-1 md:gap-4">
+            <h2 className="text-base md:text-xl font-bold text-white">Calendar</h2>
             <div className="flex gap-1 bg-[#1a1a2e] rounded-lg p-1">
               {(['month', 'week', 'day', 'year'] as const).map(view => (
                 <button
                   key={view}
                   onClick={() => setCalendarView(view)}
-                  className={`px-2 md:px-3 py-1 rounded text-xs md:text-sm font-medium transition-all ${
+                  className={`px-1 md:px-3 py-0.5 md:py-1 rounded text-xs md:text-sm font-medium transition-all ${
                     calendarView === view 
                       ? 'bg-blue-600 text-white' 
                       : 'text-gray-400 hover:text-white hover:bg-[#252545]'
@@ -1089,24 +1089,24 @@ export default function Home() {
             </div>
           </div>
           
-          <div className="flex items-center gap-2 md:gap-4">
-            <div className="text-sm md:text-lg font-medium text-white">{getCalendarTitle()}</div>
+          <div className="flex items-center gap-1 md:gap-4">
+            <div className="text-xs md:text-lg font-medium text-white">{getCalendarTitle()}</div>
             <div className="flex gap-1">
               <button
                 onClick={() => navigateCalendar('prev')}
-                className="p-2 text-gray-400 hover:text-white transition-colors"
+                className="p-1 md:p-2 text-gray-400 hover:text-white transition-colors"
               >
                 ←
               </button>
               <button
                 onClick={() => setCalendarDate(new Date())}
-                className="px-3 py-1 text-sm bg-[#1a1a2e] text-gray-400 hover:text-white rounded transition-colors"
+                className="px-2 md:px-3 py-0.5 md:py-1 text-xs md:text-sm bg-[#1a1a2e] text-gray-400 hover:text-white rounded transition-colors"
               >
                 Today
               </button>
               <button
                 onClick={() => navigateCalendar('next')}
-                className="p-2 text-gray-400 hover:text-white transition-colors"
+                className="p-1 md:p-2 text-gray-400 hover:text-white transition-colors"
               >
                 →
               </button>
@@ -1901,10 +1901,10 @@ export default function Home() {
       </div>
 
       {/* Vision Statement */}
-      <div className="bg-[#16213e] rounded-xl p-3 mb-3 md:mb-4">
+      <div className="bg-[#16213e] rounded-xl p-2 md:p-3 mb-3 md:mb-4">
         <div className="text-center">
-          <div className="text-gray-400 text-xs italic mb-2 md:mb-3">Vision Statement</div>
-          <div className="flex items-center gap-3 md:gap-4">
+          <div className="text-gray-400 text-xs italic mb-1 md:mb-3">Vision Statement</div>
+          <div className="flex items-center gap-2 md:gap-4">
             {/* Left - Family Photo */}
             <div className="flex justify-center flex-shrink-0">
               <img 
@@ -1916,7 +1916,7 @@ export default function Home() {
             </div>
             
             {/* Right - Vision Text */}
-            <div className="flex-1 text-white text-xs md:text-sm leading-relaxed min-w-0">
+            <div className="flex-1 text-white text-xs md:text-sm leading-tight md:leading-relaxed min-w-0">
               I am building forever financial freedom and a multi-millionaire life rooted in love, connection, calm, health, and joy. I am becoming the strongest, healthiest, most aligned version of myself so I can lead my boys and my family to become the strongest, healthiest, happiest versions of themselves.
             </div>
           </div>
@@ -1924,12 +1924,12 @@ export default function Home() {
       </div>
 
       {/* Folder Tiles */}
-      <div className="flex gap-2 overflow-x-auto pb-3 mb-3 md:mb-6 snap-x snap-mandatory scrollbar-thin">
+      <div className="flex flex-nowrap gap-2 overflow-x-auto pb-3 mb-3 md:mb-6 snap-x snap-mandatory scrollbar-thin">
         {folders.map(f => (
           <button
             key={f.id}
             onClick={() => router.push(`/folder/${f.name.toLowerCase().replace(/\s+/g, '-')}`)}
-            className="snap-start shrink-0 px-3 md:px-4 py-2 rounded-full text-white text-xs md:text-sm font-medium transition-all opacity-80 hover:opacity-100 hover:scale-105"
+            className="snap-start shrink-0 px-3 md:px-4 py-2 rounded-full text-white text-xs md:text-sm font-medium transition-all opacity-80 hover:opacity-100 hover:scale-105 whitespace-nowrap"
             style={{ backgroundColor: f.color }}
           >
             {f.name}
