@@ -1067,17 +1067,17 @@ export default function Home() {
     }
 
     return (
-      <div className="bg-[#16213e] rounded-xl p-6 mt-6">
+      <div className="bg-[#16213e] rounded-xl p-3 md:p-6 mt-3 md:mt-6">
         {/* Calendar Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <h2 className="text-xl font-bold text-white">Calendar</h2>
+        <div className="flex items-center justify-between mb-3 md:mb-6">
+          <div className="flex items-center gap-2 md:gap-4">
+            <h2 className="text-lg md:text-xl font-bold text-white">Calendar</h2>
             <div className="flex gap-1 bg-[#1a1a2e] rounded-lg p-1">
               {(['month', 'week', 'day', 'year'] as const).map(view => (
                 <button
                   key={view}
                   onClick={() => setCalendarView(view)}
-                  className={`px-3 py-1 rounded text-sm font-medium transition-all ${
+                  className={`px-2 md:px-3 py-1 rounded text-xs md:text-sm font-medium transition-all ${
                     calendarView === view 
                       ? 'bg-blue-600 text-white' 
                       : 'text-gray-400 hover:text-white hover:bg-[#252545]'
@@ -1089,8 +1089,8 @@ export default function Home() {
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
-            <div className="text-lg font-medium text-white">{getCalendarTitle()}</div>
+          <div className="flex items-center gap-2 md:gap-4">
+            <div className="text-sm md:text-lg font-medium text-white">{getCalendarTitle()}</div>
             <div className="flex gap-1">
               <button
                 onClick={() => navigateCalendar('prev')}
@@ -1128,14 +1128,14 @@ export default function Home() {
               </div>
               
               {/* Calendar days */}
-              <div className="grid grid-cols-7 gap-px">
+              <div className="grid grid-cols-7 gap-0.5 md:gap-px">
                 {generateCalendarDays().map((day, index) => {
                   const dayEvents = getEventsForDate(day)
                   const isPastDate = isPastDay(day.toISOString().split('T')[0])
                   return (
                     <div
                       key={index}
-                      className={`min-h-[100px] p-2 bg-[#1a1a2e] border border-gray-700 cursor-pointer hover:bg-[#202040] transition-colors ${
+                      className={`min-h-[80px] md:min-h-[100px] p-1 md:p-2 bg-[#1a1a2e] border border-gray-700 cursor-pointer hover:bg-[#202040] transition-colors ${
                         !isCurrentMonth(day) ? 'opacity-50' : ''
                       } ${isToday(day) ? 'ring-2 ring-blue-500' : ''} ${
                         isPastDate ? 'bg-gray-900 opacity-60' : ''
@@ -1144,7 +1144,7 @@ export default function Home() {
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop(e, day)}
                     >
-                      <div className={`text-sm mb-1 ${isToday(day) ? 'font-bold text-blue-400' : isPastDate ? 'text-gray-500' : 'text-gray-300'}`}>
+                      <div className={`text-xs md:text-sm mb-1 ${isToday(day) ? 'font-bold text-blue-400' : isPastDate ? 'text-gray-500' : 'text-gray-300'}`}>
                         {day.getDate()}
                       </div>
                       <div className="space-y-1">
@@ -1289,7 +1289,7 @@ export default function Home() {
   }
 
   const renderCalendarPanel = () => (
-    <div className="w-80 bg-[#16213e] rounded-xl p-4 h-fit">
+    <div className="w-full md:w-80 bg-[#16213e] rounded-xl p-3 md:p-4 h-fit">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-bold text-white">
           {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
@@ -1380,9 +1380,9 @@ export default function Home() {
     const tabKey = type === 'daily-digest' ? 'digest' : 'sendouts'
     
     return (
-      <div className="bg-[#16213e] rounded-xl p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-white">{title}</h2>
+      <div className="bg-[#16213e] rounded-xl p-3 md:p-4">
+        <div className="flex items-center justify-between mb-3 md:mb-4">
+          <h2 className="text-base md:text-lg font-bold text-white">{title}</h2>
           <button
             onClick={() => setHideCompleted(prev => ({ ...prev, [tabKey]: !prev[tabKey] }))}
             className="text-xs text-gray-400 hover:text-white transition-colors"
@@ -1501,9 +1501,9 @@ export default function Home() {
       : categories
     
     return (
-      <div className="space-y-6">
+      <div className="space-y-3 md:space-y-6">
         {/* Today's RSS Digest */}
-        <div className="bg-[#16213e] rounded-xl p-4">
+        <div className="bg-[#16213e] rounded-xl p-3 md:p-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-white">Daily Digest</h2>
             <div className="flex items-center gap-4">
@@ -1567,7 +1567,7 @@ export default function Home() {
 
         {/* Saved Items */}
         {savedDigestItems.length > 0 && (
-          <div className="bg-[#16213e] rounded-xl p-4">
+          <div className="bg-[#16213e] rounded-xl p-3 md:p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-md font-bold text-white">Saved</h3>
               <select
@@ -1639,9 +1639,9 @@ export default function Home() {
       : activeRecipients
     
     return (
-      <div className="space-y-6">
+      <div className="space-y-3 md:space-y-6">
         {/* Today's Send Outs */}
-        <div className="bg-[#16213e] rounded-xl p-4">
+        <div className="bg-[#16213e] rounded-xl p-3 md:p-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-white">Send Outs</h2>
             <div className="flex items-center gap-4">
@@ -1711,7 +1711,7 @@ export default function Home() {
 
         {/* Saved Messages */}
         {savedSendOuts.length > 0 && (
-          <div className="bg-[#16213e] rounded-xl p-4">
+          <div className="bg-[#16213e] rounded-xl p-3 md:p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-md font-bold text-white">Saved</h3>
               <div className="text-xs text-gray-400">{savedSendOuts.length} saved messages</div>
@@ -1749,11 +1749,11 @@ export default function Home() {
   }
 
   const renderWeeklyBoard = (board: 'jaclyn' | 'river') => (
-    <div className="bg-[#16213e] rounded-xl p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold text-white capitalize">{board}</h2>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+    <div className="bg-[#16213e] rounded-xl p-3 md:p-4">
+      <div className="flex items-center justify-between mb-3 md:mb-4">
+        <h2 className="text-base md:text-lg font-bold text-white capitalize">{board}</h2>
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className="flex items-center gap-1 md:gap-2">
             <button
               onClick={() => navigateWeek('prev')}
               className="text-gray-400 hover:text-white transition-colors p-1"
@@ -1762,7 +1762,7 @@ export default function Home() {
               ◀
             </button>
             <span 
-              className="text-sm text-gray-400 cursor-pointer hover:text-white transition-colors" 
+              className="text-xs md:text-sm text-gray-400 cursor-pointer hover:text-white transition-colors" 
               onClick={goToCurrentWeek}
               title="Go to current week"
             >
@@ -1788,7 +1788,7 @@ export default function Home() {
       {/* Weekly Notes Section */}
       {renderWeeklyNotes(board)}
 
-      <div className="space-y-3">
+      <div className="space-y-2 md:space-y-3">
         {DAYS.map(day => {
           const isOverflow = day === 'overflow'
           const dayIndex = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].indexOf(day)
@@ -1800,10 +1800,10 @@ export default function Home() {
             <div key={day} className="bg-[#1a1a2e] rounded-lg overflow-hidden">
               <button
                 onClick={() => toggleCollapse(`${board}-${day}`)}
-                className="w-full flex items-center justify-between p-3 hover:bg-[#202040] transition-colors"
+                className="w-full flex items-center justify-between p-2 md:p-3 hover:bg-[#202040] transition-colors"
               >
                 <div className="text-left">
-                  <div className="font-medium text-white text-sm">{DAY_LABELS[day]}</div>
+                  <div className="font-medium text-white text-xs md:text-sm">{DAY_LABELS[day]}</div>
                   {dateForDay && (
                     <div className="text-xs text-gray-400">
                       {dateForDay.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })}
@@ -1817,9 +1817,9 @@ export default function Home() {
               </button>
 
               {!isCollapsed && (
-                <div className="px-3 pb-3 space-y-2">
+                <div className="px-2 md:px-3 pb-2 md:pb-3 space-y-1 md:space-y-2">
                   {tasksForDay.map(task => (
-                    <div key={task.id} className="group flex items-center gap-3 p-2 hover:bg-[#252545] rounded-lg transition-colors">
+                    <div key={task.id} className="group flex items-center gap-2 md:gap-3 p-1 md:p-2 hover:bg-[#252545] rounded-lg transition-colors">
                       <input
                         type="checkbox"
                         checked={task.completed}
@@ -1832,7 +1832,7 @@ export default function Home() {
                         )}
                         <span
                           onClick={() => setEditingTask(task)}
-                          className={`text-sm cursor-pointer flex-1 ${
+                          className={`text-xs md:text-sm cursor-pointer flex-1 ${
                             task.completed ? 'line-through text-gray-500' : 'text-gray-200'
                           }`}
                         >
@@ -1870,9 +1870,9 @@ export default function Home() {
   )
 
   return (
-    <main className="min-h-screen p-4 md:p-6 max-w-[1400px] mx-auto">
+    <main className="min-h-screen p-3 md:p-6 max-w-[1400px] mx-auto">
       {/* Header */}
-      <div className="text-center mb-4">
+      <div className="text-center mb-3 md:mb-4">
         <div className="text-gray-500 text-xs font-light uppercase tracking-widest">
           FAMILY · WEALTH · LOVE · CONNECTION · HEALTH · PEACE · HAPPINESS
         </div>
@@ -1901,22 +1901,22 @@ export default function Home() {
       </div>
 
       {/* Vision Statement */}
-      <div className="bg-[#16213e] rounded-xl p-3 mb-4">
+      <div className="bg-[#16213e] rounded-xl p-3 mb-3 md:mb-4">
         <div className="text-center">
-          <div className="text-gray-400 text-xs italic mb-3">Vision Statement</div>
-          <div className="flex items-center gap-4">
+          <div className="text-gray-400 text-xs italic mb-2 md:mb-3">Vision Statement</div>
+          <div className="flex items-center gap-3 md:gap-4">
             {/* Left - Family Photo */}
             <div className="flex justify-center flex-shrink-0">
               <img 
                 src="/family-photo.jpg" 
                 alt="Family" 
                 className="rounded-full object-cover" 
-                style={{ width: '68px', height: '68px' }}
+                style={{ width: '60px', height: '60px' }}
               />
             </div>
             
             {/* Right - Vision Text */}
-            <div className="flex-1 text-white text-sm leading-relaxed min-w-0">
+            <div className="flex-1 text-white text-xs md:text-sm leading-relaxed min-w-0">
               I am building forever financial freedom and a multi-millionaire life rooted in love, connection, calm, health, and joy. I am becoming the strongest, healthiest, most aligned version of myself so I can lead my boys and my family to become the strongest, healthiest, happiest versions of themselves.
             </div>
           </div>
@@ -1924,12 +1924,12 @@ export default function Home() {
       </div>
 
       {/* Folder Tiles */}
-      <div className="flex gap-2 overflow-x-auto pb-3 mb-6 snap-x snap-mandatory scrollbar-thin">
+      <div className="flex gap-2 overflow-x-auto pb-3 mb-3 md:mb-6 snap-x snap-mandatory scrollbar-thin">
         {folders.map(f => (
           <button
             key={f.id}
             onClick={() => router.push(`/folder/${f.name.toLowerCase().replace(/\s+/g, '-')}`)}
-            className="snap-start shrink-0 px-4 py-2 rounded-full text-white text-sm font-medium transition-all opacity-80 hover:opacity-100 hover:scale-105"
+            className="snap-start shrink-0 px-3 md:px-4 py-2 rounded-full text-white text-xs md:text-sm font-medium transition-all opacity-80 hover:opacity-100 hover:scale-105"
             style={{ backgroundColor: f.color }}
           >
             {f.name}
@@ -1938,9 +1938,9 @@ export default function Home() {
       </div>
 
       {/* Main Layout - Left Content + Right Calendar */}
-      <div className="flex gap-6">
+      <div className="flex flex-col md:flex-row gap-3 md:gap-6">
         {/* Main Workspace */}
-        <div className="flex-1 space-y-6">
+        <div className="flex-1 space-y-3 md:space-y-6">
         {/* Tab Navigation */}
         <div className="flex gap-1 bg-[#16213e] rounded-xl p-1">
           {[
@@ -1952,7 +1952,7 @@ export default function Home() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-all ${
+              className={`flex-1 py-2 md:py-3 px-2 md:px-4 rounded-lg text-xs md:text-sm font-medium transition-all ${
                 activeTab === tab.id 
                   ? 'bg-[#1a1a2e] text-white' 
                   : 'text-gray-400 hover:text-white hover:bg-[#1a1a2e]/50'
@@ -1971,7 +1971,9 @@ export default function Home() {
         </div>
 
         {/* Calendar Panel */}
-        {renderCalendarPanel()}
+        <div className="w-full md:w-80 md:flex-shrink-0">
+          {renderCalendarPanel()}
+        </div>
       </div>
 
       {/* Full Calendar View */}
