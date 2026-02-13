@@ -115,6 +115,9 @@ export default function Home() {
   // Hide past events state
   const [hidePastEvents, setHidePastEvents] = useState<boolean>(true)
   
+  // Temporary debug state for mobile
+  const [debugInfo, setDebugInfo] = useState<string>('')
+  
   // Week navigation state - persist across page refreshes
   const [selectedWeek, setSelectedWeek] = useState<Date>(() => {
     if (typeof window !== 'undefined') {
@@ -674,6 +677,7 @@ export default function Home() {
 
   const editEvent = (event: CalendarEvent) => {
     setEditingEvent(event)
+    setDebugInfo('') // Clear debug info when opening modal
   }
 
   const saveEvent = async (eventData: CalendarEvent) => {
@@ -801,9 +805,6 @@ export default function Home() {
   // Mobile event move functions
   const moveEventToTomorrow = async (event: CalendarEvent) => {
     try {
-      // DEBUG: Log event ID
-      console.log('Tomorrow - event id:', event.id)
-      
       // Get original scheduled_for from DB
       const { data: originalEvent, error: fetchError } = await supabase
         .from('posts')
@@ -823,28 +824,30 @@ export default function Home() {
       // Save using toISOString() and format standardization
       const newScheduledFor = updated.toISOString().replace('Z', '+00:00')
       
-      // DEBUG: Log computed values
-      console.log('Tomorrow - old scheduled_for:', originalEvent.scheduled_for)
-      console.log('Tomorrow - computed new scheduled_for:', newScheduledFor)
+      // Update debug info
+      setDebugInfo(`Event ID: ${event.id}\nOld: ${originalEvent.scheduled_for}\nNew: ${newScheduledFor}`)
       
-      // Update in Supabase - using exact same pattern as Next Week
+      // Update in Supabase with select to confirm update
       const updateResult = await supabase
         .from('posts')
         .update({ scheduled_for: newScheduledFor })
         .eq('id', event.id)
+        .select('id, scheduled_for')
+        .single()
       
-      // DEBUG: Log Supabase response
-      console.log('Tomorrow - Supabase response data:', updateResult.data)
-      console.log('Tomorrow - Supabase response error:', updateResult.error)
-      console.log('Tomorrow - Supabase response status:', updateResult.status)
-
-      if (updateResult.error) throw updateResult.error
+      // Update debug info with results
+      if (updateResult.error) {
+        setDebugInfo(prev => `${prev}\nStatus: ERROR\nError: ${updateResult.error.message}`)
+        throw updateResult.error
+      } else {
+        setDebugInfo(prev => `${prev}\nStatus: SUCCESS\nDB Result: ${updateResult.data?.scheduled_for || 'none'}`)
+      }
 
       // Re-fetch events to confirm DB value changes
       fetchData(true)
     } catch (error) {
       console.error('Tomorrow button error:', error)
-      alert(`Tomorrow failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      setDebugInfo(prev => `${prev}\nFailed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -874,6 +877,8 @@ export default function Home() {
         .from('posts')
         .update({ scheduled_for: newScheduledFor })
         .eq('id', event.id)
+        .select('id, scheduled_for')
+        .single()
 
       if (updateResult.error) throw updateResult.error
 
@@ -2376,6 +2381,13 @@ export default function Home() {
                   Pick Date
                 </button>
               </div>
+              
+              {/* TEMP: On-screen debug info */}
+              {debugInfo && (
+                <div className="mt-3 p-2 bg-gray-800 rounded text-xs text-gray-300 font-mono whitespace-pre-line">
+                  {debugInfo}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 pt-2">
