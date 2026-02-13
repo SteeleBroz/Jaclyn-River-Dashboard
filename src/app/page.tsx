@@ -231,6 +231,20 @@ export default function Home() {
     })
   }
 
+  const formatEventTime = (time24: string) => {
+    // Convert 24-hour format (HH:mm) to 12-hour format with AM/PM
+    const [hours, minutes] = time24.split(':')
+    const date = new Date()
+    date.setHours(parseInt(hours), parseInt(minutes), 0, 0)
+    
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit', 
+      hour12: true,
+      timeZone: 'America/New_York'
+    })
+  }
+
   const isPastEvent = (event: CalendarEvent) => {
     const now = new Date()
     const currentNY = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
@@ -1106,7 +1120,7 @@ export default function Home() {
                   </div>
                   <div className="text-xs text-gray-400">
                     {formatEventDate(event.date)}
-                    {event.time && ` • ${event.time}`}
+                    {event.time && ` • ${formatEventTime(event.time)}`}
                   </div>
                 </div>
               )
