@@ -801,6 +801,9 @@ export default function Home() {
   // Mobile event move functions
   const moveEventToTomorrow = async (event: CalendarEvent) => {
     try {
+      // DEBUG: Log event ID
+      console.log('Tomorrow - event id:', event.id)
+      
       // Get original scheduled_for from DB
       const { data: originalEvent, error: fetchError } = await supabase
         .from('posts')
@@ -820,27 +823,66 @@ export default function Home() {
       // Save using toISOString() and format standardization
       const newScheduledFor = updated.toISOString().replace('Z', '+00:00')
       
-      // Update in Supabase
-      const { error } = await supabase
+      // DEBUG: Log computed values
+      console.log('Tomorrow - old scheduled_for:', originalEvent.scheduled_for)
+      console.log('Tomorrow - computed new scheduled_for:', newScheduledFor)
+      
+      // Update in Supabase - using exact same pattern as Next Week
+      const updateResult = await supabase
         .from('posts')
         .update({ scheduled_for: newScheduledFor })
         .eq('id', event.id)
+      
+      // DEBUG: Log Supabase response
+      console.log('Tomorrow - Supabase response data:', updateResult.data)
+      console.log('Tomorrow - Supabase response error:', updateResult.error)
+      console.log('Tomorrow - Supabase response status:', updateResult.status)
 
-      if (error) throw error
+      if (updateResult.error) throw updateResult.error
 
       // Re-fetch events to confirm DB value changes
       fetchData(true)
     } catch (error) {
       console.error('Tomorrow button error:', error)
-      alert('Failed to move event. Please try again.')
+      alert(`Tomorrow failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
   const moveEventToNextWeek = async (event: CalendarEvent) => {
-    const nextWeek = new Date(event.date)
-    nextWeek.setDate(nextWeek.getDate() + 7)
-    const targetDateStr = nextWeek.toISOString().split('T')[0]
-    await moveEventToDate(event, targetDateStr)
+    try {
+      // Get original scheduled_for from DB - same pattern as Tomorrow
+      const { data: originalEvent, error: fetchError } = await supabase
+        .from('posts')
+        .select('scheduled_for')
+        .eq('id', event.id)
+        .single()
+
+      if (fetchError || !originalEvent) throw new Error('Failed to fetch original event')
+
+      // Parse existing scheduled_for into Date object
+      const original = new Date(originalEvent.scheduled_for)
+      
+      // Add 7 days using Date API
+      const updated = new Date(original)
+      updated.setDate(updated.getDate() + 7)
+      
+      // Save using toISOString() and format standardization
+      const newScheduledFor = updated.toISOString().replace('Z', '+00:00')
+      
+      // Update in Supabase - exact same pattern as Tomorrow
+      const updateResult = await supabase
+        .from('posts')
+        .update({ scheduled_for: newScheduledFor })
+        .eq('id', event.id)
+
+      if (updateResult.error) throw updateResult.error
+
+      // Re-fetch events to confirm DB value changes
+      fetchData(true)
+    } catch (error) {
+      console.error('Next Week button error:', error)
+      alert(`Next Week failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
 
   const openDatePicker = (event: CalendarEvent) => {
