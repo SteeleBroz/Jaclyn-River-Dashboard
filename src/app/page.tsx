@@ -83,6 +83,26 @@ export default function Home() {
   }[]>([])
   const [savedFilter, setSavedFilter] = useState<string>('All')
   const [hideRead, setHideRead] = useState<boolean>(true)
+  
+  // Send Outs state
+  const [sendOuts, setSendOuts] = useState<{
+    date: string;
+    message_stryker: string | null;
+    message_jet: string | null;
+    message_parents: string | null;
+    message_friends: string | null;
+    sent_stryker: boolean;
+    sent_jet: boolean;
+    sent_parents: boolean;
+    sent_friends: boolean;
+  } | null>(null)
+  const [savedSendOuts, setSavedSendOuts] = useState<{
+    id: number;
+    category: string;
+    text: string;
+    date_saved: string;
+  }[]>([])
+  const [hideSent, setHideSent] = useState<boolean>(true)
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setSyncing(true)
@@ -229,9 +249,100 @@ export default function Home() {
     }
   }
 
+  // Send Outs functions
+  const fetchSendOutsData = useCallback(async () => {
+    try {
+      // Fetch today's send outs
+      const today = new Date().toISOString().split('T')[0]
+      const { data: sendOutsData } = await supabase
+        .from('send_out_today')
+        .select('*')
+        .eq('date', today)
+        .single()
+      
+      if (sendOutsData) {
+        setSendOuts(sendOutsData)
+      }
+      
+      // Fetch saved send outs
+      const { data: savedData } = await supabase
+        .from('saved_send_outs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50)
+      
+      if (savedData) {
+        setSavedSendOuts(savedData)
+      }
+    } catch (error) {
+      console.warn('Send outs data not available:', error)
+      // Fail silently - send outs feature is optional
+    }
+  }, [])
+
+  const saveSendOutMessage = async (text: string, category: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('saved_send_outs')
+        .insert({
+          text,
+          category,
+          date_saved: new Date().toISOString().split('T')[0]
+        })
+        .select()
+        .single()
+      
+      if (error) throw error
+      
+      if (data) {
+        setSavedSendOuts(prev => [data, ...prev])
+      }
+    } catch (error) {
+      console.error('Failed to save send out message:', error)
+      alert('Failed to save message. Please try again.')
+    }
+  }
+
+  const markSendOutSent = async (recipient: string, isSent: boolean) => {
+    if (!sendOuts) return
+    
+    try {
+      const sentField = `sent_${recipient.toLowerCase()}`
+      const { error } = await supabase
+        .from('send_out_today')
+        .update({ [sentField]: isSent })
+        .eq('date', sendOuts.date)
+      
+      if (error) throw error
+      
+      setSendOuts(prev => prev ? { ...prev, [sentField]: isSent } : null)
+    } catch (error) {
+      console.error('Failed to mark send out as sent:', error)
+    }
+  }
+
+  const deleteSavedSendOut = async (itemId: number) => {
+    if (!confirm('Delete this saved message?')) return
+    
+    try {
+      const { error } = await supabase
+        .from('saved_send_outs')
+        .delete()
+        .eq('id', itemId)
+      
+      if (error) throw error
+      
+      setSavedSendOuts(prev => prev.filter(item => item.id !== itemId))
+    } catch (error) {
+      console.error('Failed to delete saved send out:', error)
+      alert('Failed to delete message. Please try again.')
+    }
+  }
+
   useEffect(() => { 
     fetchData()
     fetchDigestData()
+    fetchSendOutsData()
     
     // Set up real-time subscriptions
     const taskSubscription = supabase
@@ -1138,6 +1249,134 @@ export default function Home() {
     )
   }
 
+  const renderSendOuts = () => {
+    const recipients = [
+      { key: 'message_stryker', label: 'Stryker', category: 'Stryker', sentKey: 'sent_stryker' },
+      { key: 'message_jet', label: 'Jet', category: 'Jet', sentKey: 'sent_jet' },
+      { key: 'message_parents', label: 'Parents', category: 'Parents', sentKey: 'sent_parents' },
+      { key: 'message_friends', label: 'Friends/Family', category: 'Friends', sentKey: 'sent_friends' }
+    ]
+    
+    // Only show recipients that have messages for today
+    const activeRecipients = recipients.filter(({ key }) => 
+      sendOuts && sendOuts[key as keyof typeof sendOuts]
+    )
+    
+    // Filter out sent messages if hideSent is enabled
+    const visibleRecipients = hideSent && sendOuts 
+      ? activeRecipients.filter(({ sentKey }) => !sendOuts[sentKey as keyof typeof sendOuts])
+      : activeRecipients
+    
+    return (
+      <div className="space-y-6">
+        {/* Today's Send Outs */}
+        <div className="bg-[#16213e] rounded-xl p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-white">Send Outs</h2>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 text-xs text-gray-400">
+                <input
+                  type="checkbox"
+                  checked={hideSent}
+                  onChange={(e) => setHideSent(e.target.checked)}
+                  className="w-3 h-3 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                />
+                Hide Sent
+              </label>
+              <div className="text-xs text-gray-400">
+                {sendOuts ? new Date(sendOuts.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : 'Loading...'}
+              </div>
+            </div>
+          </div>
+
+          {sendOuts ? (
+            <div className="space-y-3">
+              {visibleRecipients.map(({ key, label, category, sentKey }) => {
+                const text = sendOuts[key as keyof typeof sendOuts] as string
+                const isSent = sendOuts[sentKey as keyof typeof sendOuts] as boolean
+                return (
+                  <div key={key} className="flex items-start gap-3 p-3 bg-[#1a1a2e] rounded-lg">
+                    <input
+                      type="checkbox"
+                      checked={isSent}
+                      onChange={(e) => markSendOutSent(category.toLowerCase(), e.target.checked)}
+                      className="w-4 h-4 mt-1 rounded border-gray-600 bg-[#16213e] text-green-500 focus:ring-green-500 focus:ring-offset-0 shrink-0"
+                      title="Mark as sent"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-gray-400 mb-1 font-medium">{label}</div>
+                      <div className="text-gray-200 text-sm leading-relaxed">{text}</div>
+                    </div>
+                    <button
+                      onClick={() => saveSendOutMessage(text, category)}
+                      className="text-yellow-500 hover:text-yellow-400 transition-colors p-1 shrink-0"
+                      title={`Save ${category} message`}
+                    >
+                      ⭐
+                    </button>
+                  </div>
+                )
+              })}
+              {visibleRecipients.length === 0 && activeRecipients.length > 0 && hideSent && (
+                <div className="text-center text-gray-400 py-4">
+                  <div className="text-sm">All messages marked as sent</div>
+                  <div className="text-xs mt-1">Uncheck "Hide Sent" to see them</div>
+                </div>
+              )}
+              {activeRecipients.length === 0 && (
+                <div className="text-center text-gray-400 py-8">
+                  <div className="text-sm">No messages scheduled for today</div>
+                  <div className="text-xs mt-1">Messages generate weekdays at 5:00 AM ET</div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center text-gray-400 py-8">
+              <div className="text-sm">Messages generate weekdays at 5:00 AM ET</div>
+              <div className="text-xs mt-1">Next generation: Monday morning</div>
+            </div>
+          )}
+        </div>
+
+        {/* Saved Messages */}
+        {savedSendOuts.length > 0 && (
+          <div className="bg-[#16213e] rounded-xl p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-md font-bold text-white">Saved</h3>
+              <div className="text-xs text-gray-400">{savedSendOuts.length} saved messages</div>
+            </div>
+
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {savedSendOuts.map(item => (
+                <div key={item.id} className="p-3 bg-[#1a1a2e] rounded-lg">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <span className="text-xs text-purple-400 font-medium">{item.category}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">
+                        {new Date(item.date_saved).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                      <button
+                        onClick={() => deleteSavedSendOut(item.id)}
+                        className="text-gray-500 hover:text-red-400 transition-colors"
+                        title="Delete saved message"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-gray-200 text-sm leading-relaxed">{item.text}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Existing Task Checklist */}
+        {renderChecklist('send-outs', 'Task Checklist')}
+      </div>
+    )
+  }
+
   const renderWeeklyBoard = (board: 'jaclyn' | 'river') => (
     <div className="bg-[#16213e] rounded-xl p-4">
       <div className="flex items-center justify-between mb-4">
@@ -1309,7 +1548,7 @@ export default function Home() {
         {activeTab === 'jaclyn' && renderWeeklyBoard('jaclyn')}
         {activeTab === 'river' && renderWeeklyBoard('river')}
         {activeTab === 'digest' && renderDailyDigest()}
-        {activeTab === 'sendouts' && renderChecklist('send-outs', 'Send Outs')}
+        {activeTab === 'sendouts' && renderSendOuts()}
         </div>
 
         {/* Calendar Panel */}
