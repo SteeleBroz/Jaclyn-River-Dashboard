@@ -797,6 +797,121 @@ export default function Home() {
     setWeeklyNotes(prev => prev.filter(n => n.id !== noteId))
   }
 
+  // Drag & Drop functionality for calendar events
+  const [draggedEvent, setDraggedEvent] = useState<CalendarEvent | null>(null)
+
+  const handleDragStart = (e: React.DragEvent, event: CalendarEvent) => {
+    setDraggedEvent(event)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (draggedEvent) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+    }
+  }
+
+  const handleDrop = async (e: React.DragEvent, targetDate: Date) => {
+    e.preventDefault()
+    if (!draggedEvent) return
+
+    const targetDateStr = targetDate.toISOString().split('T')[0]
+    
+    // Block dropping into past days
+    if (isPastDay(targetDateStr)) {
+      alert('Cannot reschedule events to past dates.')
+      setDraggedEvent(null)
+      return
+    }
+
+    // If dropping on the same date, do nothing
+    if (draggedEvent.date === targetDateStr) {
+      setDraggedEvent(null)
+      return
+    }
+
+    try {
+      // Find the original event in the DB to get the exact scheduled_for timestamp
+      const { data: originalEvent, error: fetchError } = await supabase
+        .from('posts')
+        .select('scheduled_for')
+        .eq('id', draggedEvent.id)
+        .single()
+
+      if (fetchError || !originalEvent) throw new Error('Failed to fetch original event')
+
+      // Parse original UTC timestamp
+      const originalUtc = new Date(originalEvent.scheduled_for)
+      
+      // Convert to NY time to extract local time components
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      })
+      
+      const nyTimeString = formatter.format(originalUtc) // "YYYY-MM-DD, HH:mm"
+      const [, timeOnly] = nyTimeString.split(', ') // Extract "HH:mm"
+      
+      // Create new date with target date + same NY local time
+      const newDateTimeInNY = `${targetDateStr}, ${timeOnly}`
+      
+      // Parse back to Date object in NY timezone
+      const newUtc = new Date(`${targetDateStr}T${timeOnly}:00-05:00`) // EST assumption, will adjust for DST
+      
+      // Let's use a more direct approach - build the new UTC timestamp
+      const [hours, minutes] = timeOnly.split(':').map(Number)
+      const targetDateObj = new Date(targetDateStr + 'T00:00:00Z')
+      targetDateObj.setUTCHours(hours + 5, minutes, 0, 0) // Add 5 hours to convert NY to UTC (EST)
+      
+      // Account for DST if needed - check if the original date was in DST
+      const isDst = (date: Date) => {
+        const jan = new Date(date.getFullYear(), 0, 1).getTimezoneOffset()
+        const jul = new Date(date.getFullYear(), 6, 1).getTimezoneOffset()
+        return Math.max(jan, jul) !== date.getTimezoneOffset()
+      }
+      
+      const targetIsDst = isDst(new Date(targetDateStr))
+      if (targetIsDst) {
+        targetDateObj.setUTCHours(targetDateObj.getUTCHours() - 1) // Subtract 1 hour for EDT
+      }
+
+      const utcIsoString = targetDateObj.toISOString()
+
+      // Update only scheduled_for in Supabase
+      const { error } = await supabase
+        .from('posts')
+        .update({ 
+          scheduled_for: utcIsoString
+        })
+        .eq('id', draggedEvent.id)
+
+      if (error) throw error
+
+      // Update events in state
+      setEvents(prev => prev.map(e => 
+        e.id === draggedEvent.id 
+          ? { 
+              ...e, 
+              date: targetDateStr,
+              time: timeOnly
+            }
+          : e
+      ))
+
+    } catch (error) {
+      console.error('Failed to move event:', error)
+      alert('Failed to move event. Please try again.')
+    }
+
+    setDraggedEvent(null)
+  }
+
   const formatNoteTime = (timestamp: string) => {
     const date = new Date(timestamp)
     return date.toLocaleString('en-US', { 
@@ -1015,26 +1130,34 @@ export default function Home() {
               <div className="grid grid-cols-7 gap-px">
                 {generateCalendarDays().map((day, index) => {
                   const dayEvents = getEventsForDate(day)
+                  const isPastDate = isPastDay(day.toISOString().split('T')[0])
                   return (
                     <div
                       key={index}
                       className={`min-h-[100px] p-2 bg-[#1a1a2e] border border-gray-700 cursor-pointer hover:bg-[#202040] transition-colors ${
                         !isCurrentMonth(day) ? 'opacity-50' : ''
                       } ${isToday(day) ? 'ring-2 ring-blue-500' : ''} ${
-                        isPastDay(day.toISOString().split('T')[0]) ? 'bg-gray-900 opacity-60' : ''
-                      }`}
+                        isPastDate ? 'bg-gray-900 opacity-60' : ''
+                      } ${draggedEvent && !isPastDate ? 'border-blue-500 border-2' : ''}`}
                       onClick={() => addEvent(day.toISOString().split('T')[0])}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, day)}
                     >
-                      <div className={`text-sm mb-1 ${isToday(day) ? 'font-bold text-blue-400' : isPastDay(day.toISOString().split('T')[0]) ? 'text-gray-500' : 'text-gray-300'}`}>
+                      <div className={`text-sm mb-1 ${isToday(day) ? 'font-bold text-blue-400' : isPastDate ? 'text-gray-500' : 'text-gray-300'}`}>
                         {day.getDate()}
                       </div>
                       <div className="space-y-1">
                         {dayEvents.slice(0, 3).map(event => (
                           <div
                             key={event.id}
-                            className="text-xs p-1 rounded truncate cursor-pointer"
+                            draggable={calendarView === 'month'}
+                            onDragStart={(e) => handleDragStart(e, event)}
+                            className={`text-xs p-1 rounded truncate cursor-pointer ${
+                              calendarView === 'month' ? 'cursor-move hover:opacity-80' : ''
+                            } ${draggedEvent?.id === event.id ? 'opacity-50' : ''}`}
                             style={{ backgroundColor: getFolderColor(event.folder || 'PERSONAL') + '40', color: getFolderColor(event.folder || 'PERSONAL') }}
                             onClick={(e) => { e.stopPropagation(); editEvent(event) }}
+                            title={calendarView === 'month' ? 'Drag to reschedule or click to edit' : 'Click to edit'}
                           >
                             <span className={isPastEvent(event) ? 'line-through text-gray-400 opacity-60' : ''}>
                               {event.time && `${event.time} `}{event.title}
