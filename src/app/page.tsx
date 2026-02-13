@@ -62,6 +62,7 @@ export default function Home() {
   })
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   
@@ -624,52 +625,67 @@ export default function Home() {
     }
   }
 
-  const editEvent = async (event: CalendarEvent) => {
-    const title = prompt('Event title:', event.title)
-    if (!title) return
-    
-    const time = prompt('Time (HH:MM, leave empty for all-day):', event.time || '')
-    
-    let folder = event.folder || 'PERSONAL'
-    if (folders.length > 0) {
-      const folderOptions = folders.map(f => f.name).join(', ')
-      const selectedFolder = prompt(`Category (${folderOptions}):`, folder)
-      if (selectedFolder?.trim()) folder = selectedFolder.trim()
-    }
-    
-    const scheduledFor = time?.trim() 
-      ? `${event.date}T${time}:00`
-      : `${event.date}T12:00:00`
-    
-    const { data } = await supabase.from('posts')
-      .update({
-        title: title.trim(),
-        folder: folder,
-        scheduled_for: scheduledFor
-      })
-      .eq('id', event.id)
-      .select()
-      .single()
-    
-    if (data) {
-      const mappedEvent = {
-        id: data.id,
-        title: data.title,
-        description: data.content, // Actual description content
-        folder: data.folder || 'PERSONAL', // Folder name for color coding
-        date: data.scheduled_for?.split('T')[0] || event.date,
-        time: data.scheduled_for?.split('T')[1]?.substring(0, 5),
-        created_at: data.created_at
+  const editEvent = (event: CalendarEvent) => {
+    setEditingEvent(event)
+  }
+
+  const saveEvent = async (eventData: CalendarEvent) => {
+    try {
+      // Parse times and combine with date
+      let scheduledFor = `${eventData.date}T12:00:00`
+      if (eventData.time?.trim()) {
+        scheduledFor = `${eventData.date}T${eventData.time}:00`
       }
-      setEvents(prev => prev.map(e => e.id === event.id ? mappedEvent : e))
+      
+      const { data, error } = await supabase.from('posts')
+        .update({
+          title: eventData.title.trim(),
+          content: eventData.description || '',
+          folder: eventData.folder || 'PERSONAL',
+          scheduled_for: scheduledFor
+        })
+        .eq('id', eventData.id)
+        .select()
+        .single()
+      
+      if (error) throw error
+      
+      if (data) {
+        const mappedEvent: CalendarEvent = {
+          id: data.id,
+          title: data.title,
+          description: data.content || '',
+          folder: data.folder || 'PERSONAL',
+          date: data.scheduled_for?.split('T')[0] || eventData.date,
+          time: data.scheduled_for?.split('T')[1]?.substring(0, 5),
+          created_at: data.created_at
+        }
+        setEvents(prev => prev.map(e => e.id === eventData.id ? mappedEvent : e))
+      }
+      
+      setEditingEvent(null)
+    } catch (error) {
+      console.error('Failed to save event:', error)
+      alert('Failed to save event. Please try again.')
     }
   }
 
-  const deleteEvent = async (eventId: number) => {
+  const deleteEventById = async (eventId: number) => {
     if (!confirm('Delete this event?')) return
-    await supabase.from('posts').delete().eq('id', eventId)
-    setEvents(prev => prev.filter(e => e.id !== eventId))
+    
+    try {
+      const { error } = await supabase.from('posts').delete().eq('id', eventId)
+      if (error) throw error
+      
+      setEvents(prev => prev.filter(e => e.id !== eventId))
+      setEditingEvent(null)
+    } catch (error) {
+      console.error('Failed to delete event:', error)
+      alert('Failed to delete event. Please try again.')
+    }
   }
+
+  // deleteEvent function removed - using deleteEventById instead
 
   const getWeeklyNotes = (author: string) => {
     return weeklyNotes
@@ -1021,7 +1037,7 @@ export default function Home() {
                       {event.time && <div className="text-sm text-gray-400">{event.time}</div>}
                     </div>
                     <button
-                      onClick={(e) => { e.stopPropagation(); deleteEvent(event.id) }}
+                      onClick={(e) => { e.stopPropagation(); deleteEventById(event.id) }}
                       className="text-gray-500 hover:text-red-400 transition-colors"
                     >
                       ×
@@ -1851,6 +1867,97 @@ export default function Home() {
               </button>
               <button
                 onClick={() => deleteTask(editingTask.id)}
+                className="bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Event Details Modal */}
+      {editingEvent && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setEditingEvent(null)}>
+          <div className="bg-[#16213e] rounded-xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white">Event Details</h3>
+
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Title</label>
+              <input
+                className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 focus:border-blue-500 outline-none"
+                value={editingEvent.title}
+                onChange={e => setEditingEvent({ ...editingEvent, title: e.target.value })}
+                placeholder="Event title"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Folder</label>
+                <select
+                  className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                  value={editingEvent.folder || 'PERSONAL'}
+                  onChange={e => setEditingEvent({ ...editingEvent, folder: e.target.value })}
+                >
+                  {folders.map(f => (
+                    <option key={f.id} value={f.name}>{f.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Date</label>
+                <input
+                  type="date"
+                  className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                  value={editingEvent.date}
+                  onChange={e => setEditingEvent({ ...editingEvent, date: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Start Time</label>
+                <input
+                  type="time"
+                  className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                  value={editingEvent.time || ''}
+                  onChange={e => setEditingEvent({ ...editingEvent, time: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">End Time</label>
+                <input
+                  type="time"
+                  className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                  placeholder="Optional"
+                  disabled
+                />
+                <div className="text-xs text-gray-500 mt-1">Coming in Phase 2</div>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Description</label>
+              <textarea
+                className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none resize-none"
+                rows={3}
+                value={editingEvent.description || ''}
+                onChange={e => setEditingEvent({ ...editingEvent, description: e.target.value })}
+                placeholder="Event notes..."
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => saveEvent(editingEvent)}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium transition-colors"
+              >
+                Save Changes
+              </button>
+              <button
+                onClick={() => deleteEventById(editingEvent.id)}
                 className="bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
               >
                 Delete
