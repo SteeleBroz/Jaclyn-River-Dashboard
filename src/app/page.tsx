@@ -858,9 +858,6 @@ export default function Home() {
 
       // Force immediate re-fetch and UI update
       await fetchData(true)
-      
-      // Force re-render by updating events state timestamp
-      setEvents(prev => [...prev])
     } catch (error) {
       console.error('Tomorrow button error:', error)
       setDebugInfo(prev => `${prev}\nFailed: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -912,9 +909,6 @@ export default function Home() {
 
       // Force immediate re-fetch and UI update
       await fetchData(true)
-      
-      // Force re-render by updating events state timestamp
-      setEvents(prev => [...prev])
     } catch (error) {
       console.error('Next Week button error:', error)
       alert(`Next Week failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
