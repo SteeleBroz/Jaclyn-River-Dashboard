@@ -1001,12 +1001,13 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Quote of the Day */}
+      {/* Vision Statement */}
       <div className="bg-[#16213e] rounded-xl p-4 mb-6">
         <div className="text-center">
-          <div className="text-gray-400 text-sm italic mb-1">Quote of the Day</div>
-          <div className="text-white text-lg font-medium">"Focus on progress, not perfection."</div>
-          <div className="text-gray-500 text-xs mt-1">— Daily Wisdom</div>
+          <div className="text-gray-400 text-xs italic mb-2">Vision Statement</div>
+          <div className="text-white text-sm leading-relaxed max-w-2xl mx-auto">
+            I am building forever financial freedom and a multi-millionaire life rooted in love, connection, calm, health, and joy. I am becoming the strongest, healthiest, most aligned version of myself so I can lead my boys and my family to become the strongest, healthiest, happiest versions of themselves.
+          </div>
         </div>
       </div>
 
