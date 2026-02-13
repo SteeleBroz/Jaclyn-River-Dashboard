@@ -115,9 +115,6 @@ export default function Home() {
   // Hide past events state
   const [hidePastEvents, setHidePastEvents] = useState<boolean>(true)
   
-  // Mobile move debugging state
-  const [moveStatus, setMoveStatus] = useState<string>('')
-  
   // Week navigation state - persist across page refreshes
   const [selectedWeek, setSelectedWeek] = useState<Date>(() => {
     if (typeof window !== 'undefined') {
@@ -804,12 +801,6 @@ export default function Home() {
   // Mobile event move functions
   const moveEventToTomorrow = async (event: CalendarEvent) => {
     try {
-      // TEMP: Show tap indicator
-      setMoveStatus('Tomorrow tapped ✅')
-      
-      // Show saving state
-      setTimeout(() => setMoveStatus('Saving...'), 100)
-      
       // Get original scheduled_for from DB
       const { data: originalEvent, error: fetchError } = await supabase
         .from('posts')
@@ -829,11 +820,6 @@ export default function Home() {
       // Save using toISOString() and format standardization
       const newScheduledFor = updated.toISOString().replace('Z', '+00:00')
       
-      // TEMP: Log before/after values
-      console.log('old scheduled_for:', originalEvent.scheduled_for)
-      console.log('new scheduled_for:', newScheduledFor)
-      setMoveStatus(`Old: ${originalEvent.scheduled_for}\nNew: ${newScheduledFor}`)
-      
       // Update in Supabase
       const { error } = await supabase
         .from('posts')
@@ -844,13 +830,9 @@ export default function Home() {
 
       // Re-fetch events to confirm DB value changes
       fetchData(true)
-      
-      // Clear status on success
-      setTimeout(() => setMoveStatus(''), 2000)
     } catch (error) {
       console.error('Tomorrow button error:', error)
-      setMoveStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
-      setTimeout(() => setMoveStatus(''), 5000)
+      alert('Failed to move event. Please try again.')
     }
   }
 
@@ -2352,12 +2334,6 @@ export default function Home() {
                   Pick Date
                 </button>
               </div>
-              {/* TEMP: Tap indicator */}
-              {moveStatus && (
-                <div className="mt-2 text-xs text-center text-green-400">
-                  {moveStatus}
-                </div>
-              )}
             </div>
 
             <div className="flex gap-3 pt-2">
