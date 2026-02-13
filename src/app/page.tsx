@@ -67,6 +67,11 @@ export default function Home() {
     item_prosports: string;
     item_tampa: string;
     item_athlete: string;
+    read_world: boolean;
+    read_culture: boolean;
+    read_prosports: boolean;
+    read_tampa: boolean;
+    read_athlete: boolean;
   } | null>(null)
   const [savedDigestItems, setSavedDigestItems] = useState<{
     id: number;
@@ -77,6 +82,7 @@ export default function Home() {
     notes?: string;
   }[]>([])
   const [savedFilter, setSavedFilter] = useState<string>('All')
+  const [hideRead, setHideRead] = useState<boolean>(true)
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setSyncing(true)
@@ -184,6 +190,42 @@ export default function Home() {
     } catch (error) {
       console.error('Failed to save digest item:', error)
       alert('Failed to save item. Please try again.')
+    }
+  }
+
+  const markDigestItemRead = async (category: string, isRead: boolean) => {
+    if (!dailyDigest) return
+    
+    try {
+      const readField = `read_${category.toLowerCase().replace(' ', '')}`
+      const { error } = await supabase
+        .from('daily_digest_today')
+        .update({ [readField]: isRead })
+        .eq('date', dailyDigest.date)
+      
+      if (error) throw error
+      
+      setDailyDigest(prev => prev ? { ...prev, [readField]: isRead } : null)
+    } catch (error) {
+      console.error('Failed to mark item as read:', error)
+    }
+  }
+
+  const deleteSavedItem = async (itemId: number) => {
+    if (!confirm('Delete this saved item?')) return
+    
+    try {
+      const { error } = await supabase
+        .from('saved_digest_items')
+        .delete()
+        .eq('id', itemId)
+      
+      if (error) throw error
+      
+      setSavedDigestItems(prev => prev.filter(item => item.id !== itemId))
+    } catch (error) {
+      console.error('Failed to delete saved item:', error)
+      alert('Failed to delete item. Please try again.')
     }
   }
 
@@ -960,16 +1002,21 @@ export default function Home() {
 
   const renderDailyDigest = () => {
     const categories = [
-      { key: 'item_world', label: 'World', category: 'World' },
-      { key: 'item_culture', label: 'Culture/Entrepreneurship/Streetwear', category: 'Culture' },
-      { key: 'item_prosports', label: 'Pro Sports (NBA/MLB/NFL)', category: 'Pro Sports' },
-      { key: 'item_tampa', label: 'Tampa Local HS/MS Football & Baseball', category: 'Tampa Local' },
-      { key: 'item_athlete', label: 'Athlete Development', category: 'Athlete Dev' }
+      { key: 'item_world', label: 'World', category: 'World', readKey: 'read_world' },
+      { key: 'item_culture', label: 'Culture/Entrepreneurship/Streetwear', category: 'Culture', readKey: 'read_culture' },
+      { key: 'item_prosports', label: 'Pro Sports (NBA/MLB/NFL)', category: 'Pro Sports', readKey: 'read_prosports' },
+      { key: 'item_tampa', label: 'Tampa Local HS/MS Football & Baseball', category: 'Tampa Local', readKey: 'read_tampa' },
+      { key: 'item_athlete', label: 'Athlete Development', category: 'Athlete Dev', readKey: 'read_athlete' }
     ]
     
     const filteredSavedItems = savedFilter === 'All' 
       ? savedDigestItems 
       : savedDigestItems.filter(item => item.category === savedFilter)
+    
+    // Filter out read items if hideRead is enabled
+    const visibleCategories = hideRead && dailyDigest 
+      ? categories.filter(({ readKey }) => !dailyDigest[readKey as keyof typeof dailyDigest])
+      : categories
     
     return (
       <div className="space-y-6">
@@ -977,17 +1024,36 @@ export default function Home() {
         <div className="bg-[#16213e] rounded-xl p-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-white">Daily Digest</h2>
-            <div className="text-xs text-gray-400">
-              {dailyDigest ? new Date(dailyDigest.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : 'Loading...'}
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 text-xs text-gray-400">
+                <input
+                  type="checkbox"
+                  checked={hideRead}
+                  onChange={(e) => setHideRead(e.target.checked)}
+                  className="w-3 h-3 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                />
+                Hide Read
+              </label>
+              <div className="text-xs text-gray-400">
+                {dailyDigest ? new Date(dailyDigest.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : 'Loading...'}
+              </div>
             </div>
           </div>
 
           {dailyDigest ? (
             <div className="space-y-3">
-              {categories.map(({ key, label, category }) => {
+              {visibleCategories.map(({ key, label, category, readKey }) => {
                 const text = dailyDigest[key as keyof typeof dailyDigest] as string
+                const isRead = dailyDigest[readKey as keyof typeof dailyDigest] as boolean
                 return (
                   <div key={key} className="flex items-start gap-3 p-3 bg-[#1a1a2e] rounded-lg">
+                    <input
+                      type="checkbox"
+                      checked={isRead}
+                      onChange={(e) => markDigestItemRead(category, e.target.checked)}
+                      className="w-4 h-4 mt-1 rounded border-gray-600 bg-[#16213e] text-green-500 focus:ring-green-500 focus:ring-offset-0 shrink-0"
+                      title="Mark as read"
+                    />
                     <div className="flex-1 min-w-0">
                       <div className="text-xs text-gray-400 mb-1 font-medium">{label}</div>
                       <div className="text-gray-200 text-sm leading-relaxed">{text}</div>
@@ -1002,6 +1068,12 @@ export default function Home() {
                   </div>
                 )
               })}
+              {visibleCategories.length === 0 && hideRead && (
+                <div className="text-center text-gray-400 py-4">
+                  <div className="text-sm">All items marked as read</div>
+                  <div className="text-xs mt-1">Uncheck "Hide Read" to see them</div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center text-gray-400 py-8">
@@ -1035,9 +1107,18 @@ export default function Home() {
                 <div key={item.id} className="p-3 bg-[#1a1a2e] rounded-lg">
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <span className="text-xs text-blue-400 font-medium">{item.category}</span>
-                    <span className="text-xs text-gray-500">
-                      {new Date(item.date_saved).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">
+                        {new Date(item.date_saved).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                      <button
+                        onClick={() => deleteSavedItem(item.id)}
+                        className="text-gray-500 hover:text-red-400 transition-colors"
+                        title="Delete saved item"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
                   <div className="text-gray-200 text-sm leading-relaxed">{item.text}</div>
                 </div>
