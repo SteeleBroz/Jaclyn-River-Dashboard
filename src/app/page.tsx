@@ -1004,7 +1004,7 @@ export default function Home() {
       {/* Vision Statement */}
       <div className="bg-[#16213e] rounded-xl p-4 mb-6">
         <div className="text-center">
-          <div className="text-gray-400 text-xs italic mb-2">Vision Statement <span className="bg-yellow-500 text-black px-2 py-1 rounded text-xs font-bold ml-2">DEPLOY CHECK</span></div>
+          <div className="text-gray-400 text-xs italic mb-2">Vision Statement</div>
           <div className="text-white text-sm leading-relaxed max-w-2xl mx-auto">
             I am building forever financial freedom and a multi-millionaire life rooted in love, connection, calm, health, and joy. I am becoming the strongest, healthiest, most aligned version of myself so I can lead my boys and my family to become the strongest, healthiest, happiest versions of themselves.
           </div>
