@@ -1024,11 +1024,11 @@ export default function Home() {
                       className={`min-h-[100px] p-2 bg-[#1a1a2e] border border-gray-700 cursor-pointer hover:bg-[#202040] transition-colors ${
                         !isCurrentMonth(day) ? 'opacity-50' : ''
                       } ${isToday(day) ? 'ring-2 ring-blue-500' : ''} ${
-                        isPastDay(day.toISOString().split('T')[0]) ? 'bg-gray-800/50 opacity-75' : ''
+                        isPastDay(day.toISOString().split('T')[0]) ? 'bg-gray-900 opacity-60' : ''
                       }`}
                       onClick={() => addEvent(day.toISOString().split('T')[0])}
                     >
-                      <div className={`text-sm mb-1 ${isToday(day) ? 'font-bold text-blue-400' : 'text-gray-300'}`}>
+                      <div className={`text-sm mb-1 ${isToday(day) ? 'font-bold text-blue-400' : isPastDay(day.toISOString().split('T')[0]) ? 'text-gray-500' : 'text-gray-300'}`}>
                         {day.getDate()}
                         {day.getDate() === 12 && (
                           <div className="text-xs text-red-400">isPastDay={isPastDay(day.toISOString().split('T')[0]).toString()}</div>
@@ -1068,9 +1068,9 @@ export default function Home() {
                   const dayEvents = getEventsForDate(day)
                   return (
                     <div key={index} className={`bg-[#1a1a2e] rounded-lg p-3 ${
-                      isPastDay(day.toISOString().split('T')[0]) ? 'bg-gray-800/50 opacity-75' : ''
+                      isPastDay(day.toISOString().split('T')[0]) ? 'bg-gray-900 opacity-60' : ''
                     }`}>
-                      <div className={`text-center mb-3 ${isToday(day) ? 'font-bold text-blue-400' : 'text-gray-300'}`}>
+                      <div className={`text-center mb-3 ${isToday(day) ? 'font-bold text-blue-400' : isPastDay(day.toISOString().split('T')[0]) ? 'text-gray-500' : 'text-gray-300'}`}>
                         <div className="text-xs">{day.toLocaleDateString('en-US', { weekday: 'short' })}</div>
                         <div className="text-lg">{day.getDate()}</div>
                       </div>
