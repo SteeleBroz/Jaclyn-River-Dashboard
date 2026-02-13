@@ -15,9 +15,15 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 // Get week dates for a specific date in NY timezone
 const getWeekDates = (referenceDate: Date) => {
-  // Convert reference date to NY timezone
-  const nyDate = new Date(referenceDate.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  // Create a new Date to avoid mutating the original
+  const workingDate = new Date(referenceDate)
+  
+  // Convert to NY timezone and get the day
+  const nyDateStr = workingDate.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) // YYYY-MM-DD format
+  const nyDate = new Date(nyDateStr + 'T12:00:00') // Parse as local date at noon to avoid timezone shifts
   const currentDay = nyDate.getDay()
+  
+  // Calculate Monday of this week
   const startOfWeek = new Date(nyDate)
   startOfWeek.setDate(nyDate.getDate() - (currentDay === 0 ? 6 : currentDay - 1)) // Monday start
   
@@ -104,25 +110,47 @@ export default function Home() {
   }[]>([])
   const [hideSent, setHideSent] = useState<boolean>(true)
   
-  // Week navigation state
-  const [selectedWeek, setSelectedWeek] = useState<Date>(new Date())
+  // Week navigation state - persist across page refreshes
+  const [selectedWeek, setSelectedWeek] = useState<Date>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('selectedWeek')
+      if (stored) {
+        const date = new Date(stored)
+        if (!isNaN(date.getTime())) {
+          return date
+        }
+      }
+    }
+    return new Date()
+  })
+
+  // Save selectedWeek to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('selectedWeek', selectedWeek.toISOString())
+    }
+  }, [selectedWeek])
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setSyncing(true)
     try {
       const { weekStartDate } = getWeekDates(selectedWeek)
-      console.log('Fetching tasks for week starting:', weekStartDate)
+      console.log('🔍 Selected Week:', selectedWeek.toISOString())
+      console.log('🔍 Computed week_start for query:', weekStartDate)
       
       const [{ data: f }, { data: t }, { data: e }, { data: n }] = await Promise.all([
         supabase.from(FOLDERS_TABLE).select('*').order('id'),
         supabase.from(TASKS_TABLE)
           .select('*')
-          .or(`week_start.eq.${weekStartDate},week_start.is.null`), // Include existing tasks without week_start
+          .eq('week_start', weekStartDate), // Only exact week match - no fallback
         supabase.from('posts').select('*').eq('platform', 'calendar').order('scheduled_for'),
         supabase.from('posts').select('*').eq('platform', 'weekly-notes').order('created_at', { ascending: false })
       ])
       if (f) setFolders(f)
       if (t) {
+        console.log('🔍 Raw tasks from DB:', t.length, 'tasks')
+        console.log('🔍 First task sample:', t[0])
+        
         // Map existing schema to expected dashboard format
         const mappedTasks = t.map(task => ({
           ...task,
@@ -132,9 +160,10 @@ export default function Home() {
           day_of_week: task.day_of_week || 'monday', // Use stored value or default
           board: task.assignee === 'jaclyn' ? 'jaclyn' : 'river',
           sort_order: 0,
-          week_start: task.week_start || weekStartDate // Assign current week to legacy tasks
+          week_start: task.week_start // Don't override - use exact DB value
         }))
         setTasks(mappedTasks)
+        console.log('🔍 Mapped tasks:', mappedTasks.length, 'tasks for week', weekStartDate)
       }
       if (e) {
         // Map posts table to calendar events
@@ -166,7 +195,7 @@ export default function Home() {
       setLoading(false)
       setSyncing(false)
     }
-  }, [])
+  }, [selectedWeek]) // Include selectedWeek in dependencies
 
   // Week navigation functions
   const navigateWeek = (direction: 'prev' | 'next') => {
@@ -446,11 +475,6 @@ export default function Home() {
       clearInterval(intervalRefresh)
     }
   }, [fetchData])
-
-  // Refetch when selectedWeek changes
-  useEffect(() => {
-    fetchData(true)
-  }, [selectedWeek, fetchData])
 
   const toggleComplete = async (task: Task) => {
     const updated = !task.completed
@@ -1460,13 +1484,16 @@ export default function Home() {
             >
               ◀
             </button>
-            <span 
-              className="text-sm text-gray-400 cursor-pointer hover:text-white transition-colors" 
-              onClick={goToCurrentWeek}
-              title="Go to current week"
-            >
-              {weekRange}
-            </span>
+            <div className="flex flex-col">
+              <span 
+                className="text-sm text-gray-400 cursor-pointer hover:text-white transition-colors" 
+                onClick={goToCurrentWeek}
+                title="Go to current week"
+              >
+                {weekRange}
+              </span>
+              <span className="text-xs text-red-400">DEBUG: {weekStartDate}</span>
+            </div>
             <button
               onClick={() => navigateWeek('next')}
               className="text-gray-400 hover:text-white transition-colors p-1"
