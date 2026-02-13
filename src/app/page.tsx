@@ -110,6 +110,9 @@ export default function Home() {
   }[]>([])
   const [hideSent, setHideSent] = useState<boolean>(true)
   
+  // Hide past events state
+  const [hidePastEvents, setHidePastEvents] = useState<boolean>(true)
+  
   // Week navigation state - persist across page refreshes
   const [selectedWeek, setSelectedWeek] = useState<Date>(() => {
     if (typeof window !== 'undefined') {
@@ -226,6 +229,26 @@ export default function Home() {
       day: 'numeric',
       timeZone: 'America/New_York'
     })
+  }
+
+  const isPastEvent = (event: CalendarEvent) => {
+    const now = new Date()
+    const currentNY = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+    
+    // Create event datetime in NY timezone
+    let eventDateTime: Date
+    if (event.time) {
+      // Event has specific time
+      eventDateTime = new Date(`${event.date}T${event.time}:00`)
+    } else {
+      // No time specified, treat as end of day (23:59)
+      eventDateTime = new Date(`${event.date}T23:59:00`)
+    }
+    
+    // Convert event time to NY timezone for comparison
+    const eventNY = new Date(eventDateTime.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+    
+    return currentNY > eventNY
   }
 
   // Daily Digest functions
@@ -1054,24 +1077,44 @@ export default function Home() {
       </div>
 
       <div className="mb-4">
-        <h4 className="text-sm font-medium text-gray-300 mb-2">This Week's Events</h4>
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-sm font-medium text-gray-300">This Week's Events</h4>
+          <label className="flex items-center gap-2 text-xs text-gray-400">
+            <input
+              type="checkbox"
+              checked={hidePastEvents}
+              onChange={(e) => setHidePastEvents(e.target.checked)}
+              className="w-3 h-3 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+            />
+            Hide Past Events
+          </label>
+        </div>
         <div className="space-y-2 max-h-60 overflow-y-auto">
-          {getThisWeekEvents().map(event => (
-            <div 
-              key={event.id} 
-              className="p-2 bg-[#1a1a2e] rounded-lg border-l-4 cursor-pointer hover:bg-[#202040] transition-colors"
-              style={{ borderLeftColor: getFolderColor(event.description || 'PERSONAL') }}
-              onClick={() => editEvent(event)}
-            >
-              <div className="font-medium text-white text-sm">{event.title}</div>
-              <div className="text-xs text-gray-400">
-                {formatEventDate(event.date)}
-                {event.time && ` • ${event.time}`}
-              </div>
+          {getThisWeekEvents()
+            .filter(event => !hidePastEvents || !isPastEvent(event))
+            .map(event => {
+              const isPast = isPastEvent(event)
+              return (
+                <div 
+                  key={event.id} 
+                  className={`p-2 bg-[#1a1a2e] rounded-lg border-l-4 cursor-pointer hover:bg-[#202040] transition-colors ${isPast ? 'opacity-60' : ''}`}
+                  style={{ borderLeftColor: getFolderColor(event.description || 'PERSONAL') }}
+                  onClick={() => editEvent(event)}
+                >
+                  <div className={`font-medium text-sm ${isPast ? 'line-through text-gray-400' : 'text-white'}`}>
+                    {event.title}
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    {formatEventDate(event.date)}
+                    {event.time && ` • ${event.time}`}
+                  </div>
+                </div>
+              )
+            })}
+          {getThisWeekEvents().filter(event => !hidePastEvents || !isPastEvent(event)).length === 0 && (
+            <div className="text-sm text-gray-500 italic">
+              {hidePastEvents ? 'No upcoming events this week' : 'No events this week'}
             </div>
-          ))}
-          {getThisWeekEvents().length === 0 && (
-            <div className="text-sm text-gray-500 italic">No events this week</div>
           )}
         </div>
       </div>
