@@ -1652,8 +1652,14 @@ export default function Home() {
   return (
     <main className="min-h-screen p-4 md:p-6 max-w-[1400px] mx-auto">
       {/* Header */}
+      <div className="text-center mb-6">
+        <div className="text-gray-400 text-sm font-light uppercase tracking-wide">
+          FAMILY · WEALTH · LOVE · CONNECTION · HEALTH · PEACE · HAPPINESS
+        </div>
+      </div>
+      
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-lg font-bold text-white">Command HQ</h1>
+        <div></div>
         <div className="flex items-center gap-3">
           {syncing && (
             <div className="flex items-center gap-2 text-sm text-gray-400">
@@ -1678,8 +1684,20 @@ export default function Home() {
       <div className="bg-[#16213e] rounded-xl p-4 mb-6">
         <div className="text-center">
           <div className="text-gray-400 text-xs italic mb-2">Vision Statement</div>
-          <div className="text-white text-sm leading-relaxed max-w-2xl mx-auto">
-            I am building forever financial freedom and a multi-millionaire life rooted in love, connection, calm, health, and joy. I am becoming the strongest, healthiest, most aligned version of myself so I can lead my boys and my family to become the strongest, healthiest, happiest versions of themselves.
+          <div className="flex items-center justify-center gap-6">
+            <img 
+              src="/wealth-icon.svg" 
+              alt="Wealth" 
+              className="w-12 h-12 rounded-full flex-shrink-0 opacity-80" 
+            />
+            <div className="text-white text-sm leading-relaxed max-w-2xl">
+              I am building forever financial freedom and a multi-millionaire life rooted in love, connection, calm, health, and joy. I am becoming the strongest, healthiest, most aligned version of myself so I can lead my boys and my family to become the strongest, healthiest, happiest versions of themselves.
+            </div>
+            <img 
+              src="/family-photo.jpg" 
+              alt="Family" 
+              className="w-12 h-12 rounded-full object-cover flex-shrink-0" 
+            />
           </div>
         </div>
       </div>
