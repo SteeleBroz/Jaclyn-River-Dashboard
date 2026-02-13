@@ -1568,6 +1568,13 @@ export default function Home() {
                           />
                         )}
                       </div>
+                      <button
+                        onClick={() => deleteTask(task.id)}
+                        className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all p-1 shrink-0"
+                        title="Delete task"
+                      >
+                        🗑️
+                      </button>
                     </div>
                   ))}
                   <button
