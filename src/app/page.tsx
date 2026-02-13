@@ -173,7 +173,8 @@ export default function Home() {
         const mappedEvents = e.map(post => ({
           id: post.id,
           title: post.title,
-          description: post.folder, // Store folder name for color coding
+          description: post.content, // Actual description content
+          folder: post.folder || 'PERSONAL', // Folder name for color coding
           date: post.scheduled_for?.split('T')[0] || new Date().toISOString().split('T')[0],
           time: post.scheduled_for?.split('T')[1]?.substring(0, 5),
           created_at: post.created_at
@@ -613,7 +614,8 @@ export default function Home() {
       const mappedEvent = {
         id: data.id,
         title: data.title,
-        description: data.folder, // Store folder name for color coding
+        description: data.content, // Actual description content
+        folder: data.folder || 'PERSONAL', // Folder name for color coding
         date: data.scheduled_for?.split('T')[0] || date,
         time: data.scheduled_for?.split('T')[1]?.substring(0, 5),
         created_at: data.created_at
@@ -628,10 +630,10 @@ export default function Home() {
     
     const time = prompt('Time (HH:MM, leave empty for all-day):', event.time || '')
     
-    let folder = 'PERSONAL'
+    let folder = event.folder || 'PERSONAL'
     if (folders.length > 0) {
       const folderOptions = folders.map(f => f.name).join(', ')
-      const selectedFolder = prompt(`Category (${folderOptions}):`, 'PERSONAL')
+      const selectedFolder = prompt(`Category (${folderOptions}):`, folder)
       if (selectedFolder?.trim()) folder = selectedFolder.trim()
     }
     
@@ -653,7 +655,8 @@ export default function Home() {
       const mappedEvent = {
         id: data.id,
         title: data.title,
-        description: data.folder, // Store folder name for color coding
+        description: data.content, // Actual description content
+        folder: data.folder || 'PERSONAL', // Folder name for color coding
         date: data.scheduled_for?.split('T')[0] || event.date,
         time: data.scheduled_for?.split('T')[1]?.substring(0, 5),
         created_at: data.created_at
@@ -945,7 +948,7 @@ export default function Home() {
                           <div
                             key={event.id}
                             className="text-xs p-1 rounded truncate cursor-pointer"
-                            style={{ backgroundColor: getFolderColor(event.description || 'PERSONAL') + '40', color: getFolderColor(event.description || 'PERSONAL') }}
+                            style={{ backgroundColor: getFolderColor(event.folder || 'PERSONAL') + '40', color: getFolderColor(event.folder || 'PERSONAL') }}
                             onClick={(e) => { e.stopPropagation(); editEvent(event) }}
                           >
                             {event.time && `${event.time} `}{event.title}
@@ -978,7 +981,7 @@ export default function Home() {
                           <div
                             key={event.id}
                             className="text-xs p-2 rounded cursor-pointer"
-                            style={{ backgroundColor: getFolderColor(event.description || 'PERSONAL') + '40', color: getFolderColor(event.description || 'PERSONAL') }}
+                            style={{ backgroundColor: getFolderColor(event.folder || 'PERSONAL') + '40', color: getFolderColor(event.folder || 'PERSONAL') }}
                             onClick={() => editEvent(event)}
                           >
                             {event.time && `${event.time} `}{event.title}
@@ -1010,7 +1013,7 @@ export default function Home() {
                   <div
                     key={event.id}
                     className="p-3 rounded-lg cursor-pointer flex items-center justify-between hover:bg-[#252545] transition-colors"
-                    style={{ backgroundColor: getFolderColor(event.description || 'PERSONAL') + '20', borderLeft: `4px solid ${getFolderColor(event.description || 'PERSONAL')}` }}
+                    style={{ backgroundColor: getFolderColor(event.folder || 'PERSONAL') + '20', borderLeft: `4px solid ${getFolderColor(event.folder || 'PERSONAL')}` }}
                     onClick={() => editEvent(event)}
                   >
                     <div>
@@ -1112,7 +1115,7 @@ export default function Home() {
                 <div 
                   key={event.id} 
                   className={`p-2 bg-[#1a1a2e] rounded-lg border-l-4 cursor-pointer hover:bg-[#202040] transition-colors ${isPast ? 'opacity-60' : ''}`}
-                  style={{ borderLeftColor: getFolderColor(event.description || 'PERSONAL') }}
+                  style={{ borderLeftColor: getFolderColor(event.folder || 'PERSONAL') }}
                   onClick={() => editEvent(event)}
                 >
                   <div className={`font-medium text-sm ${isPast ? 'line-through text-gray-400' : 'text-white'}`}>

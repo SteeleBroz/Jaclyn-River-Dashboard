@@ -44,6 +44,7 @@ export type CalendarEvent = {
   id: number
   title: string
   description: string | null
+  folder: string
   date: string
   time?: string
   created_at: string
