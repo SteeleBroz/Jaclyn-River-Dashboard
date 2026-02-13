@@ -810,16 +810,40 @@ export default function Home() {
       // Show saving state
       setTimeout(() => setMoveStatus('Saving...'), 100)
       
-      // Get current NY date
-      const currentNYDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-      
-      // Calculate tomorrow in NY timezone
-      const nyToday = new Date(currentNYDate + 'T12:00:00')
-      const nyTomorrow = new Date(nyToday)
-      nyTomorrow.setDate(nyToday.getDate() + 1)
-      const targetDateStr = nyTomorrow.toISOString().split('T')[0]
+      // Get original scheduled_for from DB
+      const { data: originalEvent, error: fetchError } = await supabase
+        .from('posts')
+        .select('scheduled_for')
+        .eq('id', event.id)
+        .single()
 
-      await moveEventToDate(event, targetDateStr)
+      if (fetchError || !originalEvent) throw new Error('Failed to fetch original event')
+
+      // Parse existing scheduled_for into Date object
+      const original = new Date(originalEvent.scheduled_for)
+      
+      // Add one day using Date API
+      const updated = new Date(original)
+      updated.setDate(updated.getDate() + 1)
+      
+      // Save using toISOString() and format standardization
+      const newScheduledFor = updated.toISOString().replace('Z', '+00:00')
+      
+      // TEMP: Log before/after values
+      console.log('old scheduled_for:', originalEvent.scheduled_for)
+      console.log('new scheduled_for:', newScheduledFor)
+      setMoveStatus(`Old: ${originalEvent.scheduled_for}\nNew: ${newScheduledFor}`)
+      
+      // Update in Supabase
+      const { error } = await supabase
+        .from('posts')
+        .update({ scheduled_for: newScheduledFor })
+        .eq('id', event.id)
+
+      if (error) throw error
+
+      // Re-fetch events to confirm DB value changes
+      fetchData(true)
       
       // Clear status on success
       setTimeout(() => setMoveStatus(''), 2000)
