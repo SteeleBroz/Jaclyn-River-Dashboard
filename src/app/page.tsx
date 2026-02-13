@@ -63,6 +63,7 @@ export default function Home() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
+  const [hidePastThisWeek, setHidePastThisWeek] = useState(true)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   
@@ -171,15 +172,24 @@ export default function Home() {
       }
       if (e) {
         // Map posts table to calendar events
-        const mappedEvents = e.map(post => ({
-          id: post.id,
-          title: post.title,
-          description: post.content, // Actual description content
-          folder: post.folder || 'PERSONAL', // Folder name for color coding
-          date: post.scheduled_for?.split('T')[0] || new Date().toISOString().split('T')[0],
-          time: post.scheduled_for?.split('T')[1]?.substring(0, 5),
-          created_at: post.created_at
-        }))
+        const mappedEvents = e.map(post => {
+          // Parse scheduled_for with end time support: "YYYY-MM-DDTHH:mm:00|HH:mm:00"
+          const [startDateTime, endTimeOnly] = post.scheduled_for?.split('|') || []
+          const date = startDateTime?.split('T')[0] || new Date().toISOString().split('T')[0]
+          const time = startDateTime?.split('T')[1]?.substring(0, 5)
+          const endTime = endTimeOnly?.substring(0, 5)
+          
+          return {
+            id: post.id,
+            title: post.title,
+            description: post.content, // Actual description content
+            folder: post.folder || 'PERSONAL', // Folder name for color coding
+            date,
+            time,
+            endTime,
+            created_at: post.created_at
+          }
+        })
         setEvents(mappedEvents)
       }
       if (n) {
@@ -218,8 +228,33 @@ export default function Home() {
   // Date helpers for America/New_York timezone
   const getTodayNY = () => {
     const now = new Date()
-    const nyTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
-    return nyTime.toISOString().split('T')[0] // YYYY-MM-DD format
+    // Use Intl.DateTimeFormat to avoid timezone shift issues
+    const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' })
+    return formatter.format(now) // Returns YYYY-MM-DD directly
+  }
+
+  const getCurrentNYTime = () => {
+    const now = new Date()
+    return new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  }
+
+  const isPastEvent = (event: CalendarEvent) => {
+    const currentNY = getCurrentNYTime()
+    
+    // Use end time if available, otherwise start time
+    let cutoffTime = event.time || '12:00' // Default to noon if no start time
+    if (event.endTime) {
+      cutoffTime = event.endTime
+    }
+    
+    // Combine event date with cutoff time
+    const eventCutoff = new Date(`${event.date}T${cutoffTime}:00`)
+    return currentNY > eventCutoff
+  }
+
+  const isPastDay = (dayDate: string) => {
+    const todayNY = getTodayNY()
+    return dayDate < todayNY
   }
 
   const formatDateNY = (dateString: string) => {
@@ -588,6 +623,12 @@ export default function Home() {
     const date = selectedDate || prompt('Date (YYYY-MM-DD):')
     if (!date?.trim()) return
     
+    // Prevent creating new events on past days
+    if (isPastDay(date)) {
+      alert('Cannot create new events on past days. Past events remain editable.')
+      return
+    }
+    
     const time = prompt('Time (optional, HH:MM):')
     
     // Show folder options if available
@@ -612,13 +653,20 @@ export default function Home() {
     }).select().single()
     
     if (data) {
+      // Parse scheduled_for with end time support: "YYYY-MM-DDTHH:mm:00|HH:mm:00"
+      const [startDateTime, endTimeOnly] = data.scheduled_for?.split('|') || []
+      const mappedDate = startDateTime?.split('T')[0] || date
+      const mappedTime = startDateTime?.split('T')[1]?.substring(0, 5)
+      const mappedEndTime = endTimeOnly?.substring(0, 5)
+      
       const mappedEvent = {
         id: data.id,
         title: data.title,
         description: data.content, // Actual description content
         folder: data.folder || 'PERSONAL', // Folder name for color coding
-        date: data.scheduled_for?.split('T')[0] || date,
-        time: data.scheduled_for?.split('T')[1]?.substring(0, 5),
+        date: mappedDate,
+        time: mappedTime,
+        endTime: mappedEndTime,
         created_at: data.created_at
       }
       setEvents(prev => [...prev, mappedEvent])
@@ -631,10 +679,15 @@ export default function Home() {
 
   const saveEvent = async (eventData: CalendarEvent) => {
     try {
-      // Parse times and combine with date
+      // Parse times and combine with date using new format: "YYYY-MM-DDTHH:mm:00|HH:mm:00"
       let scheduledFor = `${eventData.date}T12:00:00`
       if (eventData.time?.trim()) {
         scheduledFor = `${eventData.date}T${eventData.time}:00`
+      }
+      
+      // Add end time if provided
+      if (eventData.endTime?.trim()) {
+        scheduledFor += `|${eventData.endTime}:00`
       }
       
       const { data, error } = await supabase.from('posts')
@@ -651,13 +704,20 @@ export default function Home() {
       if (error) throw error
       
       if (data) {
+        // Parse scheduled_for with end time support: "YYYY-MM-DDTHH:mm:00|HH:mm:00"
+        const [startDateTime, endTimeOnly] = data.scheduled_for?.split('|') || []
+        const date = startDateTime?.split('T')[0] || eventData.date
+        const time = startDateTime?.split('T')[1]?.substring(0, 5)
+        const endTime = endTimeOnly?.substring(0, 5)
+        
         const mappedEvent: CalendarEvent = {
           id: data.id,
           title: data.title,
           description: data.content || '',
           folder: data.folder || 'PERSONAL',
-          date: data.scheduled_for?.split('T')[0] || eventData.date,
-          time: data.scheduled_for?.split('T')[1]?.substring(0, 5),
+          date,
+          time,
+          endTime,
           created_at: data.created_at
         }
         setEvents(prev => prev.map(e => e.id === eventData.id ? mappedEvent : e))
@@ -953,7 +1013,9 @@ export default function Home() {
                       key={index}
                       className={`min-h-[100px] p-2 bg-[#1a1a2e] border border-gray-700 cursor-pointer hover:bg-[#202040] transition-colors ${
                         !isCurrentMonth(day) ? 'opacity-50' : ''
-                      } ${isToday(day) ? 'ring-2 ring-blue-500' : ''}`}
+                      } ${isToday(day) ? 'ring-2 ring-blue-500' : ''} ${
+                        isPastDay(day.toISOString().split('T')[0]) ? 'bg-gray-800/50 opacity-75' : ''
+                      }`}
                       onClick={() => addEvent(day.toISOString().split('T')[0])}
                     >
                       <div className={`text-sm mb-1 ${isToday(day) ? 'font-bold text-blue-400' : 'text-gray-300'}`}>
@@ -967,7 +1029,9 @@ export default function Home() {
                             style={{ backgroundColor: getFolderColor(event.folder || 'PERSONAL') + '40', color: getFolderColor(event.folder || 'PERSONAL') }}
                             onClick={(e) => { e.stopPropagation(); editEvent(event) }}
                           >
-                            {event.time && `${event.time} `}{event.title}
+                            <span className={isPastEvent(event) ? 'line-through opacity-70' : ''}>
+                              {event.time && `${event.time} `}{event.title}
+                            </span>
                           </div>
                         ))}
                         {dayEvents.length > 3 && (
@@ -987,7 +1051,9 @@ export default function Home() {
                 {generateCalendarDays().map((day, index) => {
                   const dayEvents = getEventsForDate(day)
                   return (
-                    <div key={index} className="bg-[#1a1a2e] rounded-lg p-3">
+                    <div key={index} className={`bg-[#1a1a2e] rounded-lg p-3 ${
+                      isPastDay(day.toISOString().split('T')[0]) ? 'bg-gray-800/50 opacity-75' : ''
+                    }`}>
                       <div className={`text-center mb-3 ${isToday(day) ? 'font-bold text-blue-400' : 'text-gray-300'}`}>
                         <div className="text-xs">{day.toLocaleDateString('en-US', { weekday: 'short' })}</div>
                         <div className="text-lg">{day.getDate()}</div>
@@ -1000,7 +1066,9 @@ export default function Home() {
                             style={{ backgroundColor: getFolderColor(event.folder || 'PERSONAL') + '40', color: getFolderColor(event.folder || 'PERSONAL') }}
                             onClick={() => editEvent(event)}
                           >
-                            {event.time && `${event.time} `}{event.title}
+                            <span className={isPastEvent(event) ? 'line-through opacity-70' : ''}>
+                              {event.time && `${event.time} `}{event.title}
+                            </span>
                           </div>
                         ))}
                         <button
@@ -1033,7 +1101,9 @@ export default function Home() {
                     onClick={() => editEvent(event)}
                   >
                     <div>
-                      <div className="font-medium text-white">{event.title}</div>
+                      <div className={`font-medium text-white ${isPastEvent(event) ? 'line-through opacity-70' : ''}`}>
+                        {event.title}
+                      </div>
                       {event.time && <div className="text-sm text-gray-400">{event.time}</div>}
                     </div>
                     <button
@@ -1115,16 +1185,16 @@ export default function Home() {
           <label className="flex items-center gap-2 text-xs text-gray-400">
             <input
               type="checkbox"
-              checked={hidePastEvents}
-              onChange={(e) => setHidePastEvents(e.target.checked)}
+              checked={hidePastThisWeek}
+              onChange={(e) => setHidePastThisWeek(e.target.checked)}
               className="w-3 h-3 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
             />
-            Hide Past Events
+            Hide Past
           </label>
         </div>
         <div className="space-y-2 max-h-60 overflow-y-auto">
           {getThisWeekEvents()
-            .filter(event => !hidePastEvents || !isPastEvent(event))
+            .filter(event => !hidePastThisWeek || !isPastEvent(event))
             .map(event => {
               const isPast = isPastEvent(event)
               return (
@@ -1931,10 +2001,11 @@ export default function Home() {
                 <input
                   type="time"
                   className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                  value={editingEvent.endTime || ''}
+                  onChange={e => setEditingEvent({ ...editingEvent, endTime: e.target.value })}
                   placeholder="Optional"
-                  disabled
                 />
-                <div className="text-xs text-gray-500 mt-1">Coming in Phase 2</div>
+                <div className="text-xs text-gray-500 mt-1">Optional</div>
               </div>
             </div>
 

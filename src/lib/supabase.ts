@@ -47,6 +47,7 @@ export type CalendarEvent = {
   folder: string
   date: string
   time?: string
+  endTime?: string
   created_at: string
 }
 
