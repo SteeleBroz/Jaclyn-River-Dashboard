@@ -809,13 +809,6 @@ export default function Home() {
     nyTomorrow.setDate(nyToday.getDate() + 1)
     const targetDateStr = nyTomorrow.toISOString().split('T')[0]
 
-    // DEBUG OUTPUT (temporary)
-    console.log('=== TOMORROW DEBUG ===')
-    console.log('currentNYDate:', currentNYDate)
-    console.log('eventDateNY:', event.date)
-    console.log('targetDateNY:', targetDateStr)
-    alert(`Tomorrow Debug:\ncurrentNYDate: ${currentNYDate}\neventDateNY: ${event.date}\ntargetDateNY: ${targetDateStr}`)
-
     await moveEventToDate(event, targetDateStr)
   }
 
@@ -856,9 +849,6 @@ export default function Home() {
 
       if (fetchError || !originalEvent) throw new Error('Failed to fetch original event')
 
-      // DEBUG OUTPUT (temporary)
-      console.log('before scheduled_for:', originalEvent.scheduled_for)
-
       // Parse original UTC timestamp
       const originalUtc = new Date(originalEvent.scheduled_for)
       
@@ -894,9 +884,6 @@ export default function Home() {
       }
 
       const utcIsoString = targetDateObj.toISOString()
-
-      // DEBUG OUTPUT (temporary)
-      console.log('after scheduled_for:', utcIsoString)
 
       // Update only scheduled_for in Supabase
       const { error } = await supabase
