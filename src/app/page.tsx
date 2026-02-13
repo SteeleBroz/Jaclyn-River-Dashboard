@@ -1036,7 +1036,7 @@ export default function Home() {
                             style={{ backgroundColor: getFolderColor(event.folder || 'PERSONAL') + '40', color: getFolderColor(event.folder || 'PERSONAL') }}
                             onClick={(e) => { e.stopPropagation(); editEvent(event) }}
                           >
-                            <span className={isPastEvent(event) ? 'line-through opacity-70' : ''}>
+                            <span className={isPastEvent(event) ? 'line-through text-gray-400 opacity-60' : ''}>
                               {event.time && `${event.time} `}{event.title}
                             </span>
                           </div>
@@ -1073,7 +1073,7 @@ export default function Home() {
                             style={{ backgroundColor: getFolderColor(event.folder || 'PERSONAL') + '40', color: getFolderColor(event.folder || 'PERSONAL') }}
                             onClick={() => editEvent(event)}
                           >
-                            <span className={isPastEvent(event) ? 'line-through opacity-70' : ''}>
+                            <span className={isPastEvent(event) ? 'line-through text-gray-400 opacity-60' : ''}>
                               {event.time && `${event.time} `}{event.title}
                             </span>
                           </div>
@@ -1108,7 +1108,7 @@ export default function Home() {
                     onClick={() => editEvent(event)}
                   >
                     <div>
-                      <div className={`font-medium text-white ${isPastEvent(event) ? 'line-through opacity-70' : ''}`}>
+                      <div className={`font-medium ${isPastEvent(event) ? 'line-through text-gray-400 opacity-60' : 'text-white'}`}>
                         {event.title}
                       </div>
                       {event.time && <div className="text-sm text-gray-400">{event.time}</div>}
@@ -1211,7 +1211,7 @@ export default function Home() {
                   style={{ borderLeftColor: getFolderColor(event.folder || 'PERSONAL') }}
                   onClick={() => editEvent(event)}
                 >
-                  <div className={`font-medium text-sm ${isPast ? 'line-through text-gray-400' : 'text-white'}`}>
+                  <div className={`font-medium text-sm ${isPast ? 'line-through text-gray-400 opacity-60' : 'text-white'}`}>
                     {event.title}
                   </div>
                   <div className="text-xs text-gray-400">
