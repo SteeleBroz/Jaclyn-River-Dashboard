@@ -159,15 +159,34 @@ export default function Home() {
     }
   }, [])
 
+  // Date helpers for America/New_York timezone
+  const getTodayNY = () => {
+    const now = new Date()
+    const nyTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+    return nyTime.toISOString().split('T')[0] // YYYY-MM-DD format
+  }
+
+  const formatDateNY = (dateString: string) => {
+    // Parse date and format in NY timezone
+    const date = new Date(dateString + 'T12:00:00') // Add noon to avoid timezone edge cases
+    return date.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      month: 'short', 
+      day: 'numeric',
+      timeZone: 'America/New_York'
+    })
+  }
+
   // Daily Digest functions
   const fetchDigestData = useCallback(async () => {
     try {
-      // Fetch today's digest
-      const today = new Date().toISOString().split('T')[0]
+      // Fetch today's digest using NY timezone
+      const todayNY = getTodayNY()
+      console.log('Daily Digest - Querying for NY date:', todayNY)
       const { data: digestData } = await supabase
         .from('daily_digest_today')
         .select('*')
-        .eq('date', today)
+        .eq('date', todayNY)
         .single()
       
       if (digestData) {
@@ -197,7 +216,7 @@ export default function Home() {
         .insert({
           text,
           category,
-          date_saved: new Date().toISOString().split('T')[0]
+          date_saved: getTodayNY()
         })
         .select()
         .single()
@@ -252,12 +271,13 @@ export default function Home() {
   // Send Outs functions
   const fetchSendOutsData = useCallback(async () => {
     try {
-      // Fetch today's send outs
-      const today = new Date().toISOString().split('T')[0]
+      // Fetch today's send outs using NY timezone
+      const todayNY = getTodayNY()
+      console.log('Send Outs - Querying for NY date:', todayNY)
       const { data: sendOutsData } = await supabase
         .from('send_out_today')
         .select('*')
-        .eq('date', today)
+        .eq('date', todayNY)
         .single()
       
       if (sendOutsData) {
@@ -287,7 +307,7 @@ export default function Home() {
         .insert({
           text,
           category,
-          date_saved: new Date().toISOString().split('T')[0]
+          date_saved: getTodayNY()
         })
         .select()
         .single()
@@ -1146,7 +1166,7 @@ export default function Home() {
                 Hide Read
               </label>
               <div className="text-xs text-gray-400">
-                {dailyDigest ? new Date(dailyDigest.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : 'Loading...'}
+                {dailyDigest ? formatDateNY(dailyDigest.date) : 'Loading...'}
               </div>
             </div>
           </div>
@@ -1284,7 +1304,7 @@ export default function Home() {
                 Hide Sent
               </label>
               <div className="text-xs text-gray-400">
-                {sendOuts ? new Date(sendOuts.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : 'Loading...'}
+                {sendOuts ? formatDateNY(sendOuts.date) : 'Loading...'}
               </div>
             </div>
           </div>
