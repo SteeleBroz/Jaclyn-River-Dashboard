@@ -175,17 +175,7 @@ export default function Home() {
       }
       if (e) {
         // Map posts table to calendar events
-        const mappedEvents = e.map(post => {
-          // Parse content for end time metadata: "ENDTIME:HH:MM|description"
-          let description = post.content || ''
-          let endTime: string | undefined
-          
-          if (post.content?.startsWith('ENDTIME:')) {
-            const [endTimePart, ...contentParts] = post.content.split('|')
-            endTime = endTimePart.substring(8) // Remove "ENDTIME:" prefix
-            description = contentParts.join('|') // Rejoin in case description has pipes
-          }
-          
+        const mappedEvents = e.map(post => {          
           // Parse scheduled_for for start time
           const date = post.scheduled_for?.split('T')[0] || new Date().toISOString().split('T')[0]
           const time = post.scheduled_for?.split('T')[1]?.substring(0, 5)
@@ -193,11 +183,11 @@ export default function Home() {
           return {
             id: post.id,
             title: post.title,
-            description, // Actual description content
+            description: post.content || '', // Raw content as description
             folder: post.folder || 'PERSONAL', // Folder name for color coding
             date,
             time,
-            endTime,
+            endTime: undefined, // End time disabled for now
             created_at: post.created_at
           }
         })
@@ -647,16 +637,6 @@ export default function Home() {
     }).select().single()
     
     if (data) {
-      // Parse content for end time metadata: "ENDTIME:HH:MM|description"
-      let description = data.content || ''
-      let endTime: string | undefined
-      
-      if (data.content?.startsWith('ENDTIME:')) {
-        const [endTimePart, ...contentParts] = data.content.split('|')
-        endTime = endTimePart.substring(8) // Remove "ENDTIME:" prefix
-        description = contentParts.join('|') // Rejoin in case description has pipes
-      }
-      
       // Parse scheduled_for for start time
       const mappedDate = data.scheduled_for?.split('T')[0] || date
       const mappedTime = data.scheduled_for?.split('T')[1]?.substring(0, 5)
@@ -664,11 +644,11 @@ export default function Home() {
       const mappedEvent = {
         id: data.id,
         title: data.title,
-        description, // Actual description content
+        description: data.content || '', // Raw content as description
         folder: data.folder || 'PERSONAL', // Folder name for color coding
         date: mappedDate,
         time: mappedTime,
-        endTime,
+        endTime: undefined, // End time disabled for now
         created_at: data.created_at
       }
       setEvents(prev => [...prev, mappedEvent])
@@ -688,11 +668,8 @@ export default function Home() {
         scheduledFor = `${eventData.date}T${eventData.time}:00`
       }
       
-      // Store end time and description in content field: "ENDTIME:HH:MM|description"
+      // Store description in content field (end time disabled for now)
       let contentField = eventData.description || ''
-      if (eventData.endTime?.trim()) {
-        contentField = `ENDTIME:${eventData.endTime}|${eventData.description || ''}`
-      }
       
       const { data, error } = await supabase.from('posts')
         .update({
@@ -708,16 +685,6 @@ export default function Home() {
       if (error) throw error
       
       if (data) {
-        // Parse content for end time metadata: "ENDTIME:HH:MM|description"
-        let description = data.content || ''
-        let endTime: string | undefined
-        
-        if (data.content?.startsWith('ENDTIME:')) {
-          const [endTimePart, ...contentParts] = data.content.split('|')
-          endTime = endTimePart.substring(8) // Remove "ENDTIME:" prefix
-          description = contentParts.join('|') // Rejoin in case description has pipes
-        }
-        
         // Parse scheduled_for for start time
         const date = data.scheduled_for?.split('T')[0] || eventData.date
         const time = data.scheduled_for?.split('T')[1]?.substring(0, 5)
@@ -725,11 +692,11 @@ export default function Home() {
         const mappedEvent: CalendarEvent = {
           id: data.id,
           title: data.title,
-          description,
+          description: data.content || '', // Raw content as description
           folder: data.folder || 'PERSONAL',
           date,
           time,
-          endTime,
+          endTime: undefined, // End time disabled for now
           created_at: data.created_at
         }
         setEvents(prev => prev.map(e => e.id === eventData.id ? mappedEvent : e))
