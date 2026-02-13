@@ -286,7 +286,8 @@ export default function Home() {
     return date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit', 
-      hour12: true
+      hour12: true,
+      timeZone: 'America/New_York'
     })
   }
 
@@ -1160,7 +1161,7 @@ export default function Home() {
                             title={calendarView === 'month' ? 'Drag to reschedule or click to edit' : 'Click to edit'}
                           >
                             <span className={isPastEvent(event) ? 'line-through text-gray-400 opacity-60' : ''}>
-                              {event.time && `${event.time} `}{event.title}
+                              {event.time && `${formatEventTime(event.time)} `}{event.title}
                             </span>
                           </div>
                         ))}
@@ -1197,7 +1198,7 @@ export default function Home() {
                             onClick={() => editEvent(event)}
                           >
                             <span className={isPastEvent(event) ? 'line-through text-gray-400 opacity-60' : ''}>
-                              {event.time && `${event.time} `}{event.title}
+                              {event.time && `${formatEventTime(event.time)} `}{event.title}
                             </span>
                           </div>
                         ))}
@@ -1234,7 +1235,7 @@ export default function Home() {
                       <div className={`font-medium ${isPastEvent(event) ? 'line-through text-gray-400 opacity-60' : 'text-white'}`}>
                         {event.title}
                       </div>
-                      {event.time && <div className="text-sm text-gray-400">{event.time}</div>}
+                      {event.time && <div className="text-sm text-gray-400">{formatEventTime(event.time)}</div>}
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); deleteEventById(event.id) }}
