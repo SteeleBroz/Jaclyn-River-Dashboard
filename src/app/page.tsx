@@ -883,7 +883,7 @@ export default function Home() {
         targetDateObj.setUTCHours(targetDateObj.getUTCHours() - 1) // Subtract 1 hour for EDT
       }
 
-      const utcIsoString = targetDateObj.toISOString()
+      const utcIsoString = targetDateObj.toISOString().replace('Z', '+00:00')
 
       // Update only scheduled_for in Supabase
       const { error } = await supabase
@@ -1001,7 +1001,7 @@ export default function Home() {
         targetDateObj.setUTCHours(targetDateObj.getUTCHours() - 1) // Subtract 1 hour for EDT
       }
 
-      const utcIsoString = targetDateObj.toISOString()
+      const utcIsoString = targetDateObj.toISOString().replace('Z', '+00:00')
 
       // Update only scheduled_for in Supabase
       const { error } = await supabase
