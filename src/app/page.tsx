@@ -2895,10 +2895,6 @@ export default function Home() {
                       )
                     })}
                   </div>
-                  {/* TEMP DEBUG: Live weekday readout */}
-                  <div className="mt-2 p-2 bg-gray-800 rounded text-xs text-gray-300">
-                    Selected days: {weeklyDays.join(', ') || '(none)'}
-                  </div>
                 </div>
               )}
 
