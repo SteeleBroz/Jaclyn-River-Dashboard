@@ -951,7 +951,13 @@ export default function Home() {
         
         // If recurring event, generate child events
         if (!error && data && recurrenceType !== 'none') {
+          setDebugInfo(prev => prev + `STEP 8: Generating child events\n`)
+          
           const childEvents = []
+          
+          // TEMP DEBUG: Log recurrence parameters
+          const selectedWeekdays = weeklyDays // Current weekday selection
+          setDebugInfo(prev => prev + `  - selectedWeekdays: [${selectedWeekdays.join(', ')}] (${selectedWeekdays.length} selected)\n`)
           
           // Calculate end date for generation
           let endDate: Date
@@ -968,6 +974,12 @@ export default function Home() {
           }
           
           const startDate = new Date(eventData.date + 'T00:00:00')
+          
+          // TEMP DEBUG: Log date boundaries
+          const startDateNY = startDate.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+          const endDateNY = endDate.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+          setDebugInfo(prev => prev + `  - startDateNY: ${startDateNY}\n`)
+          setDebugInfo(prev => prev + `  - endDateNY: ${endDateNY}\n`)
           
           if (recurrenceType === 'weekly' && weeklyDays.length > 0) {
             // Generate weekly recurring events for selected days
@@ -1034,13 +1046,39 @@ export default function Home() {
             }
           }
           
-          // Insert all child events at once
+          // TEMP DEBUG: Log occurrence results
+          setDebugInfo(prev => prev + `  - occurrenceDates.length: ${childEvents.length}\n`)
           if (childEvents.length > 0) {
-            const { error: childError } = await supabase.from('posts').insert(childEvents)
-            if (childError) {
-              console.error('Failed to create recurring events:', childError)
+            const first5Dates = childEvents.slice(0, 5).map(event => event.scheduled_for)
+            setDebugInfo(prev => prev + `  - first 5 dates: ${first5Dates.join(', ')}\n`)
+            
+            // Log first child payload example
+            setDebugInfo(prev => prev + `STEP 9: Example child payload:\n`)
+            const firstChild = childEvents[0]
+            setDebugInfo(prev => prev + `  - title: "${firstChild.title}"\n`)
+            setDebugInfo(prev => prev + `  - folder: "${firstChild.folder}"\n`)
+            setDebugInfo(prev => prev + `  - platform: "${firstChild.platform}"\n`)
+            setDebugInfo(prev => prev + `  - scheduled_for: "${firstChild.scheduled_for}"\n`)
+            setDebugInfo(prev => prev + `  - recurrence_parent_id: ${firstChild.recurrence_parent_id}\n`)
+          }
+          
+          // Insert all child events at once with proper error handling
+          if (childEvents.length > 0) {
+            setDebugInfo(prev => prev + `STEP 10: Inserting ${childEvents.length} child events\n`)
+            const childInsert = await supabase.from('posts').insert(childEvents).select('id')
+            
+            // Surface child insert results
+            if (childInsert.error) {
+              setDebugInfo(prev => prev + `❌ childInsert.error: ${childInsert.error.message}\n`)
+              console.error('Failed to create recurring events:', childInsert.error)
               alert('Parent event created but some recurring events failed. Please check the calendar.')
+            } else {
+              const insertedCount = childInsert.data?.length || 0
+              setDebugInfo(prev => prev + `✅ childInsert.data.length: ${insertedCount}\n`)
+              setDebugInfo(prev => prev + `STEP 11: Child generation completed successfully\n`)
             }
+          } else {
+            setDebugInfo(prev => prev + `⚠️  No child events generated - check weekday selection or date boundaries\n`)
           }
         }
         
