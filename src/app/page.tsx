@@ -118,6 +118,13 @@ export default function Home() {
   // Temporary debug state for mobile
   const [debugInfo, setDebugInfo] = useState<string>('')
   
+  // Recurring event state
+  const [recurrenceType, setRecurrenceType] = useState<'none' | 'weekly' | 'every4weeks'>('none')
+  const [weeklyDays, setWeeklyDays] = useState<string[]>([])
+  const [recurrenceEndType, setRecurrenceEndType] = useState<'date' | 'count'>('date')
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState<string>('')
+  const [recurrenceCount, setRecurrenceCount] = useState<number>(10)
+  
   // Admin Mode state
   const [adminMode, setAdminMode] = useState<boolean>(false)
   const [dashboardSettings, setDashboardSettings] = useState<DashboardSettings | null>(null)
@@ -872,23 +879,125 @@ export default function Home() {
       let data, error
       
       if (eventData.id === 0) {
-        // Create new event
+        // Create new event (with recurring fields for parent)
+        const eventPayload = {
+          title: eventData.title.trim(),
+          content: contentField,
+          folder: eventData.folder || 'PERSONAL',
+          platform: 'calendar',
+          status: 'published',
+          scheduled_for: scheduledFor,
+          recurrence_type: recurrenceType !== 'none' ? recurrenceType : null,
+          recurrence_interval: recurrenceType !== 'none' ? 1 : null,
+          recurrence_end_date: recurrenceType !== 'none' && recurrenceEndType === 'date' ? recurrenceEndDate : null,
+          recurrence_parent_id: null // This is the parent
+        }
+        
         const result = await supabase.from('posts')
-          .insert({
-            title: eventData.title.trim(),
-            content: contentField,
-            folder: eventData.folder || 'PERSONAL',
-            platform: 'calendar',
-            status: 'published',
-            scheduled_for: scheduledFor
-          })
+          .insert(eventPayload)
           .select()
           .single()
         
         data = result.data
         error = result.error
+        
+        // If recurring event, generate child events
+        if (!error && data && recurrenceType !== 'none') {
+          const childEvents = []
+          
+          // Calculate end date for generation
+          let endDate: Date
+          if (recurrenceEndType === 'date' && recurrenceEndDate) {
+            endDate = new Date(recurrenceEndDate + 'T23:59:59')
+          } else {
+            // Generate based on count
+            endDate = new Date(eventData.date + 'T00:00:00')
+            if (recurrenceType === 'weekly') {
+              endDate.setDate(endDate.getDate() + (recurrenceCount * 7))
+            } else if (recurrenceType === 'every4weeks') {
+              endDate.setDate(endDate.getDate() + (recurrenceCount * 28))
+            }
+          }
+          
+          const startDate = new Date(eventData.date + 'T00:00:00')
+          
+          if (recurrenceType === 'weekly' && weeklyDays.length > 0) {
+            // Generate weekly recurring events for selected days
+            const dayMap = {
+              'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4,
+              'friday': 5, 'saturday': 6, 'sunday': 0
+            }
+            
+            let currentWeekStart = new Date(startDate)
+            currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay() + 1) // Go to Monday of first week
+            
+            while (currentWeekStart <= endDate) {
+              for (const day of weeklyDays) {
+                const eventDate = new Date(currentWeekStart)
+                eventDate.setDate(currentWeekStart.getDate() + dayMap[day as keyof typeof dayMap] - 1)
+                
+                // Skip if before start date or after end date
+                if (eventDate < startDate || eventDate > endDate) continue
+                
+                const childScheduledFor = eventData.time?.trim() 
+                  ? `${eventDate.toISOString().split('T')[0]}T${eventData.time}:00`
+                  : `${eventDate.toISOString().split('T')[0]}T12:00:00`
+                
+                childEvents.push({
+                  title: eventData.title.trim(),
+                  content: contentField,
+                  folder: eventData.folder || 'PERSONAL',
+                  platform: 'calendar',
+                  status: 'published',
+                  scheduled_for: childScheduledFor,
+                  recurrence_type: recurrenceType,
+                  recurrence_interval: 1,
+                  recurrence_end_date: recurrenceEndType === 'date' ? recurrenceEndDate : null,
+                  recurrence_parent_id: data.id
+                })
+              }
+              
+              currentWeekStart.setDate(currentWeekStart.getDate() + 7) // Next week
+            }
+          } else if (recurrenceType === 'every4weeks') {
+            // Generate every 4 weeks recurring events
+            let currentDate = new Date(startDate)
+            currentDate.setDate(currentDate.getDate() + 28) // Start from 4 weeks after parent
+            
+            while (currentDate <= endDate) {
+              const childScheduledFor = eventData.time?.trim() 
+                ? `${currentDate.toISOString().split('T')[0]}T${eventData.time}:00`
+                : `${currentDate.toISOString().split('T')[0]}T12:00:00`
+              
+              childEvents.push({
+                title: eventData.title.trim(),
+                content: contentField,
+                folder: eventData.folder || 'PERSONAL',
+                platform: 'calendar',
+                status: 'published',
+                scheduled_for: childScheduledFor,
+                recurrence_type: recurrenceType,
+                recurrence_interval: 1,
+                recurrence_end_date: recurrenceEndType === 'date' ? recurrenceEndDate : null,
+                recurrence_parent_id: data.id
+              })
+              
+              currentDate.setDate(currentDate.getDate() + 28) // Add 4 weeks
+            }
+          }
+          
+          // Insert all child events at once
+          if (childEvents.length > 0) {
+            const { error: childError } = await supabase.from('posts').insert(childEvents)
+            if (childError) {
+              console.error('Failed to create recurring events:', childError)
+              alert('Parent event created but some recurring events failed. Please check the calendar.')
+            }
+          }
+        }
+        
       } else {
-        // Update existing event
+        // Update existing event (no recurring logic for updates yet)
         const result = await supabase.from('posts')
           .update({
             title: eventData.title.trim(),
@@ -919,11 +1028,15 @@ export default function Home() {
           date,
           time,
           endTime: undefined, // End time disabled for now
-          created_at: data.created_at
+          created_at: data.created_at,
+          recurrence_type: data.recurrence_type,
+          recurrence_interval: data.recurrence_interval,
+          recurrence_end_date: data.recurrence_end_date,
+          recurrence_parent_id: data.recurrence_parent_id
         }
         
         if (eventData.id === 0) {
-          // Add new event to state
+          // Add new event to state - the child events will be fetched on next data refresh
           setEvents(prev => [...prev, mappedEvent])
         } else {
           // Update existing event in state
@@ -931,7 +1044,17 @@ export default function Home() {
         }
       }
       
+      // Reset recurring form state
+      setRecurrenceType('none')
+      setWeeklyDays([])
+      setRecurrenceEndDate('')
+      setRecurrenceCount(10)
+      
       setEditingEvent(null)
+      
+      // Force refresh to show all created events
+      fetchData(true)
+      
     } catch (error) {
       console.error('Failed to save event:', error)
       alert('Failed to save event. Please try again.')
@@ -2637,6 +2760,99 @@ export default function Home() {
                 onChange={e => setEditingEvent({ ...editingEvent, description: e.target.value })}
                 placeholder="Event notes..."
               />
+            </div>
+
+            {/* Repeat Section */}
+            <div className="border-t border-gray-700 pt-4">
+              <label className="text-xs text-gray-400 mb-2 block">Repeat</label>
+              <select
+                className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none mb-3"
+                value={recurrenceType}
+                onChange={e => setRecurrenceType(e.target.value as 'none' | 'weekly' | 'every4weeks')}
+              >
+                <option value="none">None</option>
+                <option value="weekly">Weekly</option>
+                <option value="every4weeks">Every 4 Weeks</option>
+              </select>
+
+              {recurrenceType === 'weekly' && (
+                <div className="mb-3">
+                  <label className="text-xs text-gray-400 mb-2 block">Days</label>
+                  <div className="grid grid-cols-7 gap-1">
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, index) => {
+                      const dayValue = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'][index]
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => {
+                            setWeeklyDays(prev => 
+                              prev.includes(dayValue) 
+                                ? prev.filter(d => d !== dayValue)
+                                : [...prev, dayValue]
+                            )
+                          }}
+                          className={`py-1 px-2 rounded text-xs font-medium transition-colors ${
+                            weeklyDays.includes(dayValue)
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-[#1a1a2e] text-gray-400 hover:text-white border border-gray-600'
+                          }`}
+                        >
+                          {day}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {recurrenceType !== 'none' && (
+                <div>
+                  <label className="text-xs text-gray-400 mb-2 block">End Condition</label>
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setRecurrenceEndType('date')}
+                      className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                        recurrenceEndType === 'date'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-[#1a1a2e] text-gray-400 hover:text-white border border-gray-600'
+                      }`}
+                    >
+                      Until Date
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRecurrenceEndType('count')}
+                      className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                        recurrenceEndType === 'count'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-[#1a1a2e] text-gray-400 hover:text-white border border-gray-600'
+                      }`}
+                    >
+                      # of Times
+                    </button>
+                  </div>
+                  {recurrenceEndType === 'date' ? (
+                    <input
+                      type="date"
+                      className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                      value={recurrenceEndDate}
+                      onChange={e => setRecurrenceEndDate(e.target.value)}
+                    />
+                  ) : (
+                    <input
+                      type="number"
+                      className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                      value={recurrenceCount}
+                      onChange={e => setRecurrenceCount(parseInt(e.target.value) || 1)}
+                      min="1"
+                      max="100"
+                      placeholder="Number of occurrences"
+                    />
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Mobile-only Move Section */}

@@ -49,6 +49,10 @@ export type CalendarEvent = {
   time?: string
   endTime?: string
   created_at: string
+  recurrence_type?: string | null
+  recurrence_interval?: number | null
+  recurrence_end_date?: string | null
+  recurrence_parent_id?: number | null
 }
 
 export type WeeklyNote = {
