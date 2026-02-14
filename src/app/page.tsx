@@ -404,6 +404,25 @@ export default function Home() {
     }
   }
 
+  // NY Timezone Helpers
+  const toNYDateKey = (scheduled_for: string) => {
+    // Parse UTC timestamp and convert to NY date (YYYY-MM-DD)
+    const utcDate = new Date(scheduled_for)
+    const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' })
+    return formatter.format(utcDate) // Returns YYYY-MM-DD in NY timezone
+  }
+
+  const toNYTimeDisplay = (scheduled_for: string) => {
+    // Parse UTC timestamp and convert to NY time display (h:mm AM/PM)
+    const utcDate = new Date(scheduled_for)
+    return utcDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit', 
+      hour12: true,
+      timeZone: 'America/New_York'
+    })
+  }
+
   // Date helpers for America/New_York timezone
   const getTodayNY = () => {
     const now = new Date()
@@ -850,16 +869,40 @@ export default function Home() {
       // Store description in content field (end time disabled for now)
       let contentField = eventData.description || ''
       
-      const { data, error } = await supabase.from('posts')
-        .update({
-          title: eventData.title.trim(),
-          content: contentField,
-          folder: eventData.folder || 'PERSONAL',
-          scheduled_for: scheduledFor
-        })
-        .eq('id', eventData.id)
-        .select()
-        .single()
+      let data, error
+      
+      if (eventData.id === 0) {
+        // Create new event
+        const result = await supabase.from('posts')
+          .insert({
+            title: eventData.title.trim(),
+            content: contentField,
+            folder: eventData.folder || 'PERSONAL',
+            platform: 'calendar',
+            status: 'published',
+            scheduled_for: scheduledFor
+          })
+          .select()
+          .single()
+        
+        data = result.data
+        error = result.error
+      } else {
+        // Update existing event
+        const result = await supabase.from('posts')
+          .update({
+            title: eventData.title.trim(),
+            content: contentField,
+            folder: eventData.folder || 'PERSONAL',
+            scheduled_for: scheduledFor
+          })
+          .eq('id', eventData.id)
+          .select()
+          .single()
+        
+        data = result.data
+        error = result.error
+      }
       
       if (error) throw error
       
@@ -878,7 +921,14 @@ export default function Home() {
           endTime: undefined, // End time disabled for now
           created_at: data.created_at
         }
-        setEvents(prev => prev.map(e => e.id === eventData.id ? mappedEvent : e))
+        
+        if (eventData.id === 0) {
+          // Add new event to state
+          setEvents(prev => [...prev, mappedEvent])
+        } else {
+          // Update existing event in state
+          setEvents(prev => prev.map(e => e.id === eventData.id ? mappedEvent : e))
+        }
       }
       
       setEditingEvent(null)
@@ -1322,11 +1372,21 @@ export default function Home() {
   const { dates: weekDates, weekRange, weekStartDate } = getWeekDates(selectedWeek)
 
   const getThisWeekEvents = () => {
-    const startDate = weekDates[0].toISOString().split('T')[0]
-    const endDate = weekDates[6].toISOString().split('T')[0]
+    const weekStartNY = weekDates[0].toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) // YYYY-MM-DD
+    const weekEndNY = weekDates[6].toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) // YYYY-MM-DD
+    
     return events
-      .filter(event => event.date >= startDate && event.date <= endDate)
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .filter(event => {
+        // Convert event's scheduled_for to NY date key and filter by week range
+        const eventNYDate = toNYDateKey(event.date + 'T12:00:00') // Use consistent format for date conversion
+        return eventNYDate >= weekStartNY && eventNYDate <= weekEndNY
+      })
+      .sort((a, b) => {
+        // Sort by NY date keys
+        const dateA = toNYDateKey(a.date + 'T12:00:00')
+        const dateB = toNYDateKey(b.date + 'T12:00:00')
+        return dateA.localeCompare(dateB)
+      })
   }
 
   const getEventsForDate = (date: Date) => {
@@ -1700,8 +1760,8 @@ export default function Home() {
                     {event.title}
                   </div>
                   <div className="text-xs text-gray-400">
-                    {formatEventDate(event.date)}
-                    {event.time && ` • ${formatEventTime(event.time)}`}
+                    {formatEventDate(toNYDateKey(event.date + 'T12:00:00'))}
+                    {event.time && ` • ${toNYTimeDisplay(event.date + 'T' + event.time + ':00')}`}
                   </div>
                 </div>
               )
@@ -1716,7 +1776,21 @@ export default function Home() {
 
       <div className="space-y-2">
         <button
-          onClick={() => addEvent()}
+          onClick={() => {
+            // Create a new event template and open Event Details modal
+            const todayNY = getTodayNY()
+            const newEvent: CalendarEvent = {
+              id: 0, // Temporary ID for new event
+              title: '',
+              description: '',
+              folder: 'PERSONAL', // Default folder
+              date: todayNY, // Today in NY timezone
+              time: '',
+              endTime: undefined,
+              created_at: new Date().toISOString()
+            }
+            setEditingEvent(newEvent)
+          }}
           className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-lg text-sm font-medium transition-colors"
         >
           Add Event
