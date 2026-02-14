@@ -867,11 +867,33 @@ export default function Home() {
 
   const saveEvent = async (eventData: CalendarEvent) => {
     try {
+      // TEMP DEBUG: Track execution path
+      setDebugInfo('')
+      
+      const isRecurring = recurrenceType !== 'none'
+      const debugPath = isRecurring ? 'SAVE PATH: recurring' : 'SAVE PATH: one-time'
+      setDebugInfo(prev => prev + debugPath + '\n')
+      console.log('🔍 DEBUG:', debugPath)
+      
+      // TEMP DEBUG: Check common validation blockers
+      setDebugInfo(prev => prev + `STEP 1: Validation check\n`)
+      setDebugInfo(prev => prev + `  - Date: ${eventData.date}\n`)
+      setDebugInfo(prev => prev + `  - Time: ${eventData.time || 'none'}\n`)
+      setDebugInfo(prev => prev + `  - Title: ${eventData.title}\n`)
+      setDebugInfo(prev => prev + `  - RecurrenceType: ${recurrenceType}\n`)
+      if (isRecurring && recurrenceType === 'weekly') {
+        setDebugInfo(prev => prev + `  - WeeklyDays: ${weeklyDays.length} selected: ${weeklyDays.join(',')}\n`)
+      }
+      setDebugInfo(prev => prev + `  - RecurrenceEndType: ${recurrenceEndType}\n`)
+      setDebugInfo(prev => prev + `  - RecurrenceEndDate: ${recurrenceEndDate}\n`)
+      
       // Store start time in scheduled_for as normal timestamp
+      setDebugInfo(prev => prev + `STEP 2: Building scheduledFor\n`)
       let scheduledFor = `${eventData.date}T12:00:00`
       if (eventData.time?.trim()) {
         scheduledFor = `${eventData.date}T${eventData.time}:00`
       }
+      setDebugInfo(prev => prev + `  - ScheduledFor: ${scheduledFor}\n`)
       
       // Store description in content field (end time disabled for now)
       let contentField = eventData.description || ''
@@ -879,6 +901,8 @@ export default function Home() {
       let data, error
       
       if (eventData.id === 0) {
+        setDebugInfo(prev => prev + `STEP 3: Creating new event\n`)
+        
         // Create new event (with recurring fields for parent)
         const eventPayload = {
           title: eventData.title.trim(),
@@ -893,29 +917,34 @@ export default function Home() {
           recurrence_parent_id: null // This is the parent
         }
         
+        setDebugInfo(prev => prev + `STEP 4: Payload built\n`)
         console.log('🔍 PARENT INSERT PAYLOAD:', JSON.stringify(eventPayload, null, 2))
         
+        setDebugInfo(prev => prev + `STEP 5: Calling supabase insert\n`)
         const parentInsert = await supabase.from('posts')
           .insert(eventPayload)
           .select()
           .single()
         
+        setDebugInfo(prev => prev + `STEP 6: Insert completed\n`)
         console.log('🔍 PARENT INSERT DATA:', parentInsert.data)
         console.log('🔍 PARENT INSERT ERROR:', parentInsert.error)
         
         // Surface errors in modal immediately
         if (parentInsert.error) {
-          setDebugInfo(`PARENT INSERT FAILED:\n${JSON.stringify(parentInsert.error, null, 2)}`)
+          setDebugInfo(prev => prev + `PARENT INSERT FAILED:\n${JSON.stringify(parentInsert.error, null, 2)}\n`)
           alert(`Parent event creation failed: ${parentInsert.error.message}`)
           return // Stop execution - do not attempt child generation
         }
         
         // Confirm parent data exists
         if (!parentInsert.data) {
-          setDebugInfo('PARENT INSERT FAILED: No data returned')
+          setDebugInfo(prev => prev + 'PARENT INSERT FAILED: No data returned\n')
           alert('Parent event creation failed: No data returned from database')
           return
         }
+        
+        setDebugInfo(prev => prev + `STEP 7: Parent created, ID: ${parentInsert.data.id}\n`)
         
         data = parentInsert.data
         error = parentInsert.error
@@ -1076,6 +1105,12 @@ export default function Home() {
       
     } catch (error) {
       console.error('Failed to save event:', error)
+      
+      // TEMP DEBUG: Surface runtime errors in modal
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      const errorStack = error instanceof Error ? error.stack : 'No stack trace'
+      setDebugInfo(prev => prev + `\n❌ RUNTIME ERROR: ${errorMessage}\n${errorStack}\n`)
+      
       alert('Failed to save event. Please try again.')
     }
   }
