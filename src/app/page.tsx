@@ -893,13 +893,32 @@ export default function Home() {
           recurrence_parent_id: null // This is the parent
         }
         
-        const result = await supabase.from('posts')
+        console.log('🔍 PARENT INSERT PAYLOAD:', JSON.stringify(eventPayload, null, 2))
+        
+        const parentInsert = await supabase.from('posts')
           .insert(eventPayload)
           .select()
           .single()
         
-        data = result.data
-        error = result.error
+        console.log('🔍 PARENT INSERT DATA:', parentInsert.data)
+        console.log('🔍 PARENT INSERT ERROR:', parentInsert.error)
+        
+        // Surface errors in modal immediately
+        if (parentInsert.error) {
+          setDebugInfo(`PARENT INSERT FAILED:\n${JSON.stringify(parentInsert.error, null, 2)}`)
+          alert(`Parent event creation failed: ${parentInsert.error.message}`)
+          return // Stop execution - do not attempt child generation
+        }
+        
+        // Confirm parent data exists
+        if (!parentInsert.data) {
+          setDebugInfo('PARENT INSERT FAILED: No data returned')
+          alert('Parent event creation failed: No data returned from database')
+          return
+        }
+        
+        data = parentInsert.data
+        error = parentInsert.error
         
         // If recurring event, generate child events
         if (!error && data && recurrenceType !== 'none') {
