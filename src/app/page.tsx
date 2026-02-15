@@ -1408,6 +1408,82 @@ export default function Home() {
     }
   }
 
+  const duplicateEvent = async (event: CalendarEvent, type: 'next-week' | 'pick-date') => {
+    try {
+      let targetDate: string
+      
+      if (type === 'next-week') {
+        // Add 7 days to current event date
+        const currentDate = new Date(event.date + 'T12:00:00')
+        currentDate.setDate(currentDate.getDate() + 7)
+        targetDate = currentDate.toISOString().split('T')[0]
+      } else {
+        // Pick date
+        const newDate = prompt('Enter new date (YYYY-MM-DD):', event.date)
+        if (!newDate || !newDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          return
+        }
+        targetDate = newDate
+      }
+      
+      // Block duplicating to past dates
+      const currentNYDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+      if (targetDate < currentNYDate) {
+        alert('Cannot create events on past dates.')
+        return
+      }
+      
+      // Build scheduled_for timestamp with same time as original
+      let scheduledFor = `${targetDate}T12:00:00`
+      if (event.time?.trim()) {
+        scheduledFor = `${targetDate}T${event.time}:00`
+      }
+      
+      // Create new event
+      const { data, error } = await supabase.from('posts').insert({
+        title: event.title,
+        content: event.description || '',
+        folder: event.folder || 'PERSONAL',
+        platform: 'calendar',
+        status: 'published',
+        scheduled_for: scheduledFor
+        // Note: recurrence fields are left NULL (ignored as per requirements)
+      }).select().single()
+      
+      if (error) throw error
+      
+      if (data) {
+        // Parse scheduled_for for display
+        const newDate = data.scheduled_for?.split('T')[0] || targetDate
+        const newTime = data.scheduled_for?.split('T')[1]?.substring(0, 5)
+        
+        const newEvent: CalendarEvent = {
+          id: data.id,
+          title: data.title,
+          description: data.content || '',
+          folder: data.folder || 'PERSONAL',
+          date: newDate,
+          time: newTime,
+          endTime: undefined,
+          created_at: data.created_at
+        }
+        
+        // Add to state and refresh
+        setEvents(prev => [...prev, newEvent])
+        
+        // Open the new event in the modal
+        setEditingEvent(newEvent)
+        
+        // Refresh data to ensure consistency
+        fetchData(true)
+      }
+      
+    } catch (error) {
+      console.error('Failed to duplicate event:', error)
+      alert('Failed to duplicate event. Please try again.')
+    }
+  }
+
   const moveEventToDate = async (event: CalendarEvent, targetDateStr: string) => {
     // Block moving to past dates (using NY timezone)
     const currentNYDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
@@ -3104,6 +3180,25 @@ export default function Home() {
                 {debugInfo}
               </div>
             )}
+
+            {/* Duplicate Section */}
+            <div className="border-t border-gray-700 pt-4">
+              <label className="text-xs text-gray-400 mb-2 block">Duplicate</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => duplicateEvent(editingEvent, 'next-week')}
+                  className="flex-1 bg-[#1a1a2e] hover:bg-[#252545] text-white rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600"
+                >
+                  Next Week
+                </button>
+                <button
+                  onClick={() => duplicateEvent(editingEvent, 'pick-date')}
+                  className="flex-1 bg-[#1a1a2e] hover:bg-[#252545] text-white rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600"
+                >
+                  Pick Date
+                </button>
+              </div>
+            </div>
 
             <div className="flex gap-3 pt-2">
               <button
