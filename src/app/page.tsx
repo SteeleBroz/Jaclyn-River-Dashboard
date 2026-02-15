@@ -1021,8 +1021,8 @@ export default function Home() {
                   break
                 }
                 
-                const childScheduledFor = eventData.time?.trim() 
-                  ? `${eventDateStr}T${eventData.time}:00`
+                const childScheduledFor = (eventData.time?.trim() && eventData.time.trim() !== '') 
+                  ? `${eventDateStr}T${eventData.time.trim()}:00`
                   : `${eventDateStr}T12:00:00`
                 
                 childEvents.push({
@@ -1060,8 +1060,8 @@ export default function Home() {
             currentDate.setDate(currentDate.getDate() + 28) // Start from 4 weeks after parent
             
             while (currentDate <= endDate) {
-              const childScheduledFor = eventData.time?.trim() 
-                ? `${currentDate.toISOString().split('T')[0]}T${eventData.time}:00`
+              const childScheduledFor = (eventData.time?.trim() && eventData.time.trim() !== '') 
+                ? `${currentDate.toISOString().split('T')[0]}T${eventData.time.trim()}:00`
                 : `${currentDate.toISOString().split('T')[0]}T12:00:00`
               
               childEvents.push({
@@ -1100,6 +1100,19 @@ export default function Home() {
           // Insert all child events at once with proper error handling
           setDebugInfo(prev => prev + `CHILD PAYLOAD COUNT: ${childEvents.length} `)
           if (childEvents.length === 0) return;
+
+          // Log full payload for debugging
+          setDebugInfo(prev => prev + `FULL CHILD PAYLOADS:\n`)
+          childEvents.forEach((child, i) => {
+            setDebugInfo(prev => prev + `  [${i}] title:"${child.title}" platform:"${child.platform}" status:"${child.status}" scheduled_for:"${child.scheduled_for}"\n`)
+          })
+
+          // Hard guard: ensure no child has null/undefined scheduled_for
+          const invalidChildren = childEvents.filter(child => !child.scheduled_for)
+          if (invalidChildren.length > 0) {
+            setDebugInfo(prev => prev + `ERROR: ${invalidChildren.length} children have null/undefined scheduled_for\n`)
+            throw new Error(`Child events have invalid scheduled_for: ${invalidChildren.length} affected`)
+          }
 
           const childInsert = await supabase
             .from('posts')
