@@ -904,6 +904,8 @@ export default function Home() {
         setDebugInfo(prev => prev + `STEP 3: Creating new event\n`)
         
         // Create new event (with recurring fields for parent)
+        // SINGLE SOURCE OF TRUTH: Use current state directly
+        const repeatEnabled = recurrenceType !== 'none'
         const eventPayload = {
           title: eventData.title.trim(),
           content: contentField,
@@ -911,13 +913,18 @@ export default function Home() {
           platform: 'calendar',
           status: 'published',
           scheduled_for: scheduledFor,
-          recurrence_type: recurrenceType !== 'none' ? recurrenceType : null,
-          recurrence_interval: recurrenceType !== 'none' ? 1 : null,
-          recurrence_end_date: recurrenceType !== 'none' && recurrenceEndType === 'date' ? recurrenceEndDate : null,
+          recurrence_type: repeatEnabled ? recurrenceType : null,
+          recurrence_interval: repeatEnabled ? 1 : null,
+          recurrence_end_date: repeatEnabled && recurrenceEndType === 'date' ? recurrenceEndDate : null,
           recurrence_parent_id: null // This is the parent
         }
         
         setDebugInfo(prev => prev + `STEP 4: Payload built\n`)
+        
+        // State snapshot for debugging
+        const repeatEnabled = recurrenceType !== 'none'
+        setDebugInfo(prev => prev + `STATE SNAPSHOT: repeatEnabled=${repeatEnabled} recurrenceType=${recurrenceType} weeklyDays=[${weeklyDays.join(',')}] endType=${recurrenceEndType} count=${recurrenceCount} until=${recurrenceEndDate}\n`)
+        
         setDebugInfo(prev => prev + `ACTUAL PARENT PAYLOAD:\n${JSON.stringify(eventPayload, null, 2)}\n`)
         console.log('🔍 PARENT INSERT PAYLOAD:', JSON.stringify(eventPayload, null, 2))
         
@@ -1198,16 +1205,16 @@ export default function Home() {
         }
       }
       
-      // Reset recurring form state
-      setRecurrenceType('none')
-      setWeeklyDays([])
-      setRecurrenceEndDate('')
-      setRecurrenceCount(10)
-      
       setEditingEvent(null)
       
       // Force refresh to show all created events
       fetchData(true)
+      
+      // Reset recurring form state AFTER successful save
+      setRecurrenceType('none')
+      setWeeklyDays([])
+      setRecurrenceEndDate('')
+      setRecurrenceCount(10)
       
     } catch (error) {
       console.error('Failed to save event:', error)
