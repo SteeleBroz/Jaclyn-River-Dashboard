@@ -918,6 +918,7 @@ export default function Home() {
         }
         
         setDebugInfo(prev => prev + `STEP 4: Payload built\n`)
+        setDebugInfo(prev => prev + `ACTUAL PARENT PAYLOAD:\n${JSON.stringify(eventPayload, null, 2)}\n`)
         console.log('🔍 PARENT INSERT PAYLOAD:', JSON.stringify(eventPayload, null, 2))
         
         setDebugInfo(prev => prev + `STEP 5: Calling supabase insert\n`)
@@ -927,6 +928,10 @@ export default function Home() {
           .single()
         
         setDebugInfo(prev => prev + `STEP 6: Insert completed\n`)
+        setDebugInfo(prev => prev + `PARENT INSERT RESULT:\n${JSON.stringify(parentInsert.data, null, 2)}\n`)
+        if (parentInsert.error) {
+          setDebugInfo(prev => prev + `PARENT INSERT ERROR: ${parentInsert.error.message}\n`)
+        }
         console.log('🔍 PARENT INSERT DATA:', parentInsert.data)
         console.log('🔍 PARENT INSERT ERROR:', parentInsert.error)
         
@@ -3010,6 +3015,30 @@ export default function Home() {
               )}
             </div>
 
+            {/* DEBUG: Show recurrence settings */}
+            <div className="border-t border-gray-700 pt-4">
+              <div className="text-xs text-yellow-400 mb-2">DEBUG (Remove after fix):</div>
+              <div className="bg-gray-800 p-3 rounded text-xs text-gray-300 font-mono space-y-1">
+                <div>Repeat: {recurrenceType !== 'none' ? 'ON' : 'OFF'}</div>
+                <div>recurrence_type: {recurrenceType !== 'none' ? recurrenceType : 'null'}</div>
+                <div>recurrence_interval: {recurrenceType !== 'none' ? '1' : 'null'}</div>
+                <div>recurrence_end_date: {recurrenceType !== 'none' && recurrenceEndType === 'date' ? recurrenceEndDate : 'null'}</div>
+                <div>weeklyDays: [{weeklyDays.join(', ')}]</div>
+                <div>Parent Payload Preview:</div>
+                <div className="text-xs text-green-400">
+                  {JSON.stringify({
+                    title: editingEvent?.title?.trim(),
+                    platform: 'calendar',
+                    status: 'published', 
+                    recurrence_type: recurrenceType !== 'none' ? recurrenceType : null,
+                    recurrence_interval: recurrenceType !== 'none' ? 1 : null,
+                    recurrence_end_date: recurrenceType !== 'none' && recurrenceEndType === 'date' ? recurrenceEndDate : null,
+                    recurrence_parent_id: null
+                  }, null, 2)}
+                </div>
+              </div>
+            </div>
+
             {/* Mobile-only Move Section */}
             <div className="md:hidden border-t border-gray-700 pt-4 pointer-events-auto">
               <label className="text-xs text-gray-400 mb-2 block">Move Event</label>
@@ -3056,6 +3085,13 @@ export default function Home() {
                 </div>
               )}
             </div>
+
+            {/* Debug info - Always visible */}
+            {debugInfo && (
+              <div className="p-3 bg-gray-800 rounded text-xs text-gray-300 font-mono whitespace-pre-line max-h-40 overflow-y-auto">
+                {debugInfo}
+              </div>
+            )}
 
             <div className="flex gap-3 pt-2">
               <button
