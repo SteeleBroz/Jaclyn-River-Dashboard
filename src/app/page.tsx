@@ -991,17 +991,39 @@ export default function Home() {
             let currentWeekStart = new Date(startDate)
             currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay() + 1) // Go to Monday of first week
             
+            // TEMP DEBUG: Generation parameters
+            setDebugInfo(prev => prev + `WEEKLY GENERATION:\n`)
+            setDebugInfo(prev => prev + `  - requested count: ${recurrenceCount}\n`)
+            setDebugInfo(prev => prev + `  - startDate: ${startDate.toISOString().split('T')[0]}\n`)
+            
+            let generatedCount = 0 // Track child events generated
+            const firstOccurrenceDate = new Date(startDate).toISOString().split('T')[0]
+            
             while (currentWeekStart <= endDate) {
               for (const day of weeklyDays) {
                 const eventDate = new Date(currentWeekStart)
                 eventDate.setDate(currentWeekStart.getDate() + dayMap[day as keyof typeof dayMap] - 1)
                 
+                const eventDateStr = eventDate.toISOString().split('T')[0]
+                
                 // Skip if before start date or after end date
                 if (eventDate < startDate || eventDate > endDate) continue
                 
+                // CRITICAL FIX: Skip the parent event date (already created as parent)
+                if (eventDateStr === firstOccurrenceDate) {
+                  setDebugInfo(prev => prev + `  - skipping parent date: ${eventDateStr}\n`)
+                  continue
+                }
+                
+                // CRITICAL FIX: For count-based recurrence, limit child generation
+                if (recurrenceEndType === 'count' && generatedCount >= (recurrenceCount - 1)) {
+                  setDebugInfo(prev => prev + `  - reached count limit: ${recurrenceCount - 1} children\n`)
+                  break
+                }
+                
                 const childScheduledFor = eventData.time?.trim() 
-                  ? `${eventDate.toISOString().split('T')[0]}T${eventData.time}:00`
-                  : `${eventDate.toISOString().split('T')[0]}T12:00:00`
+                  ? `${eventDateStr}T${eventData.time}:00`
+                  : `${eventDateStr}T12:00:00`
                 
                 childEvents.push({
                   title: eventData.title.trim(),
@@ -1015,10 +1037,23 @@ export default function Home() {
                   recurrence_end_date: recurrenceEndType === 'date' ? recurrenceEndDate : null,
                   recurrence_parent_id: data.id
                 })
+                
+                generatedCount++
+                setDebugInfo(prev => prev + `  - generated child ${generatedCount}: ${eventDateStr}\n`)
+              }
+              
+              // Break early if we've reached the count limit
+              if (recurrenceEndType === 'count' && generatedCount >= (recurrenceCount - 1)) {
+                break
               }
               
               currentWeekStart.setDate(currentWeekStart.getDate() + 7) // Next week
             }
+            
+            // TEMP DEBUG: Final results
+            setDebugInfo(prev => prev + `GENERATION COMPLETE:\n`)
+            setDebugInfo(prev => prev + `  - children generated: ${generatedCount}\n`)
+            setDebugInfo(prev => prev + `  - first generated date: ${childEvents.length > 0 ? childEvents[0].scheduled_for.split('T')[0] : 'none'}\n`)
           } else if (recurrenceType === 'every4weeks') {
             // Generate every 4 weeks recurring events
             let currentDate = new Date(startDate)
