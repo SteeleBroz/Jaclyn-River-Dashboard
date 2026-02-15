@@ -1021,9 +1021,13 @@ export default function Home() {
                   break
                 }
                 
-                const childScheduledFor = (eventData.time?.trim() && eventData.time.trim() !== '') 
-                  ? `${eventDateStr}T${eventData.time.trim()}:00`
-                  : `${eventDateStr}T12:00:00`
+                // Guarantee valid scheduled_for timestamp
+                let timeStr = '12:00:00' // Default
+                if (eventData.time?.trim() && eventData.time.trim() !== '') {
+                  const cleanTime = eventData.time.trim()
+                  timeStr = cleanTime.includes(':') ? `${cleanTime}:00` : `${cleanTime}:00:00`
+                }
+                const childScheduledFor = `${eventDateStr}T${timeStr}`
                 
                 childEvents.push({
                   title: eventData.title.trim(),
@@ -1060,9 +1064,13 @@ export default function Home() {
             currentDate.setDate(currentDate.getDate() + 28) // Start from 4 weeks after parent
             
             while (currentDate <= endDate) {
-              const childScheduledFor = (eventData.time?.trim() && eventData.time.trim() !== '') 
-                ? `${currentDate.toISOString().split('T')[0]}T${eventData.time.trim()}:00`
-                : `${currentDate.toISOString().split('T')[0]}T12:00:00`
+              // Guarantee valid scheduled_for timestamp
+              let timeStr = '12:00:00' // Default
+              if (eventData.time?.trim() && eventData.time.trim() !== '') {
+                const cleanTime = eventData.time.trim()
+                timeStr = cleanTime.includes(':') ? `${cleanTime}:00` : `${cleanTime}:00:00`
+              }
+              const childScheduledFor = `${currentDate.toISOString().split('T')[0]}T${timeStr}`
               
               childEvents.push({
                 title: eventData.title.trim(),
@@ -1108,23 +1116,33 @@ export default function Home() {
           })
 
           // Hard guard: ensure no child has null/undefined scheduled_for
-          const invalidChildren = childEvents.filter(child => !child.scheduled_for)
+          const invalidChildren = childEvents.filter((child, i) => {
+            if (!child.scheduled_for) {
+              setDebugInfo(prev => prev + `CHILD BLOCKED: missing scheduled_for for index ${i} payload=${JSON.stringify(child)}\n`)
+              return true
+            }
+            return false
+          })
           if (invalidChildren.length > 0) {
-            setDebugInfo(prev => prev + `ERROR: ${invalidChildren.length} children have null/undefined scheduled_for\n`)
-            throw new Error(`Child events have invalid scheduled_for: ${invalidChildren.length} affected`)
+            return // Do not insert - blocked children detected
           }
 
           const childInsert = await supabase
             .from('posts')
             .insert(childEvents)
-            .select('id, scheduled_for');
+            .select('id, scheduled_for, recurrence_parent_id');
 
-          setDebugInfo(prev => prev + `CHILD INSERTED: ${childInsert.data?.length || 0} `)
+          const insertedCount = childInsert.data?.length || 0
+          const firstChildScheduledFor = childInsert.data?.[0]?.scheduled_for || 'none'
+          setDebugInfo(prev => prev + `CHILD INSERTED: ${insertedCount} + first child scheduled_for: ${firstChildScheduledFor} `)
 
           if (childInsert.error) {
             setDebugInfo(prev => prev + `CHILD INSERT ERROR: ${childInsert.error.message} `)
             throw childInsert.error
           }
+
+          // Refresh calendar data to show new child events
+          await fetchData(true)
         }
         
       } else {
