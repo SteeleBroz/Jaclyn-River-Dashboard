@@ -2606,6 +2606,11 @@ export default function Home() {
           {dashboardSettings?.header_words || 'FAMILY · WEALTH · LOVE · CONNECTION · HEALTH · PEACE · HAPPINESS'}
         </div>
         
+        {/* Build Stamp */}
+        <div className="text-gray-600 text-xs mt-1 font-mono">
+          BUILD: {process.env.VERCEL_GIT_COMMIT_SHA || 'aa38002'}
+        </div>
+        
         {/* Admin Mode Indicators */}
         {adminMode && (
           <div className="absolute top-0 right-0 flex items-center gap-2">
