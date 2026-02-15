@@ -2940,7 +2940,7 @@ export default function Home() {
       {editingEvent && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setEditingEvent(null)}>
           <div className="bg-[#16213e] rounded-xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white">Event Details</h3>
+            <h3 className="text-lg font-bold text-white">Event Details <span className="text-xs text-yellow-400 font-mono">BUILD: 0da5279</span></h3>
 
             <div>
               <label className="text-xs text-gray-400 mb-1 block">Title</label>
