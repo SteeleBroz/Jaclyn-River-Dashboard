@@ -1098,22 +1098,19 @@ export default function Home() {
           }
           
           // Insert all child events at once with proper error handling
-          if (childEvents.length > 0) {
-            setDebugInfo(prev => prev + `STEP 10: Inserting ${childEvents.length} child events\n`)
-            const childInsert = await supabase.from('posts').insert(childEvents).select('id')
-            
-            // Surface child insert results
-            if (childInsert.error) {
-              setDebugInfo(prev => prev + `❌ childInsert.error: ${childInsert.error.message}\n`)
-              console.error('Failed to create recurring events:', childInsert.error)
-              alert('Parent event created but some recurring events failed. Please check the calendar.')
-            } else {
-              const insertedCount = childInsert.data?.length || 0
-              setDebugInfo(prev => prev + `✅ childInsert.data.length: ${insertedCount}\n`)
-              setDebugInfo(prev => prev + `STEP 11: Child generation completed successfully\n`)
-            }
-          } else {
-            setDebugInfo(prev => prev + `⚠️  No child events generated - check weekday selection or date boundaries\n`)
+          setDebugInfo(prev => prev + `CHILD PAYLOAD COUNT: ${childEvents.length} `)
+          if (childEvents.length === 0) return;
+
+          const childInsert = await supabase
+            .from('posts')
+            .insert(childEvents)
+            .select('id, scheduled_for');
+
+          setDebugInfo(prev => prev + `CHILD INSERTED: ${childInsert.data?.length || 0} `)
+
+          if (childInsert.error) {
+            setDebugInfo(prev => prev + `CHILD INSERT ERROR: ${childInsert.error.message} `)
+            throw childInsert.error
           }
         }
         
