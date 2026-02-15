@@ -2938,8 +2938,14 @@ export default function Home() {
       {/* Event Details Modal */}
       {editingEvent && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setEditingEvent(null)}>
-          <div className="bg-[#16213e] rounded-xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white">Event Details <span className="text-xs text-yellow-400 font-mono">BUILD: 0da5279</span></h3>
+          <div className="bg-[#16213e] w-full max-w-md max-h-[90vh] flex flex-col rounded-xl" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="p-6 border-b border-gray-700">
+              <h3 className="text-lg font-bold text-white">Event Details <span className="text-xs text-yellow-400 font-mono">BUILD: 0da5279</span></h3>
+            </div>
+
+            {/* Scrollable Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
 
             <div>
               <label className="text-xs text-gray-400 mb-1 block">Title</label>
@@ -3198,20 +3204,24 @@ export default function Home() {
                 </button>
               </div>
             </div>
+            </div>
 
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => saveEvent(editingEvent)}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium transition-colors"
-              >
-                Save Changes
-              </button>
-              <button
-                onClick={() => deleteEventById(editingEvent.id)}
-                className="bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-              >
-                Delete
-              </button>
+            {/* Sticky Footer */}
+            <div className="p-6 border-t border-gray-700 bg-[#16213e]">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => saveEvent(editingEvent)}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium transition-colors"
+                >
+                  Save Changes
+                </button>
+                <button
+                  onClick={() => deleteEventById(editingEvent.id)}
+                  className="bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
         </div>
