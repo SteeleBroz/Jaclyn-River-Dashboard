@@ -922,7 +922,6 @@ export default function Home() {
         setDebugInfo(prev => prev + `STEP 4: Payload built\n`)
         
         // State snapshot for debugging
-        const repeatEnabled = recurrenceType !== 'none'
         setDebugInfo(prev => prev + `STATE SNAPSHOT: repeatEnabled=${repeatEnabled} recurrenceType=${recurrenceType} weeklyDays=[${weeklyDays.join(',')}] endType=${recurrenceEndType} count=${recurrenceCount} until=${recurrenceEndDate}\n`)
         
         setDebugInfo(prev => prev + `ACTUAL PARENT PAYLOAD:\n${JSON.stringify(eventPayload, null, 2)}\n`)
