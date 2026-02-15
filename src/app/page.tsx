@@ -964,7 +964,7 @@ export default function Home() {
         if (!error && data && recurrenceType !== 'none') {
           setDebugInfo(prev => prev + `STEP 8: Generating child events\n`)
           
-          const childEvents = []
+          const childEvents: any[] = []
           
           // TEMP DEBUG: Log recurrence parameters
           const selectedWeekdays = weeklyDays // Current weekday selection
