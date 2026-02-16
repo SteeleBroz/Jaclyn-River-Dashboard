@@ -1765,14 +1765,14 @@ export default function Home() {
   }
 
   const formatEventDate = (dateStr: string) => {
-    const date = new Date(dateStr)
+    const date = new Date(dateStr + 'T12:00:00')
     const today = new Date()
     const tomorrow = new Date(today)
     tomorrow.setDate(tomorrow.getDate() + 1)
     
     if (dateStr === today.toISOString().split('T')[0]) return 'Today'
     if (dateStr === tomorrow.toISOString().split('T')[0]) return 'Tomorrow'
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short', timeZone: 'America/New_York' })
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })
   }
 
   const renderFullCalendar = () => {
@@ -2125,7 +2125,7 @@ export default function Home() {
                     {event.title}
                   </div>
                   <div className="text-xs text-gray-400">
-                    {formatEventDate(toNYDateKey(event.date + 'T12:00:00'))}
+                    {formatEventDate(event.date)}
                     {event.time && ` • ${toNYTimeDisplay(event.date + 'T' + event.time + ':00')}`}
                   </div>
                 </div>
