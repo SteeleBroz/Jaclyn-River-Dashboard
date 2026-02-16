@@ -54,11 +54,16 @@ export default function Home() {
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day' | 'year'>('month')
   const [calendarDate, setCalendarDate] = useState(new Date())
-  const [hideCompleted, setHideCompleted] = useState<Record<string, boolean>>({ 
-    jaclyn: false, 
-    river: false, 
-    digest: false, 
-    sendouts: false 
+  const [hideCompleted, setHideCompleted] = useState<Record<string, boolean>>(() => {
+    if (typeof window !== 'undefined') {
+      return {
+        jaclyn: localStorage.getItem('hideCompleted_jaclyn') === 'true',
+        river: localStorage.getItem('hideCompleted_river') === 'true', 
+        digest: false, 
+        sendouts: false 
+      }
+    }
+    return { jaclyn: false, river: false, digest: false, sendouts: false }
   })
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [editingTask, setEditingTask] = useState<Task | null>(null)
@@ -1792,6 +1797,12 @@ export default function Home() {
   const toggleCollapse = (key: string) =>
     setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
 
+  const toggleHideCompleted = (board: 'jaclyn' | 'river') => {
+    const newValue = !hideCompleted[board]
+    setHideCompleted(prev => ({ ...prev, [board]: newValue }))
+    localStorage.setItem(`hideCompleted_${board}`, newValue.toString())
+  }
+
   const { dates: weekDates, weekRange, weekStartDate } = getWeekDates(selectedWeek)
 
   const getThisWeekEvents = () => {
@@ -2635,7 +2646,7 @@ export default function Home() {
             </button>
           </div>
           <button
-            onClick={() => setHideCompleted(prev => ({ ...prev, [board]: !prev[board] }))}
+            onClick={() => toggleHideCompleted(board)}
             className="text-xs text-gray-400 hover:text-white transition-colors"
           >
             {hideCompleted[board] ? 'Show' : 'Hide'} completed
