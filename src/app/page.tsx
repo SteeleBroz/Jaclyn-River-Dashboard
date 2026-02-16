@@ -2075,7 +2075,7 @@ export default function Home() {
   }
 
   const renderCalendarPanel = () => (
-    <div className="w-full md:w-80 bg-[#16213e] rounded-xl p-3 md:p-4 h-fit">
+    <div className="w-full md:w-80 bg-[#16213e] rounded-xl p-3 md:p-4 h-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-bold text-white">
           {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
@@ -2096,7 +2096,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="mb-4">
+      <div className="flex flex-col flex-1 min-h-0">
         <div className="flex items-center justify-between mb-2">
           <h4 className="text-sm font-medium text-gray-300">This Week's Events</h4>
           <label className="flex items-center gap-2 text-xs text-gray-400">
@@ -2109,7 +2109,7 @@ export default function Home() {
             Hide Past
           </label>
         </div>
-        <div className="space-y-2 max-h-60 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto space-y-2">
           {getThisWeekEvents()
             .filter(event => !hidePastThisWeek || !isPastEvent(event))
             .map(event => {
@@ -2139,7 +2139,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2 mt-4">
         <button
           onClick={() => {
             // Create a new event template and open Event Details modal
@@ -2794,7 +2794,7 @@ export default function Home() {
       </div>
 
       {/* Main Layout - Left Content + Right Calendar */}
-      <div className="flex flex-col md:flex-row gap-3 md:gap-6">
+      <div className="flex flex-col md:flex-row gap-3 md:gap-6 md:items-stretch">
         {/* Main Workspace */}
         <div className="flex-1 space-y-3 md:space-y-6">
         {/* Tab Navigation */}
@@ -2827,7 +2827,7 @@ export default function Home() {
         </div>
 
         {/* Calendar Panel */}
-        <div className="w-full md:w-80 md:flex-shrink-0">
+        <div className="w-full md:w-80 md:flex-shrink-0 h-full flex flex-col">
           {renderCalendarPanel()}
         </div>
       </div>
