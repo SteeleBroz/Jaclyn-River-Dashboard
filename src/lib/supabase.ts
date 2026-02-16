@@ -16,6 +16,7 @@ export type Folder = {
 
 export const FOLDERS_TABLE = 'folders'
 export const TASKS_TABLE = 'tasks'
+export const PERSONAL_HUB_TABLE = 'personal_hub_items'
 
 export type Task = {
   id: number
@@ -69,6 +70,18 @@ export type DashboardSettings = {
   vision_statement: string
   header_words: string
   profile_image_url: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type PersonalHubItem = {
+  id: number
+  type: 'folder' | 'doc' | 'sheet'
+  title: string
+  subtitle: string | null
+  url: string | null
+  notes: string | null
+  parent_id: number | null
   created_at: string
   updated_at: string
 }

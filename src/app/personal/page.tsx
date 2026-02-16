@@ -1,70 +1,19 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { supabase, PersonalHubItem, PERSONAL_HUB_TABLE } from '@/lib/supabase'
 
 // Types for File Hub
 type TileType = 'folder' | 'doc' | 'sheet'
 
-interface FileTile {
-  id: string
-  type: TileType
-  title: string
-  subtitle?: string
-  url?: string // Only for docs/sheets
-  notes?: string
-  parentId?: string // For nested folders
-}
-
-// Sample data for Phase 1
-const SAMPLE_TILES: FileTile[] = [
-  {
-    id: '1',
-    type: 'folder',
-    title: 'SteeleBroz',
-    subtitle: 'Brand & Marketing'
-  },
-  {
-    id: '2',
-    type: 'folder',
-    title: 'Family',
-    subtitle: 'Personal documents'
-  },
-  {
-    id: '3',
-    type: 'doc',
-    title: 'Brand Strategy 2024',
-    subtitle: 'Q1 Planning Document',
-    url: 'https://docs.google.com/document/d/example'
-  },
-  {
-    id: '4',
-    type: 'sheet',
-    title: 'Revenue Tracker',
-    subtitle: 'Monthly finances',
-    url: 'https://sheets.google.com/spreadsheet/d/example'
-  },
-  {
-    id: '5',
-    type: 'folder',
-    title: 'Kids Sports',
-    parentId: '2'
-  },
-  {
-    id: '6',
-    type: 'doc', 
-    title: 'Tournament Schedule',
-    parentId: '5',
-    url: 'https://docs.google.com/document/d/example2'
-  }
-]
-
 export default function PersonalPage() {
   const router = useRouter()
-  const [tiles, setTiles] = useState<FileTile[]>(SAMPLE_TILES)
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
+  const [tiles, setTiles] = useState<PersonalHubItem[]>([])
+  const [currentFolderId, setCurrentFolderId] = useState<number | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [editingTile, setEditingTile] = useState<FileTile | null>(null)
+  const [editingTile, setEditingTile] = useState<PersonalHubItem | null>(null)
+  const [loading, setLoading] = useState(true)
 
   // Form state for create/edit
   const [formData, setFormData] = useState({
@@ -75,9 +24,30 @@ export default function PersonalPage() {
     notes: ''
   })
 
+  // Fetch tiles from database
+  const fetchTiles = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from(PERSONAL_HUB_TABLE)
+        .select('*')
+        .order('created_at')
+      
+      if (error) throw error
+      setTiles(data || [])
+    } catch (error) {
+      console.error('Error fetching personal hub items:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchTiles()
+  }, [])
+
   // Get current folder path for breadcrumbs
   const getBreadcrumbs = () => {
-    const breadcrumbs: Array<{id: string | null, name: string}> = [
+    const breadcrumbs: Array<{id: number | null, name: string}> = [
       { id: null, name: 'Personal' }
     ]
     
@@ -86,7 +56,7 @@ export default function PersonalPage() {
       const folder = tiles.find(t => t.id === folderId && t.type === 'folder')
       if (folder) {
         breadcrumbs.unshift({ id: folder.id, name: folder.title })
-        folderId = folder.parentId || null
+        folderId = folder.parent_id || null
       } else {
         break
       }
@@ -97,7 +67,7 @@ export default function PersonalPage() {
 
   // Get tiles for current folder
   const getCurrentTiles = () => {
-    return tiles.filter(tile => tile.parentId === currentFolderId)
+    return tiles.filter(tile => tile.parent_id === currentFolderId)
   }
 
   // Icons for different tile types
@@ -134,7 +104,7 @@ export default function PersonalPage() {
   }
 
   // Handle tile click
-  const handleTileClick = (tile: FileTile) => {
+  const handleTileClick = (tile: PersonalHubItem) => {
     if (tile.type === 'folder') {
       setCurrentFolderId(tile.id)
     } else {
@@ -146,63 +116,109 @@ export default function PersonalPage() {
   }
 
   // Handle create new tile
-  const handleCreateTile = () => {
+  const handleCreateTile = async () => {
     if (!formData.title.trim()) return
+    if (formData.type !== 'folder' && !formData.url.trim()) return
 
-    const newTile: FileTile = {
-      id: Date.now().toString(),
-      type: formData.type,
-      title: formData.title.trim(),
-      subtitle: formData.subtitle.trim() || undefined,
-      url: formData.url.trim() || undefined,
-      notes: formData.notes.trim() || undefined,
-      parentId: currentFolderId || undefined
+    try {
+      const { data, error } = await supabase
+        .from(PERSONAL_HUB_TABLE)
+        .insert({
+          type: formData.type,
+          title: formData.title.trim(),
+          subtitle: formData.subtitle.trim() || null,
+          url: formData.url.trim() || null,
+          notes: formData.notes.trim() || null,
+          parent_id: currentFolderId
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      if (data) {
+        setTiles(prev => [...prev, data])
+      }
+
+      setShowCreateModal(false)
+      setFormData({ type: 'folder', title: '', subtitle: '', url: '', notes: '' })
+    } catch (error) {
+      console.error('Failed to create item:', error)
+      alert('Failed to create item. Please try again.')
     }
-
-    setTiles(prev => [...prev, newTile])
-    setShowCreateModal(false)
-    setFormData({ type: 'folder', title: '', subtitle: '', url: '', notes: '' })
   }
 
   // Handle edit tile
-  const handleEditTile = () => {
+  const handleEditTile = async () => {
     if (!editingTile || !formData.title.trim()) return
+    if (editingTile.type !== 'folder' && !formData.url.trim()) return
 
-    setTiles(prev => prev.map(tile => 
-      tile.id === editingTile.id 
-        ? {
-            ...tile,
-            title: formData.title.trim(),
-            subtitle: formData.subtitle.trim() || undefined,
-            url: formData.url.trim() || undefined,
-            notes: formData.notes.trim() || undefined
-          }
-        : tile
-    ))
-    
-    setEditingTile(null)
-    setFormData({ type: 'folder', title: '', subtitle: '', url: '', notes: '' })
+    try {
+      const { data, error } = await supabase
+        .from(PERSONAL_HUB_TABLE)
+        .update({
+          title: formData.title.trim(),
+          subtitle: formData.subtitle.trim() || null,
+          url: formData.url.trim() || null,
+          notes: formData.notes.trim() || null
+        })
+        .eq('id', editingTile.id)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      if (data) {
+        setTiles(prev => prev.map(tile => 
+          tile.id === editingTile.id ? data : tile
+        ))
+      }
+
+      setEditingTile(null)
+      setFormData({ type: 'folder', title: '', subtitle: '', url: '', notes: '' })
+    } catch (error) {
+      console.error('Failed to edit item:', error)
+      alert('Failed to edit item. Please try again.')
+    }
   }
 
   // Handle delete tile
-  const handleDeleteTile = (tileId: string) => {
+  const handleDeleteTile = async (tileId: number) => {
     if (!confirm('Delete this item?')) return
 
-    // Delete the tile and any nested items
-    const deleteRecursive = (id: string) => {
-      const tile = tiles.find(t => t.id === id)
-      if (tile?.type === 'folder') {
-        // Delete all children first
-        tiles.filter(t => t.parentId === id).forEach(child => deleteRecursive(child.id))
-      }
-      setTiles(prev => prev.filter(t => t.id !== id))
-    }
+    try {
+      // Database handles CASCADE delete for children automatically
+      const { error } = await supabase
+        .from(PERSONAL_HUB_TABLE)
+        .delete()
+        .eq('id', tileId)
 
-    deleteRecursive(tileId)
+      if (error) throw error
+
+      // Update local state - remove deleted item and any children
+      setTiles(prev => {
+        const deleteRecursive = (id: number): number[] => {
+          const item = prev.find(t => t.id === id)
+          let idsToDelete = [id]
+          if (item?.type === 'folder') {
+            prev.filter(t => t.parent_id === id).forEach(child => {
+              idsToDelete.push(...deleteRecursive(child.id))
+            })
+          }
+          return idsToDelete
+        }
+        
+        const idsToDelete = deleteRecursive(tileId)
+        return prev.filter(t => !idsToDelete.includes(t.id))
+      })
+    } catch (error) {
+      console.error('Failed to delete item:', error)
+      alert('Failed to delete item. Please try again.')
+    }
   }
 
   // Open edit modal
-  const openEditModal = (tile: FileTile) => {
+  const openEditModal = (tile: PersonalHubItem) => {
     setEditingTile(tile)
     setFormData({
       type: tile.type,
@@ -215,6 +231,14 @@ export default function PersonalPage() {
 
   const breadcrumbs = getBreadcrumbs()
   const currentTiles = getCurrentTiles()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0f1419]">
+        <div className="text-xl text-gray-400 animate-pulse">Loading...</div>
+      </div>
+    )
+  }
 
   return (
     <main className="min-h-screen p-4 md:p-6 max-w-[1400px] mx-auto bg-[#0f1419]">
