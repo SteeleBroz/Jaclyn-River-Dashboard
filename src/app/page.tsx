@@ -1772,7 +1772,7 @@ export default function Home() {
     
     if (dateStr === today.toISOString().split('T')[0]) return 'Today'
     if (dateStr === tomorrow.toISOString().split('T')[0]) return 'Tomorrow'
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short', timeZone: 'America/New_York' })
   }
 
   const renderFullCalendar = () => {
