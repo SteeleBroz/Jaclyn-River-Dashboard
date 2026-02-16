@@ -2690,18 +2690,26 @@ export default function Home() {
                   {tasksForDay.map(task => (
                     <div 
                       key={task.id} 
-                      className="group flex items-center gap-2 md:gap-3 p-1 md:p-2 hover:bg-[#252545] rounded-lg transition-colors cursor-grab active:cursor-grabbing"
-                      onPointerDown={(e) => handleTaskPointerDown(e, task)}
-                      onPointerMove={handleTaskPointerMove}
-                      onPointerUp={handleTaskPointerUp}
-                      style={{ touchAction: 'none' }}
+                      className="group flex items-center gap-2 md:gap-3 p-1 md:p-2 hover:bg-[#252545] rounded-lg transition-colors"
                     >
                       <input
                         type="checkbox"
                         checked={task.completed}
                         onChange={() => toggleComplete(task)}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
                         className="w-4 h-4 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
                       />
+                      <div 
+                        className="text-gray-500 hover:text-gray-300 cursor-grab active:cursor-grabbing px-1 text-xs select-none"
+                        onPointerDown={(e) => handleTaskPointerDown(e, task)}
+                        onPointerMove={handleTaskPointerMove}
+                        onPointerUp={handleTaskPointerUp}
+                        style={{ touchAction: 'none' }}
+                        title="Drag to move"
+                      >
+                        ⋮⋮
+                      </div>
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         {task.priority !== 'none' && (
                           <div className={`w-2 h-2 rounded-full ${PRIORITY_COLORS[task.priority]}`} />
