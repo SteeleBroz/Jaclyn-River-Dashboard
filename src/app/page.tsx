@@ -2860,6 +2860,15 @@ export default function Home() {
 
       {/* Folder Tiles */}
       <div className="flex flex-nowrap gap-2 overflow-x-auto pb-3 mb-3 md:mb-6 snap-x snap-mandatory scrollbar-thin">
+        {/* Personal File Hub Tile */}
+        <button
+          onClick={() => router.push('/personal')}
+          className="snap-start shrink-0 px-3 md:px-4 py-2 rounded-full text-white text-xs md:text-sm font-medium transition-all opacity-80 hover:opacity-100 hover:scale-105 whitespace-nowrap"
+          style={{ backgroundColor: '#6366f1' }}
+        >
+          Personal
+        </button>
+        
         {folders.map(f => (
           <button
             key={f.id}
