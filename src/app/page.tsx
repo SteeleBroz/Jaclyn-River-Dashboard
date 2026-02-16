@@ -67,6 +67,10 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   
+  // Drag & Drop state for weekly tasks
+  const [draggedTask, setDraggedTask] = useState<Task | null>(null)
+  const [draggedElement, setDraggedElement] = useState<HTMLElement | null>(null)
+  
   // Daily Digest state
   const [dailyDigest, setDailyDigest] = useState<{
     date: string;
@@ -1731,6 +1735,60 @@ export default function Home() {
     return t
   }
 
+  // Drag & Drop handlers for weekly tasks
+  const handleTaskPointerDown = (e: React.PointerEvent, task: Task) => {
+    const element = e.currentTarget as HTMLElement
+    element.setPointerCapture(e.pointerId)
+    setDraggedTask(task)
+    setDraggedElement(element)
+    element.style.opacity = '0.5'
+    element.style.cursor = 'grabbing'
+  }
+
+  const handleTaskPointerMove = (e: React.PointerEvent) => {
+    if (!draggedTask) return
+    e.preventDefault()
+  }
+
+  const handleTaskPointerUp = (e: React.PointerEvent) => {
+    if (!draggedTask || !draggedElement) return
+    
+    draggedElement.style.opacity = '1'
+    draggedElement.style.cursor = 'grab'
+    
+    // Find drop target
+    const elementBelow = document.elementFromPoint(e.clientX, e.clientY)
+    const dropContainer = elementBelow?.closest('[data-drop-day]')
+    
+    if (dropContainer) {
+      const newDay = dropContainer.getAttribute('data-drop-day')
+      if (newDay && newDay !== draggedTask.day_of_week) {
+        updateTaskDay(draggedTask, newDay)
+      }
+    }
+    
+    setDraggedTask(null)
+    setDraggedElement(null)
+  }
+
+  const updateTaskDay = async (task: Task, newDay: string) => {
+    try {
+      const { error } = await supabase
+        .from(TASKS_TABLE)
+        .update({ day_of_week: newDay })
+        .eq('id', task.id)
+      
+      if (error) throw error
+      
+      // Update local state
+      setTasks(prev => prev.map(t => 
+        t.id === task.id ? { ...t, day_of_week: newDay } : t
+      ))
+    } catch (error) {
+      console.error('Failed to update task day:', error)
+    }
+  }
+
   const toggleCollapse = (key: string) =>
     setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
 
@@ -2617,9 +2675,16 @@ export default function Home() {
               </button>
 
               {!isCollapsed && (
-                <div className="px-2 md:px-3 pb-2 md:pb-3 space-y-1 md:space-y-2">
+                <div className="px-2 md:px-3 pb-2 md:pb-3 space-y-1 md:space-y-2" data-drop-day={day}>
                   {tasksForDay.map(task => (
-                    <div key={task.id} className="group flex items-center gap-2 md:gap-3 p-1 md:p-2 hover:bg-[#252545] rounded-lg transition-colors">
+                    <div 
+                      key={task.id} 
+                      className="group flex items-center gap-2 md:gap-3 p-1 md:p-2 hover:bg-[#252545] rounded-lg transition-colors cursor-grab active:cursor-grabbing"
+                      onPointerDown={(e) => handleTaskPointerDown(e, task)}
+                      onPointerMove={handleTaskPointerMove}
+                      onPointerUp={handleTaskPointerUp}
+                      style={{ touchAction: 'none' }}
+                    >
                       <input
                         type="checkbox"
                         checked={task.completed}
