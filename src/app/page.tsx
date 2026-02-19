@@ -87,6 +87,10 @@ export default function Home() {
     return false
   })
   
+  // DEBUG: Temporary debug state
+  const [lastDropTargetTaskId, setLastDropTargetTaskId] = useState<string>('none')
+  const [lastDropDay, setLastDropDay] = useState<string>('none')
+  
   // Daily Digest state
   const [dailyDigest, setDailyDigest] = useState<{
     date: string;
@@ -1921,12 +1925,16 @@ export default function Home() {
       const newDay = dropContainer.getAttribute('data-drop-day')
       const sourceDay = draggedTask.day_of_week
       
+      // DEBUG: Set debug values
+      const targetTaskId = targetTaskElement ? parseInt(targetTaskElement.getAttribute('data-task-id') || '0') : 0
+      setLastDropTargetTaskId(targetTaskId ? targetTaskId.toString() : 'none')
+      setLastDropDay(newDay || 'none')
+      
       if (newDay && newDay !== sourceDay) {
         // Cross-day move (existing behavior)
         updateTaskDay(draggedTask, newDay)
       } else if (newDay === sourceDay && targetTaskElement) {
         // Same-day reordering
-        const targetTaskId = parseInt(targetTaskElement.getAttribute('data-task-id') || '0')
         const targetTaskDay = targetTaskElement.getAttribute('data-day')
         
         console.log('Reorder check:', { sourceDay, targetTaskDay, targetTaskId, draggedId: draggedTask.id }) // Debug logging
@@ -1939,6 +1947,10 @@ export default function Home() {
           }
         }
       }
+    } else {
+      // DEBUG: No drop container found
+      setLastDropTargetTaskId('none')
+      setLastDropDay('none')
     }
     
     setDraggedTask(null)
@@ -2924,7 +2936,12 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Weekly Notes Section */}
+      {/* DEBUG: Temporary debug display */}
+      <div className="mb-4 p-2 bg-red-900 rounded text-white text-xs">
+        DEBUG - draggedTaskId: {draggedTask?.id || 'none'} | lastDropTargetTaskId: {lastDropTargetTaskId} | lastDropDay: {lastDropDay}
+      </div>
+
+      {/* Weekly Notes Section */}}
       {renderWeeklyNotes(board)}
 
       <div className="space-y-2 md:space-y-3">
@@ -2962,7 +2979,7 @@ export default function Home() {
                       key={task.id}
                       data-task-id={task.id}
                       data-day={day}
-                      className="group flex items-center gap-2 md:gap-3 p-1 md:p-2 hover:bg-[#252545] rounded-lg transition-colors"
+                      className="group relative flex items-center gap-2 md:gap-3 p-1 md:p-2 hover:bg-[#252545] rounded-lg transition-colors"
                     >
                       <input
                         type="checkbox"
