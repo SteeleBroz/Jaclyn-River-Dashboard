@@ -1764,11 +1764,14 @@ export default function Home() {
     if (hideCompleted[board]) t = t.filter(t => !t.completed)
     // Sort by sort_order ASC, fallback to created_at ASC
     return t.sort((a, b) => {
-      if (a.sort_order !== null && b.sort_order !== null) {
+      if (a.sort_order !== null && a.sort_order !== undefined && 
+          b.sort_order !== null && b.sort_order !== undefined) {
         return a.sort_order - b.sort_order
       }
-      if (a.sort_order !== null && b.sort_order === null) return -1
-      if (a.sort_order === null && b.sort_order !== null) return 1
+      if ((a.sort_order !== null && a.sort_order !== undefined) && 
+          (b.sort_order === null || b.sort_order === undefined)) return -1
+      if ((a.sort_order === null || a.sort_order === undefined) && 
+          (b.sort_order !== null && b.sort_order !== undefined)) return 1
       return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     })
   }
@@ -1983,11 +1986,14 @@ export default function Home() {
         t.day_of_week === draggedTask.day_of_week && 
         t.week_start === draggedTask.week_start
       ).sort((a, b) => {
-        if (a.sort_order !== null && b.sort_order !== null) {
+        if (a.sort_order !== null && a.sort_order !== undefined && 
+            b.sort_order !== null && b.sort_order !== undefined) {
           return a.sort_order - b.sort_order
         }
-        if (a.sort_order !== null && b.sort_order === null) return -1
-        if (a.sort_order === null && b.sort_order !== null) return 1
+        if ((a.sort_order !== null && a.sort_order !== undefined) && 
+            (b.sort_order === null || b.sort_order === undefined)) return -1
+        if ((a.sort_order === null || a.sort_order === undefined) && 
+            (b.sort_order !== null && b.sort_order !== undefined)) return 1
         return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       })
 
@@ -2941,7 +2947,7 @@ export default function Home() {
         DEBUG - draggedTaskId: {draggedTask?.id || 'none'} | lastDropTargetTaskId: {lastDropTargetTaskId} | lastDropDay: {lastDropDay}
       </div>
 
-      {/* Weekly Notes Section */}}
+      {/* Weekly Notes Section */}
       {renderWeeklyNotes(board)}
 
       <div className="space-y-2 md:space-y-3">
@@ -3154,6 +3160,10 @@ export default function Home() {
     <main className="min-h-screen p-3 md:p-6 max-w-[1400px] mx-auto">
       {/* Header */}
       <div className="text-center mb-3 md:mb-4 relative">
+        {/* Build stamp */}
+        <div className="absolute top-0 right-0 text-xs text-gray-600 text-right">
+          BUILD: b748ebe
+        </div>
         <div 
           ref={headerWordsRef}
           className="text-gray-500 text-xs font-light uppercase tracking-widest cursor-pointer select-none"

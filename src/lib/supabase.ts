@@ -39,7 +39,6 @@ export type Task = {
   owner?: string
   completed?: boolean
   notes?: string
-  sort_order?: number
 }
 
 export type CalendarEvent = {
