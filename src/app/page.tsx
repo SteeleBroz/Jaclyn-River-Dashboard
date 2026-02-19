@@ -1892,6 +1892,7 @@ export default function Home() {
     setDraggedElement(element)
     element.style.opacity = '0.5'
     element.style.cursor = 'grabbing'
+    element.style.pointerEvents = 'none' // Allow elementFromPoint to see through
   }
 
   const handleTaskPointerMove = (e: React.PointerEvent) => {
@@ -1904,23 +1905,36 @@ export default function Home() {
     
     draggedElement.style.opacity = '1'
     draggedElement.style.cursor = 'grab'
+    draggedElement.style.pointerEvents = 'auto' // Restore pointer events
     
-    // Find drop target
-    const elementBelow = document.elementFromPoint(e.clientX, e.clientY)
-    const dropContainer = elementBelow?.closest('[data-drop-day]')
+    // Find drop target using pointer coordinates
+    const dropEl = document.elementFromPoint(e.clientX, e.clientY)
+    console.log('Drop element:', dropEl) // Debug logging
+    
+    const dropContainer = dropEl?.closest('[data-drop-day]')
+    const targetTaskElement = dropEl?.closest('[data-task-id]')
+    
+    console.log('Drop container:', dropContainer) // Debug logging
+    console.log('Target task element:', targetTaskElement) // Debug logging
     
     if (dropContainer) {
       const newDay = dropContainer.getAttribute('data-drop-day')
-      if (newDay && newDay !== draggedTask.day_of_week) {
+      const sourceDay = draggedTask.day_of_week
+      
+      if (newDay && newDay !== sourceDay) {
         // Cross-day move (existing behavior)
         updateTaskDay(draggedTask, newDay)
-      } else if (newDay === draggedTask.day_of_week) {
+      } else if (newDay === sourceDay && targetTaskElement) {
         // Same-day reordering
-        const targetTaskElement = elementBelow?.closest('[data-task-id]')
-        if (targetTaskElement) {
-          const targetTaskId = parseInt(targetTaskElement.getAttribute('data-task-id') || '0')
+        const targetTaskId = parseInt(targetTaskElement.getAttribute('data-task-id') || '0')
+        const targetTaskDay = targetTaskElement.getAttribute('data-day')
+        
+        console.log('Reorder check:', { sourceDay, targetTaskDay, targetTaskId, draggedId: draggedTask.id }) // Debug logging
+        
+        if (targetTaskDay === sourceDay && targetTaskId !== draggedTask.id) {
           const targetTask = tasks.find(t => t.id === targetTaskId)
-          if (targetTask && targetTask.id !== draggedTask.id) {
+          if (targetTask) {
+            console.log('Triggering reorder') // Debug logging
             updateTaskOrder(draggedTask, targetTask)
           }
         }
@@ -2947,6 +2961,7 @@ export default function Home() {
                     <div 
                       key={task.id}
                       data-task-id={task.id}
+                      data-day={day}
                       className="group flex items-center gap-2 md:gap-3 p-1 md:p-2 hover:bg-[#252545] rounded-lg transition-colors"
                     >
                       <input
