@@ -3174,6 +3174,7 @@ export default function Home() {
     <main className="min-h-screen p-3 md:p-6 max-w-[1400px] mx-auto">
       {/* Header */}
       <div className="text-center mb-3 md:mb-4 relative">
+        <div 
           ref={headerWordsRef}
           className="text-gray-500 text-xs font-light uppercase tracking-widest cursor-pointer select-none"
           onClick={handleHeaderWordsClick}
