@@ -3162,7 +3162,7 @@ export default function Home() {
       <div className="text-center mb-3 md:mb-4 relative">
         {/* Build stamp */}
         <div className="absolute top-0 right-0 text-xs text-gray-600 text-right">
-          BUILD: f6a40c8
+          BUILD: a150fda
         </div>
         <div 
           ref={headerWordsRef}
