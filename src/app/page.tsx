@@ -80,6 +80,12 @@ export default function Home() {
   const [groceryItems, setGroceryItems] = useState<GroceryItem[]>([])
   const [draggedGroceryItem, setDraggedGroceryItem] = useState<GroceryItem | null>(null)
   const [draggedGroceryElement, setDraggedGroceryElement] = useState<HTMLElement | null>(null)
+  const [hideCheckedGrocery, setHideCheckedGrocery] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('hideCheckedGrocery') === 'true'
+    }
+    return false
+  })
   
   // Daily Digest state
   const [dailyDigest, setDailyDigest] = useState<{
@@ -1757,7 +1763,11 @@ export default function Home() {
 
   // Grocery List functions
   const getGroceryItemsByStore = (store: 'costco' | 'publix' | 'random') => {
-    return groceryItems.filter(item => item.store === store).sort((a, b) => a.sort_order - b.sort_order)
+    let items = groceryItems.filter(item => item.store === store)
+    if (hideCheckedGrocery) {
+      items = items.filter(item => !item.checked)
+    }
+    return items.sort((a, b) => a.sort_order - b.sort_order)
   }
 
   const addGroceryItem = async (store: 'costco' | 'publix' | 'random', text: string) => {
@@ -1858,6 +1868,12 @@ export default function Home() {
     } catch (error) {
       console.error('Failed to update grocery item order:', error)
     }
+  }
+
+  const toggleHideCheckedGrocery = () => {
+    const newValue = !hideCheckedGrocery
+    setHideCheckedGrocery(newValue)
+    localStorage.setItem('hideCheckedGrocery', newValue.toString())
   }
 
   // Drag & Drop handlers for weekly tasks
@@ -2927,7 +2943,19 @@ export default function Home() {
     ]
 
     return (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+      <div>
+        {/* Header with toggle */}
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-bold text-white">Grocery List</h2>
+          <button
+            onClick={toggleHideCheckedGrocery}
+            className="text-xs text-gray-400 hover:text-white transition-colors"
+          >
+            {hideCheckedGrocery ? 'Show' : 'Hide'} checked
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
         {stores.map(store => (
           <div key={store.key} className="bg-[#16213e] rounded-xl p-4 h-fit">
             <div className="flex items-center gap-2 mb-4">
@@ -3010,6 +3038,7 @@ export default function Home() {
             </div>
           </div>
         ))}
+        </div>
       </div>
     )
   }
