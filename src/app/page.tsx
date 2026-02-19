@@ -1823,21 +1823,41 @@ export default function Home() {
     ))
   }
 
-  const updateGroceryItemOrder = async (id: number, newSortOrder: number, store: 'costco' | 'publix' | 'random') => {
-    const { error } = await supabase.from('grocery_items')
-      .update({ sort_order: newSortOrder })
-      .eq('id', id)
+  const updateGroceryItemOrder = async (draggedId: number, targetId: number, store: 'costco' | 'publix' | 'random') => {
+    const storeItems = groceryItems.filter(item => item.store === store).sort((a, b) => a.sort_order - b.sort_order)
+    const draggedIndex = storeItems.findIndex(item => item.id === draggedId)
+    const targetIndex = storeItems.findIndex(item => item.id === targetId)
     
-    if (error) {
+    if (draggedIndex === -1 || targetIndex === -1) return
+    
+    // Reorder the items array
+    const reorderedItems = [...storeItems]
+    const [draggedItem] = reorderedItems.splice(draggedIndex, 1)
+    reorderedItems.splice(targetIndex, 0, draggedItem)
+    
+    // Update sort_order for all items in this store
+    const updates = reorderedItems.map((item, index) => ({
+      id: item.id,
+      sort_order: index + 1
+    }))
+    
+    try {
+      // Update all items in batch
+      for (const update of updates) {
+        await supabase.from('grocery_items')
+          .update({ sort_order: update.sort_order })
+          .eq('id', update.id)
+      }
+      
+      // Update local state
+      setGroceryItems(prev => prev.map(item => {
+        const update = updates.find(u => u.id === item.id)
+        return update ? { ...item, sort_order: update.sort_order } : item
+      }))
+      
+    } catch (error) {
       console.error('Failed to update grocery item order:', error)
-      return
     }
-    
-    setGroceryItems(prev => prev.map(item => 
-      item.id === id 
-        ? { ...item, sort_order: newSortOrder }
-        : item
-    ))
   }
 
   // Drag & Drop handlers for weekly tasks
@@ -1917,12 +1937,22 @@ export default function Home() {
     
     // Find drop target
     const elementBelow = document.elementFromPoint(e.clientX, e.clientY)
-    const dropContainer = elementBelow?.closest('[data-grocery-store]')
+    const dropContainer = elementBelow?.closest('[data-grocery-drop-store]')
     
     if (dropContainer) {
-      const newStore = dropContainer.getAttribute('data-grocery-store') as 'costco' | 'publix' | 'random'
+      const newStore = dropContainer.getAttribute('data-grocery-drop-store') as 'costco' | 'publix' | 'random'
       if (newStore && newStore !== draggedGroceryItem.store) {
+        // Moving to different store
         updateGroceryItemStore(draggedGroceryItem.id, newStore)
+      } else if (newStore === draggedGroceryItem.store) {
+        // Reordering within same store - find target position
+        const targetItem = elementBelow?.closest('[data-grocery-item-id]')
+        if (targetItem) {
+          const targetId = parseInt(targetItem.getAttribute('data-grocery-item-id') || '0')
+          if (targetId !== draggedGroceryItem.id) {
+            updateGroceryItemOrder(draggedGroceryItem.id, targetId, newStore)
+          }
+        }
       }
     }
     
@@ -2911,10 +2941,11 @@ export default function Home() {
               </span>
             </div>
 
-            <div className="space-y-2 mb-4" data-grocery-store={store.key}>
+            <div className="space-y-2 mb-4" data-grocery-drop-store={store.key}>
               {getGroceryItemsByStore(store.key).map(item => (
                 <div 
                   key={item.id}
+                  data-grocery-item-id={item.id}
                   className="group flex items-center gap-3 p-2 hover:bg-[#1a1a2e] rounded-lg transition-colors"
                 >
                   <input
