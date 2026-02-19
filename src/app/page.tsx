@@ -1758,7 +1758,15 @@ export default function Home() {
   const boardTasks = (board: string, day: string) => {
     let t = tasks.filter(t => t.board === board && t.day_of_week === day)
     if (hideCompleted[board]) t = t.filter(t => !t.completed)
-    return t
+    // Sort by sort_order ASC, fallback to created_at ASC
+    return t.sort((a, b) => {
+      if (a.sort_order !== null && b.sort_order !== null) {
+        return a.sort_order - b.sort_order
+      }
+      if (a.sort_order !== null && b.sort_order === null) return -1
+      if (a.sort_order === null && b.sort_order !== null) return 1
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    })
   }
 
   // Grocery List functions
@@ -1904,7 +1912,18 @@ export default function Home() {
     if (dropContainer) {
       const newDay = dropContainer.getAttribute('data-drop-day')
       if (newDay && newDay !== draggedTask.day_of_week) {
+        // Cross-day move (existing behavior)
         updateTaskDay(draggedTask, newDay)
+      } else if (newDay === draggedTask.day_of_week) {
+        // Same-day reordering
+        const targetTaskElement = elementBelow?.closest('[data-task-id]')
+        if (targetTaskElement) {
+          const targetTaskId = parseInt(targetTaskElement.getAttribute('data-task-id') || '0')
+          const targetTask = tasks.find(t => t.id === targetTaskId)
+          if (targetTask && targetTask.id !== draggedTask.id) {
+            updateTaskOrder(draggedTask, targetTask)
+          }
+        }
       }
     }
     
@@ -1927,6 +1946,54 @@ export default function Home() {
       ))
     } catch (error) {
       console.error('Failed to update task day:', error)
+    }
+  }
+
+  const updateTaskOrder = async (draggedTask: Task, targetTask: Task) => {
+    try {
+      // Get all tasks for the same day, board, and week
+      const dayTasks = tasks.filter(t => 
+        t.board === draggedTask.board && 
+        t.day_of_week === draggedTask.day_of_week && 
+        t.week_start === draggedTask.week_start
+      ).sort((a, b) => {
+        if (a.sort_order !== null && b.sort_order !== null) {
+          return a.sort_order - b.sort_order
+        }
+        if (a.sort_order !== null && b.sort_order === null) return -1
+        if (a.sort_order === null && b.sort_order !== null) return 1
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      })
+
+      // Remove dragged task and find target position
+      const filteredTasks = dayTasks.filter(t => t.id !== draggedTask.id)
+      const targetIndex = filteredTasks.findIndex(t => t.id === targetTask.id)
+      
+      // Insert dragged task at target position
+      const reorderedTasks = [...filteredTasks]
+      reorderedTasks.splice(targetIndex, 0, draggedTask)
+
+      // Update sort_order for all tasks in this day (renumber 1, 2, 3...)
+      const updates = reorderedTasks.map((task, index) => ({
+        id: task.id,
+        sort_order: index + 1
+      }))
+
+      // Update database in batch
+      for (const update of updates) {
+        await supabase.from(TASKS_TABLE)
+          .update({ sort_order: update.sort_order })
+          .eq('id', update.id)
+      }
+
+      // Update local state
+      setTasks(prev => prev.map(task => {
+        const update = updates.find(u => u.id === task.id)
+        return update ? { ...task, sort_order: update.sort_order } : task
+      }))
+
+    } catch (error) {
+      console.error('Failed to update task order:', error)
     }
   }
 
@@ -2878,7 +2945,8 @@ export default function Home() {
                 <div className="px-2 md:px-3 pb-2 md:pb-3 space-y-1 md:space-y-2" data-drop-day={day}>
                   {tasksForDay.map(task => (
                     <div 
-                      key={task.id} 
+                      key={task.id}
+                      data-task-id={task.id}
                       className="group flex items-center gap-2 md:gap-3 p-1 md:p-2 hover:bg-[#252545] rounded-lg transition-colors"
                     >
                       <input
