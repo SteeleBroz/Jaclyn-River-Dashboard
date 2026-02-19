@@ -2826,6 +2826,13 @@ export default function Home() {
             >
               ▶
             </button>
+            <button
+              onClick={goToCurrentWeek}
+              className="text-xs text-gray-400 hover:text-white transition-colors px-2 py-1 rounded"
+              title="Go to current week"
+            >
+              Today
+            </button>
           </div>
           <button
             onClick={() => toggleHideCompleted(board)}
