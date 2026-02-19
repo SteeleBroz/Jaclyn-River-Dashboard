@@ -2178,7 +2178,7 @@ export default function Home() {
             Hide Past
           </label>
         </div>
-        <div className="flex-1 overflow-y-auto space-y-2">
+        <div className="flex-1 max-h-[320px] overflow-y-auto space-y-2">
           {getThisWeekEvents()
             .filter(event => !hidePastThisWeek || !isPastEvent(event))
             .map(event => {
