@@ -3784,6 +3784,11 @@ export default function Home() {
           </div>
         </div>
       )}
+      
+      {/* Version verification */}
+      <div className="text-xs text-gray-600 text-center mt-4">
+        v: 35bee87
+      </div>
     </main>
   )
 }
