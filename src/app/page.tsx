@@ -87,9 +87,6 @@ export default function Home() {
     return false
   })
   
-  // DEBUG: Temporary debug state
-  const [lastDropTargetTaskId, setLastDropTargetTaskId] = useState<string>('none')
-  const [lastDropDay, setLastDropDay] = useState<string>('none')
   
   // Daily Digest state
   const [dailyDigest, setDailyDigest] = useState<{
@@ -1942,10 +1939,7 @@ export default function Home() {
       const newDay = dropContainer.getAttribute('data-drop-day')
       const sourceDay = draggedTask.day_of_week
       
-      // DEBUG: Set debug values
       const targetTaskId = targetTaskElement ? parseInt(targetTaskElement.getAttribute('data-task-id') || '0') : 0
-      setLastDropTargetTaskId(targetTaskId ? targetTaskId.toString() : 'none')
-      setLastDropDay(newDay || 'none')
       
       if (newDay && newDay !== sourceDay) {
         // Cross-day move (existing behavior)
@@ -1965,9 +1959,6 @@ export default function Home() {
         }
       }
     } else {
-      // DEBUG: No drop container found
-      setLastDropTargetTaskId('none')
-      setLastDropDay('none')
     }
     
     setDraggedTask(null)
@@ -2969,10 +2960,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* DEBUG: Temporary debug display */}
-      <div className="mb-4 p-2 bg-red-900 rounded text-white text-xs">
-        DEBUG - draggedTaskId: {draggedTask?.id || 'none'} | lastDropTargetTaskId: {lastDropTargetTaskId} | lastDropDay: {lastDropDay}
-      </div>
 
       {/* Weekly Notes Section */}
       {renderWeeklyNotes(board)}
@@ -3187,11 +3174,6 @@ export default function Home() {
     <main className="min-h-screen p-3 md:p-6 max-w-[1400px] mx-auto">
       {/* Header */}
       <div className="text-center mb-3 md:mb-4 relative">
-        {/* Build stamp */}
-        <div className="absolute top-0 right-0 text-xs text-gray-600 text-right">
-          BUILD: f4e5187
-        </div>
-        <div 
           ref={headerWordsRef}
           className="text-gray-500 text-xs font-light uppercase tracking-widest cursor-pointer select-none"
           onClick={handleHeaderWordsClick}
