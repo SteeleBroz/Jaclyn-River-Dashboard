@@ -214,9 +214,15 @@ export default function Home() {
           notes: task.description,
           day_of_week: task.day_of_week || 'monday', // Use stored value or default
           board: task.assignee === 'jaclyn' ? 'jaclyn' : 'river',
-          sort_order: 0,
+          // DON'T override sort_order - preserve DB value
           week_start: task.week_start // Don't override - use exact DB value
         }))
+        
+        console.log('📥 FETCHED TASKS with sort_order:', mappedTasks.map(t => ({ 
+          id: t.id, 
+          title: t.title, 
+          sort_order: t.sort_order 
+        })))
         setTasks(mappedTasks)
         console.log('🔍 Mapped tasks:', mappedTasks.length, 'tasks for week', weekStartDate)
       }
@@ -1763,7 +1769,7 @@ export default function Home() {
     let t = tasks.filter(t => t.board === board && t.day_of_week === day)
     if (hideCompleted[board]) t = t.filter(t => !t.completed)
     // Sort by sort_order ASC, fallback to created_at ASC
-    return t.sort((a, b) => {
+    const sorted = t.sort((a, b) => {
       if (a.sort_order !== null && a.sort_order !== undefined && 
           b.sort_order !== null && b.sort_order !== undefined) {
         return a.sort_order - b.sort_order
@@ -1774,6 +1780,14 @@ export default function Home() {
           (b.sort_order !== null && b.sort_order !== undefined)) return 1
       return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     })
+    
+    console.log(`📋 SORTED TASKS for ${board}-${day}:`, sorted.map(t => ({ 
+      id: t.id, 
+      title: t.title, 
+      sort_order: t.sort_order 
+    })))
+    
+    return sorted
   }
 
   // Grocery List functions
@@ -2008,14 +2022,23 @@ export default function Home() {
       // Update sort_order for all tasks in this day (renumber 1, 2, 3...)
       const updates = reorderedTasks.map((task, index) => ({
         id: task.id,
+        title: task.title, // For logging
         sort_order: index + 1
       }))
 
+      console.log('🔄 REORDER PAYLOAD:', updates)
+
       // Update database in batch
       for (const update of updates) {
-        await supabase.from(TASKS_TABLE)
+        const { error } = await supabase.from(TASKS_TABLE)
           .update({ sort_order: update.sort_order })
           .eq('id', update.id)
+        
+        if (error) {
+          console.error(`❌ UPDATE FAILED for task ${update.id}:`, error)
+        } else {
+          console.log(`✅ UPDATED task ${update.id} (${update.title}) to sort_order ${update.sort_order}`)
+        }
       }
 
       // Update local state
@@ -2023,6 +2046,10 @@ export default function Home() {
         const update = updates.find(u => u.id === task.id)
         return update ? { ...task, sort_order: update.sort_order } : task
       }))
+
+      // Force re-fetch to confirm database persistence
+      console.log('🔄 CALLING fetchData(true) to verify persistence')
+      await fetchData(true)
 
     } catch (error) {
       console.error('Failed to update task order:', error)
