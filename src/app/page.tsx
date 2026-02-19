@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
+import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday','overflow'] as const
 const DAY_LABELS: Record<string, string> = {
@@ -50,7 +50,7 @@ export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [weeklyNotes, setWeeklyNotes] = useState<WeeklyNote[]>([])
-  const [activeTab, setActiveTab] = useState<'jaclyn' | 'river' | 'digest' | 'sendouts'>('jaclyn')
+  const [activeTab, setActiveTab] = useState<'jaclyn' | 'river' | 'grocery' | 'digest' | 'sendouts'>('jaclyn')
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day' | 'year'>('month')
   const [calendarDate, setCalendarDate] = useState(new Date())
@@ -75,6 +75,11 @@ export default function Home() {
   // Drag & Drop state for weekly tasks
   const [draggedTask, setDraggedTask] = useState<Task | null>(null)
   const [draggedElement, setDraggedElement] = useState<HTMLElement | null>(null)
+  
+  // Grocery List state
+  const [groceryItems, setGroceryItems] = useState<GroceryItem[]>([])
+  const [draggedGroceryItem, setDraggedGroceryItem] = useState<GroceryItem | null>(null)
+  const [draggedGroceryElement, setDraggedGroceryElement] = useState<HTMLElement | null>(null)
   
   // Daily Digest state
   const [dailyDigest, setDailyDigest] = useState<{
@@ -174,13 +179,17 @@ export default function Home() {
       console.log('🔍 Selected Week:', selectedWeek.toISOString())
       console.log('🔍 Computed week_start for query:', weekStartDate)
       
-      const [{ data: f }, { data: t }, { data: e }, { data: n }] = await Promise.all([
+      const [{ data: f }, { data: t }, { data: e }, { data: n }, groceryResult] = await Promise.all([
         supabase.from(FOLDERS_TABLE).select('*').order('id'),
         supabase.from(TASKS_TABLE)
           .select('*')
           .eq('week_start', weekStartDate), // Only exact week match - no fallback
         supabase.from('posts').select('*').eq('platform', 'calendar').order('scheduled_for'),
-        supabase.from('posts').select('*').eq('platform', 'weekly-notes').order('created_at', { ascending: false })
+        supabase.from('posts').select('*').eq('platform', 'weekly-notes').order('created_at', { ascending: false }),
+        supabase.from('grocery_items').select('*').order('sort_order').then(
+          result => result, 
+          error => ({ data: null, error }) // Handle missing table gracefully
+        )
       ])
       if (f) setFolders(f)
       if (t) {
@@ -232,6 +241,12 @@ export default function Home() {
           seen: post.status === 'seen'
         }))
         setWeeklyNotes(mappedNotes)
+      }
+      if (groceryResult.data) {
+        setGroceryItems(groceryResult.data)
+      } else if (groceryResult.error) {
+        console.warn('Grocery items table not found - please create it:', groceryResult.error.message)
+        setGroceryItems([]) // Set empty array as fallback
       }
     } catch (error) {
       console.error('Error fetching data:', error)
@@ -1740,6 +1755,91 @@ export default function Home() {
     return t
   }
 
+  // Grocery List functions
+  const getGroceryItemsByStore = (store: 'costco' | 'publix' | 'random') => {
+    return groceryItems.filter(item => item.store === store).sort((a, b) => a.sort_order - b.sort_order)
+  }
+
+  const addGroceryItem = async (store: 'costco' | 'publix' | 'random', text: string) => {
+    if (!text.trim()) return
+    
+    const maxSortOrder = Math.max(...groceryItems.filter(item => item.store === store).map(item => item.sort_order), 0)
+    
+    const { data, error } = await supabase.from('grocery_items').insert({
+      store,
+      text: text.trim(),
+      sort_order: maxSortOrder + 1,
+      checked: false
+    }).select().single()
+    
+    if (error) {
+      console.error('Failed to add grocery item:', error)
+      return
+    }
+    
+    if (data) {
+      setGroceryItems(prev => [...prev, data])
+    }
+  }
+
+  const toggleGroceryItemChecked = async (id: number, checked: boolean) => {
+    const { error } = await supabase.from('grocery_items').update({ checked }).eq('id', id)
+    if (error) {
+      console.error('Failed to toggle grocery item:', error)
+      return
+    }
+    setGroceryItems(prev => prev.map(item => item.id === id ? { ...item, checked } : item))
+  }
+
+  const deleteGroceryItem = async (id: number) => {
+    if (!confirm('Delete this item?')) return
+    const { error } = await supabase.from('grocery_items').delete().eq('id', id)
+    if (error) {
+      console.error('Failed to delete grocery item:', error)
+      return
+    }
+    setGroceryItems(prev => prev.filter(item => item.id !== id))
+  }
+
+  const updateGroceryItemStore = async (id: number, newStore: 'costco' | 'publix' | 'random') => {
+    const maxSortOrder = Math.max(...groceryItems.filter(item => item.store === newStore).map(item => item.sort_order), 0)
+    
+    const { error } = await supabase.from('grocery_items')
+      .update({ 
+        store: newStore,
+        sort_order: maxSortOrder + 1
+      })
+      .eq('id', id)
+    
+    if (error) {
+      console.error('Failed to update grocery item store:', error)
+      return
+    }
+    
+    setGroceryItems(prev => prev.map(item => 
+      item.id === id 
+        ? { ...item, store: newStore, sort_order: maxSortOrder + 1 }
+        : item
+    ))
+  }
+
+  const updateGroceryItemOrder = async (id: number, newSortOrder: number, store: 'costco' | 'publix' | 'random') => {
+    const { error } = await supabase.from('grocery_items')
+      .update({ sort_order: newSortOrder })
+      .eq('id', id)
+    
+    if (error) {
+      console.error('Failed to update grocery item order:', error)
+      return
+    }
+    
+    setGroceryItems(prev => prev.map(item => 
+      item.id === id 
+        ? { ...item, sort_order: newSortOrder }
+        : item
+    ))
+  }
+
   // Drag & Drop handlers for weekly tasks
   const handleTaskPointerDown = (e: React.PointerEvent, task: Task) => {
     const element = e.currentTarget as HTMLElement
@@ -1792,6 +1892,42 @@ export default function Home() {
     } catch (error) {
       console.error('Failed to update task day:', error)
     }
+  }
+
+  // Grocery List Drag & Drop handlers
+  const handleGroceryPointerDown = (e: React.PointerEvent, item: GroceryItem) => {
+    const element = e.currentTarget as HTMLElement
+    element.setPointerCapture(e.pointerId)
+    setDraggedGroceryItem(item)
+    setDraggedGroceryElement(element)
+    element.style.opacity = '0.5'
+    element.style.cursor = 'grabbing'
+  }
+
+  const handleGroceryPointerMove = (e: React.PointerEvent) => {
+    if (!draggedGroceryItem) return
+    e.preventDefault()
+  }
+
+  const handleGroceryPointerUp = (e: React.PointerEvent) => {
+    if (!draggedGroceryItem || !draggedGroceryElement) return
+    
+    draggedGroceryElement.style.opacity = '1'
+    draggedGroceryElement.style.cursor = 'grab'
+    
+    // Find drop target
+    const elementBelow = document.elementFromPoint(e.clientX, e.clientY)
+    const dropContainer = elementBelow?.closest('[data-grocery-store]')
+    
+    if (dropContainer) {
+      const newStore = dropContainer.getAttribute('data-grocery-store') as 'costco' | 'publix' | 'random'
+      if (newStore && newStore !== draggedGroceryItem.store) {
+        updateGroceryItemStore(draggedGroceryItem.id, newStore)
+      }
+    }
+    
+    setDraggedGroceryItem(null)
+    setDraggedGroceryElement(null)
   }
 
   const toggleCollapse = (key: string) =>
@@ -2753,6 +2889,100 @@ export default function Home() {
     </div>
   )
 
+  const renderGroceryList = () => {
+    const stores: Array<{ key: 'costco' | 'publix' | 'random'; label: string; color: string }> = [
+      { key: 'costco', label: 'Costco', color: '#dc2626' },
+      { key: 'publix', label: 'Publix', color: '#16a34a' },
+      { key: 'random', label: 'Random', color: '#2563eb' }
+    ]
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+        {stores.map(store => (
+          <div key={store.key} className="bg-[#16213e] rounded-xl p-4 h-fit">
+            <div className="flex items-center gap-2 mb-4">
+              <div 
+                className="w-3 h-3 rounded-full" 
+                style={{ backgroundColor: store.color }}
+              />
+              <h3 className="text-lg font-bold text-white">{store.label}</h3>
+              <span className="text-sm text-gray-400">
+                ({getGroceryItemsByStore(store.key).length})
+              </span>
+            </div>
+
+            <div className="space-y-2 mb-4" data-grocery-store={store.key}>
+              {getGroceryItemsByStore(store.key).map(item => (
+                <div 
+                  key={item.id}
+                  className="group flex items-center gap-3 p-2 hover:bg-[#1a1a2e] rounded-lg transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    checked={item.checked}
+                    onChange={(e) => toggleGroceryItemChecked(item.id, e.target.checked)}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-4 h-4 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                  />
+                  <div 
+                    className="text-gray-500 hover:text-gray-300 cursor-grab active:cursor-grabbing px-1 text-xs select-none"
+                    onPointerDown={(e) => handleGroceryPointerDown(e, item)}
+                    onPointerMove={handleGroceryPointerMove}
+                    onPointerUp={handleGroceryPointerUp}
+                    style={{ touchAction: 'none' }}
+                    title="Drag to move"
+                  >
+                    ⋮⋮
+                  </div>
+                  <span
+                    className={`flex-1 text-sm ${
+                      item.checked ? 'line-through text-gray-500' : 'text-gray-200'
+                    }`}
+                  >
+                    {item.text}
+                  </span>
+                  <button
+                    onClick={() => deleteGroceryItem(item.id)}
+                    className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all p-1"
+                    title="Delete item"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Add item..."
+                className="flex-1 px-3 py-2 bg-[#1a1a2e] border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const target = e.target as HTMLInputElement
+                    addGroceryItem(store.key, target.value)
+                    target.value = ''
+                  }
+                }}
+              />
+              <button
+                onClick={(e) => {
+                  const input = e.currentTarget.previousElementSibling as HTMLInputElement
+                  addGroceryItem(store.key, input.value)
+                  input.value = ''
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <main className="min-h-screen p-3 md:p-6 max-w-[1400px] mx-auto">
       {/* Header */}
@@ -2888,6 +3118,7 @@ export default function Home() {
           {[
             { id: 'jaclyn', label: 'Jaclyn' },
             { id: 'river', label: 'River' },
+            { id: 'grocery', label: 'Grocery List' },
             { id: 'digest', label: 'Daily Digest' },
             { id: 'sendouts', label: 'Send Outs' }
           ].map(tab => (
@@ -2908,6 +3139,7 @@ export default function Home() {
         {/* Tab Content */}
         {activeTab === 'jaclyn' && renderWeeklyBoard('jaclyn')}
         {activeTab === 'river' && renderWeeklyBoard('river')}
+        {activeTab === 'grocery' && renderGroceryList()}
         {activeTab === 'digest' && renderDailyDigest()}
         {activeTab === 'sendouts' && renderSendOuts()}
         </div>

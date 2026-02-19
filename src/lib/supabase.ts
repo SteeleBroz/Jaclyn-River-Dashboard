@@ -85,3 +85,12 @@ export type PersonalHubItem = {
   created_at: string
   updated_at: string
 }
+
+export type GroceryItem = {
+  id: number
+  store: 'costco' | 'publix' | 'random'
+  text: string
+  sort_order: number
+  checked: boolean
+  created_at: string
+}
