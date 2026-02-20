@@ -50,7 +50,7 @@ export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [weeklyNotes, setWeeklyNotes] = useState<WeeklyNote[]>([])
-  const [activeTab, setActiveTab] = useState<'jaclyn' | 'river' | 'grocery' | 'digest' | 'sendouts'>('jaclyn')
+  const [activeTab, setActiveTab] = useState<'jaclyn' | 'river' | 'grocery' | 'ideas' | 'digest' | 'sendouts'>('jaclyn')
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day' | 'year'>('month')
   const [calendarDate, setCalendarDate] = useState(new Date())
@@ -87,6 +87,11 @@ export default function Home() {
     return false
   })
   
+  // Ideas state
+  const [ideasList, setIdeasList] = useState<Array<{ id: number; text: string }>>([])
+  const [backlogList, setBacklogList] = useState<Array<{ id: number; text: string }>>([])
+  const [draggedIdea, setDraggedIdea] = useState<{ id: number; text: string } | null>(null)
+  const [draggedIdeaElement, setDraggedIdeaElement] = useState<HTMLElement | null>(null)
   
   // Daily Digest state
   const [dailyDigest, setDailyDigest] = useState<{
@@ -3170,6 +3175,157 @@ export default function Home() {
     )
   }
 
+  const renderIdeas = () => {
+    const handleIdeaPointerDown = (e: React.PointerEvent, item: { id: number; text: string }) => {
+      if (draggedIdea) return
+      
+      const element = e.currentTarget as HTMLElement
+      setDraggedIdea(item)
+      setDraggedIdeaElement(element)
+      element.style.opacity = '0.5'
+      element.style.cursor = 'grabbing'
+    }
+
+    const handleIdeaPointerMove = (e: React.PointerEvent) => {
+      if (!draggedIdea) return
+      e.preventDefault()
+    }
+
+    const handleIdeaPointerUp = (e: React.PointerEvent) => {
+      if (!draggedIdea || !draggedIdeaElement) return
+      
+      draggedIdeaElement.style.opacity = '1'
+      draggedIdeaElement.style.cursor = 'grab'
+      
+      // Find drop target
+      const elementBelow = document.elementFromPoint(e.clientX, e.clientY)
+      const targetItem = elementBelow?.closest('[data-idea-item-id]')
+      
+      if (targetItem) {
+        const targetId = parseInt(targetItem.getAttribute('data-idea-item-id') || '0')
+        const targetList = targetItem.closest('[data-idea-list]')?.getAttribute('data-idea-list') as 'ideas' | 'backlog'
+        
+        if (targetId !== draggedIdea.id && targetList) {
+          // Reorder within the same list
+          const sourceList = draggedIdea.id <= 1000 ? 'ideas' : 'backlog' // Simple ID-based detection
+          const isIdeasList = targetList === 'ideas'
+          const currentList = isIdeasList ? ideasList : backlogList
+          const setCurrentList = isIdeasList ? setIdeasList : setBacklogList
+          
+          if (sourceList === targetList) {
+            // Reorder within same list
+            const newList = [...currentList]
+            const draggedIndex = newList.findIndex(item => item.id === draggedIdea.id)
+            const targetIndex = newList.findIndex(item => item.id === targetId)
+            
+            if (draggedIndex !== -1 && targetIndex !== -1) {
+              const [removed] = newList.splice(draggedIndex, 1)
+              newList.splice(targetIndex, 0, removed)
+              setCurrentList(newList)
+            }
+          }
+        }
+      }
+      
+      setDraggedIdea(null)
+      setDraggedIdeaElement(null)
+    }
+
+    const addIdea = (listType: 'ideas' | 'backlog', text: string) => {
+      if (!text.trim()) return
+      
+      const newId = Date.now() + (listType === 'ideas' ? 0 : 1000) // Simple ID generation
+      const newItem = { id: newId, text: text.trim() }
+      
+      if (listType === 'ideas') {
+        setIdeasList(prev => [...prev, newItem])
+      } else {
+        setBacklogList(prev => [...prev, newItem])
+      }
+    }
+
+    const deleteIdea = (listType: 'ideas' | 'backlog', id: number) => {
+      if (listType === 'ideas') {
+        setIdeasList(prev => prev.filter(item => item.id !== id))
+      } else {
+        setBacklogList(prev => prev.filter(item => item.id !== id))
+      }
+    }
+
+    const renderIdeaList = (title: string, items: Array<{ id: number; text: string }>, listType: 'ideas' | 'backlog') => (
+      <div className="bg-[#16213e] rounded-xl p-4 h-fit">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-white">{title}</h3>
+          <span className="text-sm text-gray-400">({items.length})</span>
+        </div>
+
+        <div className="space-y-2 mb-4" data-idea-list={listType}>
+          {items.map(item => (
+            <div
+              key={item.id}
+              data-idea-item-id={item.id}
+              className="group flex items-center gap-3 p-2 hover:bg-[#1a1a2e] rounded-lg transition-colors cursor-grab"
+              onPointerDown={(e) => handleIdeaPointerDown(e, item)}
+              onPointerMove={handleIdeaPointerMove}
+              onPointerUp={handleIdeaPointerUp}
+            >
+              <div className="flex-1 text-white text-sm">
+                {item.text}
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  deleteIdea(listType, item.id)
+                }}
+                className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-all"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder={`Add ${listType === 'ideas' ? 'idea' : 'backlog item'}...`}
+            className="flex-1 px-3 py-2 bg-[#1a1a2e] border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const target = e.target as HTMLInputElement
+                addIdea(listType, target.value)
+                target.value = ''
+              }
+            }}
+          />
+          <button
+            onClick={(e) => {
+              const input = e.currentTarget.previousElementSibling as HTMLInputElement
+              addIdea(listType, input.value)
+              input.value = ''
+            }}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            Add
+          </button>
+        </div>
+      </div>
+    )
+
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-bold text-white">Ideas</h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+          {renderIdeaList('Ideas', ideasList, 'ideas')}
+          {renderIdeaList('Backlog (Someday To-Dos)', backlogList, 'backlog')}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <main className="min-h-screen p-3 md:p-6 max-w-[1400px] mx-auto">
       {/* Header */}
@@ -3306,6 +3462,7 @@ export default function Home() {
             { id: 'jaclyn', label: 'Jaclyn' },
             { id: 'river', label: 'River' },
             { id: 'grocery', label: 'Grocery List' },
+            { id: 'ideas', label: 'Ideas' },
             { id: 'digest', label: 'Daily Digest' },
             { id: 'sendouts', label: 'Send Outs' }
           ].map(tab => (
@@ -3327,6 +3484,7 @@ export default function Home() {
         {activeTab === 'jaclyn' && renderWeeklyBoard('jaclyn')}
         {activeTab === 'river' && renderWeeklyBoard('river')}
         {activeTab === 'grocery' && renderGroceryList()}
+        {activeTab === 'ideas' && renderIdeas()}
         {activeTab === 'digest' && renderDailyDigest()}
         {activeTab === 'sendouts' && renderSendOuts()}
         </div>
