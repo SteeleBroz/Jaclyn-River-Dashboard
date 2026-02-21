@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
+import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday','overflow'] as const
 const DAY_LABELS: Record<string, string> = {
@@ -88,10 +88,15 @@ export default function Home() {
   })
   
   // Ideas state
-  const [ideasList, setIdeasList] = useState<Array<{ id: number; text: string }>>([])
-  const [backlogList, setBacklogList] = useState<Array<{ id: number; text: string }>>([])
-  const [draggedIdea, setDraggedIdea] = useState<{ id: number; text: string } | null>(null)
+  const [ideaItems, setIdeaItems] = useState<IdeaItem[]>([])
+  const [draggedIdea, setDraggedIdea] = useState<IdeaItem | null>(null)
   const [draggedIdeaElement, setDraggedIdeaElement] = useState<HTMLElement | null>(null)
+  const [hideCompletedIdeas, setHideCompletedIdeas] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('hideCompletedIdeas') === 'true'
+    }
+    return false
+  })
   
   // Daily Digest state
   const [dailyDigest, setDailyDigest] = useState<{
@@ -191,7 +196,7 @@ export default function Home() {
       console.log('🔍 Selected Week:', selectedWeek.toISOString())
       console.log('🔍 Computed week_start for query:', weekStartDate)
       
-      const [{ data: f }, { data: t }, { data: e }, { data: n }, groceryResult] = await Promise.all([
+      const [{ data: f }, { data: t }, { data: e }, { data: n }, groceryResult, ideaResult] = await Promise.all([
         supabase.from(FOLDERS_TABLE).select('*').order('id'),
         supabase.from(TASKS_TABLE)
           .select('*')
@@ -200,6 +205,10 @@ export default function Home() {
         supabase.from('posts').select('*').eq('platform', 'weekly-notes').order('created_at', { ascending: false }),
         supabase.from('grocery_items').select('*').order('sort_order').then(
           result => result, 
+          error => ({ data: null, error }) // Handle missing table gracefully
+        ),
+        supabase.from('ideas_items').select('*').order('list_key, sort_order').then(
+          result => result,
           error => ({ data: null, error }) // Handle missing table gracefully
         )
       ])
@@ -265,6 +274,12 @@ export default function Home() {
       } else if (groceryResult.error) {
         console.warn('Grocery items table not found - please create it:', groceryResult.error.message)
         setGroceryItems([]) // Set empty array as fallback
+      }
+      if (ideaResult.data) {
+        setIdeaItems(ideaResult.data)
+      } else if (ideaResult.error) {
+        console.warn('Ideas items table not found - please create it:', ideaResult.error.message)
+        setIdeaItems([]) // Set empty array as fallback
       }
     } catch (error) {
       console.error('Error fetching data:', error)
@@ -3176,7 +3191,116 @@ export default function Home() {
   }
 
   const renderIdeas = () => {
-    const handleIdeaPointerDown = (e: React.PointerEvent, item: { id: number; text: string }) => {
+    // Get items for each list
+    const getItemsByList = (listKey: IdeaItem['list_key']) => {
+      const items = ideaItems.filter(item => item.list_key === listKey)
+      return hideCompletedIdeas ? items.filter(item => !item.completed) : items
+    }
+
+    // Toggle completed state
+    const toggleCompleteIdea = async (item: IdeaItem) => {
+      const updated = !item.completed
+      await supabase.from('ideas_items').update({ 
+        completed: updated, 
+        updated_at: new Date().toISOString() 
+      }).eq('id', item.id)
+      setIdeaItems(prev => prev.map(i => i.id === item.id ? { ...i, completed: updated } : i))
+    }
+
+    // Add new item
+    const addIdea = async (listKey: IdeaItem['list_key'], text: string) => {
+      if (!text.trim()) return
+      
+      // Get highest sort_order for this list
+      const listItems = ideaItems.filter(item => item.list_key === listKey)
+      const maxSort = listItems.length > 0 ? Math.max(...listItems.map(i => i.sort_order)) : 0
+      
+      const { data } = await supabase.from('ideas_items').insert({
+        text: text.trim(),
+        list_key: listKey,
+        sort_order: maxSort + 1,
+        completed: false
+      }).select().single()
+      
+      if (data) {
+        setIdeaItems(prev => [...prev, data])
+      }
+    }
+
+    // Delete item
+    const deleteIdea = async (itemId: number) => {
+      if (!confirm('Delete this item?')) return
+      await supabase.from('ideas_items').delete().eq('id', itemId)
+      setIdeaItems(prev => prev.filter(item => item.id !== itemId))
+    }
+
+    // Update item order within same list
+    const updateIdeaOrder = async (draggedItem: IdeaItem, targetItem: IdeaItem) => {
+      try {
+        // Get all items in the same list, sorted by sort_order
+        const listItems = ideaItems
+          .filter(item => item.list_key === draggedItem.list_key)
+          .sort((a, b) => a.sort_order - b.sort_order)
+        
+        // Remove dragged item from list
+        const filteredItems = listItems.filter(item => item.id !== draggedItem.id)
+        
+        // Find where to insert the dragged item
+        const targetIndex = filteredItems.findIndex(item => item.id === targetItem.id)
+        const reorderedItems = [...filteredItems]
+        reorderedItems.splice(targetIndex, 0, draggedItem)
+        
+        // Update sort_order for all affected items
+        const updates = reorderedItems.map((item, index) => ({
+          id: item.id,
+          sort_order: index + 1
+        }))
+        
+        // Batch update in Supabase
+        for (const update of updates) {
+          await supabase.from('ideas_items').update({ 
+            sort_order: update.sort_order,
+            updated_at: new Date().toISOString() 
+          }).eq('id', update.id)
+        }
+        
+        // Update local state
+        setIdeaItems(prev => prev.map(item => {
+          const update = updates.find(u => u.id === item.id)
+          return update ? { ...item, sort_order: update.sort_order } : item
+        }))
+      } catch (error) {
+        console.error('Failed to update idea order:', error)
+      }
+    }
+
+    // Move item between lists
+    const moveIdeaBetweenLists = async (draggedItem: IdeaItem, newListKey: IdeaItem['list_key']) => {
+      try {
+        // Get highest sort_order for target list
+        const targetListItems = ideaItems.filter(item => item.list_key === newListKey)
+        const maxSort = targetListItems.length > 0 ? Math.max(...targetListItems.map(i => i.sort_order)) : 0
+        
+        // Update item's list_key and sort_order
+        await supabase.from('ideas_items').update({
+          list_key: newListKey,
+          sort_order: maxSort + 1,
+          updated_at: new Date().toISOString()
+        }).eq('id', draggedItem.id)
+        
+        // Update local state
+        setIdeaItems(prev => prev.map(item => 
+          item.id === draggedItem.id 
+            ? { ...item, list_key: newListKey, sort_order: maxSort + 1 }
+            : item
+        ))
+      } catch (error) {
+        console.error('Failed to move idea between lists:', error)
+      }
+    }
+
+    // Drag handlers
+    const handleIdeaPointerDown = (e: React.PointerEvent, item: IdeaItem) => {
       if (draggedIdea) return
       
       const element = e.currentTarget as HTMLElement
@@ -3200,30 +3324,27 @@ export default function Home() {
       // Find drop target
       const elementBelow = document.elementFromPoint(e.clientX, e.clientY)
       const targetItem = elementBelow?.closest('[data-idea-item-id]')
+      const targetList = elementBelow?.closest('[data-idea-list]')
       
-      if (targetItem) {
+      if (targetItem && targetList) {
         const targetId = parseInt(targetItem.getAttribute('data-idea-item-id') || '0')
-        const targetList = targetItem.closest('[data-idea-list]')?.getAttribute('data-idea-list') as 'ideas' | 'backlog'
+        const targetListKey = targetList.getAttribute('data-idea-list') as IdeaItem['list_key']
+        const targetIdeaItem = ideaItems.find(item => item.id === targetId)
         
-        if (targetId !== draggedIdea.id && targetList) {
-          // Reorder within the same list
-          const sourceList = draggedIdea.id <= 1000 ? 'ideas' : 'backlog' // Simple ID-based detection
-          const isIdeasList = targetList === 'ideas'
-          const currentList = isIdeasList ? ideasList : backlogList
-          const setCurrentList = isIdeasList ? setIdeasList : setBacklogList
-          
-          if (sourceList === targetList) {
+        if (targetIdeaItem && targetId !== draggedIdea.id) {
+          if (draggedIdea.list_key === targetListKey) {
             // Reorder within same list
-            const newList = [...currentList]
-            const draggedIndex = newList.findIndex(item => item.id === draggedIdea.id)
-            const targetIndex = newList.findIndex(item => item.id === targetId)
-            
-            if (draggedIndex !== -1 && targetIndex !== -1) {
-              const [removed] = newList.splice(draggedIndex, 1)
-              newList.splice(targetIndex, 0, removed)
-              setCurrentList(newList)
-            }
+            updateIdeaOrder(draggedIdea, targetIdeaItem)
+          } else {
+            // Move between lists
+            moveIdeaBetweenLists(draggedIdea, targetListKey)
           }
+        }
+      } else if (targetList && !targetItem) {
+        // Dropped in empty list area - move to that list
+        const targetListKey = targetList.getAttribute('data-idea-list') as IdeaItem['list_key']
+        if (draggedIdea.list_key !== targetListKey) {
+          moveIdeaBetweenLists(draggedIdea, targetListKey)
         }
       }
       
@@ -3231,35 +3352,22 @@ export default function Home() {
       setDraggedIdeaElement(null)
     }
 
-    const addIdea = (listType: 'ideas' | 'backlog', text: string) => {
-      if (!text.trim()) return
-      
-      const newId = Date.now() + (listType === 'ideas' ? 0 : 1000) // Simple ID generation
-      const newItem = { id: newId, text: text.trim() }
-      
-      if (listType === 'ideas') {
-        setIdeasList(prev => [...prev, newItem])
-      } else {
-        setBacklogList(prev => [...prev, newItem])
-      }
+    // Toggle hide completed
+    const toggleHideCompletedIdeas = () => {
+      const newValue = !hideCompletedIdeas
+      setHideCompletedIdeas(newValue)
+      localStorage.setItem('hideCompletedIdeas', newValue.toString())
     }
 
-    const deleteIdea = (listType: 'ideas' | 'backlog', id: number) => {
-      if (listType === 'ideas') {
-        setIdeasList(prev => prev.filter(item => item.id !== id))
-      } else {
-        setBacklogList(prev => prev.filter(item => item.id !== id))
-      }
-    }
-
-    const renderIdeaList = (title: string, items: Array<{ id: number; text: string }>, listType: 'ideas' | 'backlog') => (
+    // Render individual list
+    const renderIdeaList = (title: string, listKey: IdeaItem['list_key'], items: IdeaItem[]) => (
       <div className="bg-[#16213e] rounded-xl p-4 h-fit">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-white">{title}</h3>
           <span className="text-sm text-gray-400">({items.length})</span>
         </div>
 
-        <div className="space-y-2 mb-4" data-idea-list={listType}>
+        <div className="space-y-2 mb-4 min-h-[60px]" data-idea-list={listKey}>
           {items.map(item => (
             <div
               key={item.id}
@@ -3269,13 +3377,23 @@ export default function Home() {
               onPointerMove={handleIdeaPointerMove}
               onPointerUp={handleIdeaPointerUp}
             >
+              <input
+                type="checkbox"
+                checked={item.completed}
+                onChange={() => toggleCompleteIdea(item)}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                className="w-4 h-4 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+              />
               <div className="flex-1 text-white text-sm">
-                {item.text}
+                <span className={item.completed ? 'line-through text-gray-400' : ''}>
+                  {item.text}
+                </span>
               </div>
               <button
                 onClick={(e) => {
                   e.stopPropagation()
-                  deleteIdea(listType, item.id)
+                  deleteIdea(item.id)
                 }}
                 className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-all"
               >
@@ -3288,12 +3406,12 @@ export default function Home() {
         <div className="flex gap-2">
           <input
             type="text"
-            placeholder={`Add ${listType === 'ideas' ? 'idea' : 'backlog item'}...`}
+            placeholder={`Add ${title.toLowerCase()}...`}
             className="flex-1 px-3 py-2 bg-[#1a1a2e] border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 const target = e.target as HTMLInputElement
-                addIdea(listType, target.value)
+                addIdea(listKey, target.value)
                 target.value = ''
               }
             }}
@@ -3301,7 +3419,7 @@ export default function Home() {
           <button
             onClick={(e) => {
               const input = e.currentTarget.previousElementSibling as HTMLInputElement
-              addIdea(listType, input.value)
+              addIdea(listKey, input.value)
               input.value = ''
             }}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
@@ -3314,13 +3432,36 @@ export default function Home() {
 
     return (
       <div>
+        {/* Header with hide completed toggle */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-bold text-white">Ideas</h2>
+          <button
+            onClick={toggleHideCompletedIdeas}
+            className="text-xs text-gray-400 hover:text-white transition-colors"
+          >
+            {hideCompletedIdeas ? 'Show' : 'Hide'} completed
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-          {renderIdeaList('Ideas', ideasList, 'ideas')}
-          {renderIdeaList('Backlog (Someday To-Dos)', backlogList, 'backlog')}
+        {/* Grid layout: Ideas/Backlog on top, 5 Goals below */}
+        <div className="space-y-6">
+          {/* Top row: Ideas and Backlog */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+            {renderIdeaList('Ideas', 'ideas', getItemsByList('ideas'))}
+            {renderIdeaList('Backlog (Someday To-Dos)', 'backlog', getItemsByList('backlog'))}
+          </div>
+
+          {/* Goals section */}
+          <div>
+            <h3 className="text-lg font-bold text-white mb-4">Goals</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              {renderIdeaList('1 Month', 'goal_1m', getItemsByList('goal_1m'))}
+              {renderIdeaList('3 Months', 'goal_3m', getItemsByList('goal_3m'))}
+              {renderIdeaList('6 Months', 'goal_6m', getItemsByList('goal_6m'))}
+              {renderIdeaList('1 Year', 'goal_1y', getItemsByList('goal_1y'))}
+              {renderIdeaList('5 Years', 'goal_5y', getItemsByList('goal_5y'))}
+            </div>
+          </div>
         </div>
       </div>
     )

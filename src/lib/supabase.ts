@@ -94,3 +94,13 @@ export type GroceryItem = {
   checked: boolean
   created_at: string
 }
+
+export type IdeaItem = {
+  id: number
+  text: string
+  list_key: 'ideas' | 'backlog' | 'goal_1m' | 'goal_3m' | 'goal_6m' | 'goal_1y' | 'goal_5y'
+  sort_order: number
+  completed: boolean
+  created_at: string
+  updated_at: string
+}
