@@ -3234,7 +3234,7 @@ export default function Home() {
       setIdeaItems(prev => prev.filter(item => item.id !== itemId))
     }
 
-    // Update item order within same list
+    // Update item order within same list (same pattern as grocery reorder)
     const updateIdeaOrder = async (draggedItem: IdeaItem, targetItem: IdeaItem) => {
       try {
         // Get all items in the same list, sorted by sort_order
@@ -3250,7 +3250,7 @@ export default function Home() {
         const reorderedItems = [...filteredItems]
         reorderedItems.splice(targetIndex, 0, draggedItem)
         
-        // Update sort_order for all affected items
+        // Renumber all items to 1..N
         const updates = reorderedItems.map((item, index) => ({
           id: item.id,
           sort_order: index + 1
@@ -3264,11 +3264,8 @@ export default function Home() {
           }).eq('id', update.id)
         }
         
-        // Update local state
-        setIdeaItems(prev => prev.map(item => {
-          const update = updates.find(u => u.id === item.id)
-          return update ? { ...item, sort_order: update.sort_order } : item
-        }))
+        // Refresh UI by calling fetchData
+        await fetchData(true)
       } catch (error) {
         console.error('Failed to update idea order:', error)
       }
@@ -3281,25 +3278,25 @@ export default function Home() {
         const targetListItems = ideaItems.filter(item => item.list_key === newListKey)
         const maxSort = targetListItems.length > 0 ? Math.max(...targetListItems.map(i => i.sort_order)) : 0
         
-        // Update item's list_key and sort_order
+        // Update item's list_key and sort_order = max(sort_order in targetList) + 1
         await supabase.from('ideas_items').update({
           list_key: newListKey,
           sort_order: maxSort + 1,
           updated_at: new Date().toISOString()
         }).eq('id', draggedItem.id)
         
-        // Update local state
-        setIdeaItems(prev => prev.map(item => 
-          item.id === draggedItem.id 
-            ? { ...item, list_key: newListKey, sort_order: maxSort + 1 }
-            : item
-        ))
+        // Refresh UI by calling fetchData
+        await fetchData(true)
       } catch (error) {
         console.error('Failed to move idea between lists:', error)
       }
-    }
+    }</thinking>
 
-    // Drag handlers
+<function_calls>
+<invoke name="exec">
+<parameter name="command">cd Jaclyn-River-Dashboard && git add . && git commit -m "Fix Ideas drag/drop using grocery pointer events pattern"
+
+    // Drag handlers (using same pattern as grocery drag/drop)
     const handleIdeaPointerDown = (e: React.PointerEvent, item: IdeaItem) => {
       if (draggedIdea) return
       
@@ -3321,30 +3318,27 @@ export default function Home() {
       draggedIdeaElement.style.opacity = '1'
       draggedIdeaElement.style.cursor = 'grab'
       
-      // Find drop target
+      // Find drop target using document.elementFromPoint (same as grocery system)
       const elementBelow = document.elementFromPoint(e.clientX, e.clientY)
-      const targetItem = elementBelow?.closest('[data-idea-item-id]')
-      const targetList = elementBelow?.closest('[data-idea-list]')
+      const dropContainer = elementBelow?.closest('[data-ideas-drop-list]')
       
-      if (targetItem && targetList) {
-        const targetId = parseInt(targetItem.getAttribute('data-idea-item-id') || '0')
-        const targetListKey = targetList.getAttribute('data-idea-list') as IdeaItem['list_key']
-        const targetIdeaItem = ideaItems.find(item => item.id === targetId)
-        
-        if (targetIdeaItem && targetId !== draggedIdea.id) {
-          if (draggedIdea.list_key === targetListKey) {
-            // Reorder within same list
-            updateIdeaOrder(draggedIdea, targetIdeaItem)
-          } else {
-            // Move between lists
-            moveIdeaBetweenLists(draggedIdea, targetListKey)
-          }
-        }
-      } else if (targetList && !targetItem) {
-        // Dropped in empty list area - move to that list
-        const targetListKey = targetList.getAttribute('data-idea-list') as IdeaItem['list_key']
-        if (draggedIdea.list_key !== targetListKey) {
+      if (dropContainer) {
+        const targetListKey = dropContainer.getAttribute('data-ideas-drop-list') as IdeaItem['list_key']
+        if (targetListKey && targetListKey !== draggedIdea.list_key) {
+          // Moving to different list
           moveIdeaBetweenLists(draggedIdea, targetListKey)
+        } else if (targetListKey === draggedIdea.list_key) {
+          // Reordering within same list - find target position
+          const targetItem = elementBelow?.closest('[data-ideas-item-id]')
+          if (targetItem) {
+            const targetId = parseInt(targetItem.getAttribute('data-ideas-item-id') || '0')
+            if (targetId !== draggedIdea.id) {
+              const targetIdeaItem = ideaItems.find(item => item.id === targetId)
+              if (targetIdeaItem) {
+                updateIdeaOrder(draggedIdea, targetIdeaItem)
+              }
+            }
+          }
         }
       }
       
@@ -3367,16 +3361,24 @@ export default function Home() {
           <span className="text-sm text-gray-400">({items.length})</span>
         </div>
 
-        <div className="space-y-2 mb-4 min-h-[60px]" data-idea-list={listKey}>
+        <div className="space-y-2 mb-4 min-h-[60px]" data-ideas-drop-list={listKey}>
           {items.map(item => (
             <div
               key={item.id}
-              data-idea-item-id={item.id}
-              className="group flex items-center gap-3 p-2 hover:bg-[#1a1a2e] rounded-lg transition-colors cursor-grab"
-              onPointerDown={(e) => handleIdeaPointerDown(e, item)}
-              onPointerMove={handleIdeaPointerMove}
-              onPointerUp={handleIdeaPointerUp}
+              data-ideas-item-id={item.id}
+              data-ideas-item-list={item.list_key}
+              className="group flex items-center gap-3 p-2 hover:bg-[#1a1a2e] rounded-lg transition-colors"
             >
+              <div 
+                className="text-gray-500 hover:text-gray-300 cursor-grab active:cursor-grabbing px-1 text-xs select-none"
+                onPointerDown={(e) => handleIdeaPointerDown(e, item)}
+                onPointerMove={handleIdeaPointerMove}
+                onPointerUp={handleIdeaPointerUp}
+                style={{ touchAction: 'none' }}
+                title="Drag to move"
+              >
+                ⋮⋮
+              </div>
               <input
                 type="checkbox"
                 checked={item.completed}
