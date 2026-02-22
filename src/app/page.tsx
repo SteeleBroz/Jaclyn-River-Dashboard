@@ -3492,7 +3492,7 @@ export default function Home() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
             <h2 className="text-lg font-bold text-white">Ideas</h2>
-            <span className="text-xs text-gray-500">IDEAS BUILD: 5691537</span>
+            <span className="text-xs text-gray-500">IDEAS BUILD: c0b9605</span>
           </div>
           <button
             onClick={toggleHideCompletedIdeas}
