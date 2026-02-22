@@ -98,19 +98,6 @@ export default function Home() {
     return false
   })
   
-  // Debug state for Ideas drag/drop
-  const [ideasDebug, setIdeasDebug] = useState<{
-    draggedId: string
-    dropList: string
-    dropItemId: string
-    action: string
-  }>({
-    draggedId: 'none',
-    dropList: 'none',
-    dropItemId: 'none',
-    action: 'none'
-  })
-  
   // Daily Digest state
   const [dailyDigest, setDailyDigest] = useState<{
     date: string;
@@ -3315,31 +3302,11 @@ export default function Home() {
       element.style.opacity = '0.5'
       element.style.cursor = 'grabbing'
       element.style.pointerEvents = 'none' // Fix hit-test blocker
-      
-      // Set initial debug state
-      setIdeasDebug({
-        draggedId: item.id.toString(),
-        dropList: 'none',
-        dropItemId: 'none',
-        action: 'none'
-      })
     }
 
     const handleIdeaPointerMove = (e: React.PointerEvent) => {
       if (!draggedIdea) return
       e.preventDefault()
-      
-      // Update debug info during move
-      const elementBelow = document.elementFromPoint(e.clientX, e.clientY)
-      const dropContainer = elementBelow?.closest('[data-ideas-drop-list]')
-      const targetItem = elementBelow?.closest('[data-ideas-item-id]')
-      
-      setIdeasDebug({
-        draggedId: draggedIdea.id.toString(),
-        dropList: dropContainer?.getAttribute('data-ideas-drop-list') || 'none',
-        dropItemId: targetItem?.getAttribute('data-ideas-item-id') || 'none',
-        action: 'detecting...'
-      })
     }
 
     const handleIdeaPointerUp = (e: React.PointerEvent) => {
@@ -3378,26 +3345,8 @@ export default function Home() {
         }
       }
       
-      // Update final debug state
-      setIdeasDebug({
-        draggedId: draggedIdea.id.toString(),
-        dropList: dropContainer?.getAttribute('data-ideas-drop-list') || 'none',
-        dropItemId: elementBelow?.closest('[data-ideas-item-id]')?.getAttribute('data-ideas-item-id') || 'none',
-        action: finalAction
-      })
-      
       setDraggedIdea(null)
       setDraggedIdeaElement(null)
-      
-      // Clear debug after 3 seconds
-      setTimeout(() => {
-        setIdeasDebug({
-          draggedId: 'none',
-          dropList: 'none', 
-          dropItemId: 'none',
-          action: 'none'
-        })
-      }, 3000)
     }
 
     // Toggle hide completed
@@ -3490,24 +3439,13 @@ export default function Home() {
       <div>
         {/* Header with hide completed toggle */}
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <h2 className="text-lg font-bold text-white">Ideas</h2>
-            <span className="text-xs text-gray-500">IDEAS BUILD: 81e9c49</span>
-          </div>
+          <h2 className="text-lg font-bold text-white">Ideas</h2>
           <button
             onClick={toggleHideCompletedIdeas}
             className="text-xs text-gray-400 hover:text-white transition-colors"
           >
             {hideCompletedIdeas ? 'Show' : 'Hide'} completed
           </button>
-        </div>
-        
-        {/* Debug info */}
-        <div className="mb-4 p-2 bg-red-900 text-red-200 text-xs rounded border border-red-700">
-          <div>ideasDraggedId: {ideasDebug.draggedId}</div>
-          <div>dropList: {ideasDebug.dropList}</div>
-          <div>dropItemId: {ideasDebug.dropItemId}</div>
-          <div>action: {ideasDebug.action}</div>
         </div>
 
         {/* Grid layout: Ideas/Backlog on top, 5 Goals below */}
