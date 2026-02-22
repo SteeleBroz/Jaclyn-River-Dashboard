@@ -3305,7 +3305,7 @@ export default function Home() {
       }
     }
 
-    // Drag handlers (using same pattern as grocery drag/drop)
+    // Drag handlers (using same pattern as grocery drag/drop) - force rebuild
     const handleIdeaPointerDown = (e: React.PointerEvent, item: IdeaItem) => {
       if (draggedIdea) return
       
