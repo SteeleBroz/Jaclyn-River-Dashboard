@@ -3303,11 +3303,7 @@ export default function Home() {
       } catch (error) {
         console.error('Failed to move idea between lists:', error)
       }
-    }</thinking>
-
-<function_calls>
-<invoke name="exec">
-<parameter name="command">cd Jaclyn-River-Dashboard && git add . && git commit -m "Fix Ideas drag/drop using grocery pointer events pattern"
+    }
 
     // Drag handlers (using same pattern as grocery drag/drop)
     const handleIdeaPointerDown = (e: React.PointerEvent, item: IdeaItem) => {
