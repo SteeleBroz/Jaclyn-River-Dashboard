@@ -3043,14 +3043,38 @@ export default function Home() {
                         {task.priority !== 'none' && (
                           <div className={`w-2 h-2 rounded-full ${PRIORITY_COLORS[task.priority]}`} />
                         )}
-                        <span
-                          onClick={() => setEditingTask(task)}
-                          className={`text-xs md:text-sm cursor-pointer flex-1 ${
-                            task.completed ? 'line-through text-gray-500' : 'text-gray-200'
-                          }`}
-                        >
-                          {task.title}
-                        </span>
+                        <div className="flex-1">
+                          <span
+                            onClick={() => setEditingTask(task)}
+                            className={`text-xs md:text-sm cursor-pointer block ${
+                              task.completed ? 'line-through text-gray-500' : 'text-gray-200'
+                            }`}
+                          >
+                            {task.title}
+                          </span>
+                          {task.notes && (
+                            <div className="text-xs text-gray-400 mt-1 break-all">
+                              {task.notes.split(' ').map((word, index) => {
+                                const isUrl = word.startsWith('http://') || word.startsWith('https://')
+                                if (isUrl) {
+                                  return (
+                                    <a
+                                      key={index}
+                                      href={word}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-400 hover:text-blue-300 underline cursor-pointer"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {word}
+                                    </a>
+                                  )
+                                }
+                                return <span key={index}>{word} </span>
+                              })}
+                            </div>
+                          )}
+                        </div>
                         {task.folder && (
                           <span
                             className="w-2 h-2 rounded-full shrink-0"
