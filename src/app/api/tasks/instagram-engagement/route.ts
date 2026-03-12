@@ -103,4 +103,4 @@ export async function POST(request: NextRequest) {
     console.error('API Error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
-}
+}// Force rebuild
