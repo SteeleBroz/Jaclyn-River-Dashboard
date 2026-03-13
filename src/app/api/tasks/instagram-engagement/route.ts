@@ -345,14 +345,19 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
     console.log(`Writing ${engagementData.length} rows to range: ${dataRange}`)
     
     try {
-      const updateResult = await sheets.spreadsheets.values.update({
+      const updateParams = {
         spreadsheetId: masterSheetId,
         range: dataRange,
         valueInputOption: 'USER_ENTERED',
         requestBody: {
           values: engagementData
         }
-      })
+      }
+      
+      console.log('🔍 RUNTIME DEBUG - Method:', 'sheets.spreadsheets.values.update')
+      console.log('🔍 RUNTIME DEBUG - Params:', JSON.stringify(updateParams, null, 2))
+      
+      const updateResult = await sheets.spreadsheets.values.update(updateParams)
       console.log('Update successful:', updateResult.status)
     } catch (updateError: any) {
       console.error('Google Sheets Update Error:', JSON.stringify(updateError, null, 2))
