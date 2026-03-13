@@ -372,7 +372,8 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
       const comments = await generateEngagementComment(accountArray, category)
       
       // Create Instagram link (direct to profile for now - would need browser automation for specific posts)
-      const instagramLink = `https://instagram.com/${handle.replace('@', '')}`
+      const cleanHandle = (handle || '').replace('@', '')
+      const instagramLink = `https://instagram.com/${cleanHandle}`
       
       // Determine why selected based on category
       const whySelected = category === 'Relationship' ? 'Relationship building - repeated engagement' :
@@ -380,18 +381,18 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
                          'Community engagement - high follow-back potential'
       
       engagementData.push([
-        category,
-        accountName,
-        instagramLink,
-        comments.primary,
-        handle,
-        followerCount,
+        category || '',
+        accountName || '',
+        instagramLink || '',
+        comments.primary || '',
+        handle || '',
+        followerCount || '',
         'Profile', // Content Type - would be determined by browser automation
         'Recent posts analysis pending', // Content Summary - would be filled by browser automation
-        whySelected,
-        comments.backup,
+        whySelected || '',
+        comments.backup || '',
         '', // Profiles To Visit
-        `Niche: ${niche}`
+        `Niche: ${niche || ''}`
       ])
     }
     
