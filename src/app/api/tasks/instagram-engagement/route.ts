@@ -273,14 +273,12 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
         'Backup Comment', 'Profiles To Visit', 'Notes'
       ]
       
-      await sheets.spreadsheets.values.batchUpdate({
+      await sheets.spreadsheets.values.update({
         spreadsheetId: masterSheetId,
-        requestBody: {
-          valueInputOption: 'USER_ENTERED',
-          data: [{
-            range: `'${tabName}'!A1:L1`,
-            values: [headers]
-          }]
+        range: `'${tabName}'!A1:L1`,
+        valueInputOption: 'USER_ENTERED',
+        resource: {
+          values: [headers]
         }
       })
     }
@@ -347,18 +345,17 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
     console.log(`Writing ${engagementData.length} rows to range: ${dataRange}`)
     
     try {
-      await sheets.spreadsheets.values.batchUpdate({
+      const updateResult = await sheets.spreadsheets.values.update({
         spreadsheetId: masterSheetId,
-        requestBody: {
-          valueInputOption: 'USER_ENTERED',
-          data: [{
-            range: dataRange,
-            values: engagementData
-          }]
+        range: dataRange,
+        valueInputOption: 'USER_ENTERED',
+        resource: {
+          values: engagementData
         }
       })
+      console.log('Update successful:', updateResult.status)
     } catch (updateError: any) {
-      console.error('Google Sheets Update Error:', updateError.message || updateError)
+      console.error('Google Sheets Update Error:', JSON.stringify(updateError, null, 2))
       throw new Error(`Failed to write engagement data: ${updateError.message || 'Unknown error'}`)
     }
     
@@ -403,14 +400,12 @@ async function updateMasterTracker(selectedAccounts: any, date: string) {
         // Update last engaged date and increment engagement count
         const currentCount = parseInt(trackerData[rowIndex][7] || '0')
         
-        await sheets.spreadsheets.values.batchUpdate({
+        await sheets.spreadsheets.values.update({
           spreadsheetId: MASTER_TRACKER_SHEET_ID,
-          requestBody: {
-            valueInputOption: 'USER_ENTERED',
-            data: [{
-              range: `G${rowIndex + 2}:H${rowIndex + 2}`,
-              values: [[date, (currentCount + 1).toString()]]
-            }]
+          range: `G${rowIndex + 2}:H${rowIndex + 2}`,
+          valueInputOption: 'USER_ENTERED',
+          resource: {
+            values: [[date, (currentCount + 1).toString()]]
           }
         })
       }
