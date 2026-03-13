@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { google } from 'googleapis'
-import path from 'path'
-import fs from 'fs'
 
 // Google API setup - using environment variables
 const TEMPLATE_SHEET_ID = '1D74x4m2wkDIjmk7ELnfZmXE-v3iDdmOmkDRD1IljIYI'
@@ -11,41 +8,59 @@ const ACCOUNT_POOLS_SHEET_ID = '1kkm06dyke9DbJK45MpWot_2Cahx-gBq94MfYoNCpgz8'
 const MASTER_TRACKER_SHEET_ID = '1Rt8ckpGPGu1esmL1_HIHIHkWZypXUSOl5dhAbTab2mY'
 const MASTER_ENGAGEMENT_SHEET_NAME = 'SteeleBroz Daily Engagement Master'
 
-async function getGoogleAuth() {
+async function getGoogleAuthToken() {
+  const clientId = process.env.GOOGLE_CLIENT_ID
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN
+  
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error('Missing Google API environment variables')
+  }
+  
   try {
-    const CREDENTIALS_PATH = path.join(process.cwd(), 'google-tokens.json')
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token'
+      })
+    })
     
-    if (!fs.existsSync(CREDENTIALS_PATH)) {
-      throw new Error('Google tokens file not found')
+    if (!response.ok) {
+      throw new Error(`Token refresh failed: ${response.statusText}`)
     }
-
-    const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf8'))
     
-    const auth = new google.auth.OAuth2()
-    auth.setCredentials(credentials)
-    
-    return auth
+    const data = await response.json()
+    return data.access_token
   } catch (error) {
-    console.error('Google auth setup error:', error)
+    console.error('Failed to get Google auth token:', error)
     throw error
   }
 }
 
-async function selectAccountsFromPools() {
+async function selectAccountsFromPools(accessToken: string) {
   try {
-    const auth = await getGoogleAuth()
-    const sheets = google.sheets({ version: 'v4', auth })
-    
     // Get current date for tracking
     const today = new Date().toISOString().split('T')[0]
     
     // Get accounts from Master Tracker to check last engaged dates
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: MASTER_TRACKER_SHEET_ID,
-      range: 'A2:L100'
+    const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_TRACKER_SHEET_ID}/values/A2:L100`
+    
+    const response = await fetch(sheetsUrl, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
     })
     
-    const accounts = Array.isArray(response.data.values) ? response.data.values : []
+    if (!response.ok) {
+      throw new Error(`Failed to fetch account data: ${response.statusText}`)
+    }
+    
+    const data = await response.json()
+    const accounts = Array.isArray(data.values) ? data.values : []
     
     // Parse accounts and categorize
     const relationshipAccounts = accounts.filter((row: any[]) => row[2] === 'Relationship')
@@ -192,9 +207,7 @@ async function generateEngagementComment(accountData: any[], accountType: string
 
 async function createMasterEngagementSheet(date: string, taskTitle: string, selectedAccounts: any) {
   try {
-    const auth = await getGoogleAuth()
-    const sheets = google.sheets({ version: 'v4', auth })
-    const drive = google.drive({ version: 'v3', auth })
+    const accessToken = await getGoogleAuthToken()
     
     // Format date for tab name
     const dateObj = new Date(date + 'T12:00:00')
@@ -206,52 +219,86 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
     const tabName = formattedDate // e.g., "Mar 12"
     
     // Check if master sheet exists
-    const searchResponse = await drive.files.list({
-      q: `name='${MASTER_ENGAGEMENT_SHEET_NAME}' and '${THUMB_EQUITY_FOLDER_ID}' in parents`,
-      fields: 'files(id,name,webViewLink)'
+    const searchUrl = `https://www.googleapis.com/drive/v3/files?q=name='${encodeURIComponent(MASTER_ENGAGEMENT_SHEET_NAME)}' and '${THUMB_EQUITY_FOLDER_ID}' in parents&fields=files(id,name,webViewLink)`
+    
+    const searchResponse = await fetch(searchUrl, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
     })
     
+    if (!searchResponse.ok) {
+      throw new Error(`Failed to search for master sheet: ${searchResponse.statusText}`)
+    }
+    
+    const searchData = await searchResponse.json()
     let masterSheetId
     let masterSheetUrl
     
-    if (searchResponse.data.files && searchResponse.data.files.length > 0) {
+    if (searchData.files && searchData.files.length > 0) {
       // Master sheet exists
-      masterSheetId = searchResponse.data.files[0].id
-      masterSheetUrl = searchResponse.data.files[0].webViewLink
+      masterSheetId = searchData.files[0].id
+      masterSheetUrl = searchData.files[0].webViewLink
     } else {
       // Create master sheet from template
-      const copyResponse = await drive.files.copy({
-        fileId: TEMPLATE_SHEET_ID,
-        requestBody: {
+      const copyUrl = `https://www.googleapis.com/drive/v3/files/${TEMPLATE_SHEET_ID}/copy`
+      
+      const copyResponse = await fetch(copyUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
           name: MASTER_ENGAGEMENT_SHEET_NAME,
           parents: [THUMB_EQUITY_FOLDER_ID]
-        }
+        })
       })
       
-      masterSheetId = copyResponse.data.id
+      if (!copyResponse.ok) {
+        throw new Error(`Failed to create master sheet: ${copyResponse.statusText}`)
+      }
+      
+      const copyData = await copyResponse.json()
+      masterSheetId = copyData.id
       
       // Get web view link
-      const getResponse = await drive.files.get({
-        fileId: masterSheetId,
-        fields: 'webViewLink'
+      const getUrl = `https://www.googleapis.com/drive/v3/files/${masterSheetId}?fields=webViewLink`
+      const getResponse = await fetch(getUrl, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
       })
       
-      masterSheetUrl = getResponse.data.webViewLink
+      if (!getResponse.ok) {
+        throw new Error(`Failed to get master sheet URL: ${getResponse.statusText}`)
+      }
+      
+      const getData = await getResponse.json()
+      masterSheetUrl = getData.webViewLink
     }
     
     // Check if today's tab already exists
-    const sheetInfo = await sheets.spreadsheets.get({
-      spreadsheetId: masterSheetId
+    const sheetsApiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${masterSheetId}`
+    const sheetInfoResponse = await fetch(sheetsApiUrl, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
     })
     
-    const existingSheets = sheetInfo.data.sheets || []
+    if (!sheetInfoResponse.ok) {
+      throw new Error(`Failed to get sheet info: ${sheetInfoResponse.statusText}`)
+    }
+    
+    const sheetInfo = await sheetInfoResponse.json()
+    const existingSheets = sheetInfo.sheets || []
     const tabExists = existingSheets.some((sheet: any) => sheet.properties.title === tabName)
     
     if (!tabExists) {
       // Create new tab for today
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: masterSheetId,
-        requestBody: {
+      const addSheetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${masterSheetId}:batchUpdate`
+      
+      const addSheetResponse = await fetch(addSheetUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
           requests: [{
             addSheet: {
               properties: {
@@ -263,8 +310,12 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
               }
             }
           }]
-        }
+        })
       })
+      
+      if (!addSheetResponse.ok) {
+        throw new Error(`Failed to create daily tab: ${addSheetResponse.statusText}`)
+      }
       
       // Add headers to new tab
       const headers = [
@@ -273,13 +324,19 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
         'Backup Comment', 'Profiles To Visit', 'Notes'
       ]
       
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: masterSheetId,
-        range: `${tabName}!A1:L1`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-          values: [headers]
-        }
+      const headerRange = `${tabName}!A1:L1`
+      const headersUrl = `https://sheets.googleapis.com/v4/spreadsheets/${masterSheetId}/values/${encodeURIComponent(headerRange)}`
+      
+      await fetch(headersUrl, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          values: [headers],
+          valueInputOption: 'USER_ENTERED'
+        })
       })
     }
     
@@ -341,85 +398,26 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
     }
     
     const dataRange = `${tabName}!A2:L${engagementData.length + 1}`
+    const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${masterSheetId}/values/${encodeURIComponent(dataRange)}`
     
     console.log(`Writing ${engagementData.length} rows to range: ${dataRange}`)
     
-    // ISOLATED TEST SEQUENCE
-    try {
-      // Test A1 only
-      console.log('🧪 A1 TEST START')
-      const a1Params = {
-        spreadsheetId: masterSheetId,
-        range: `${tabName}!A1`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-          values: [['test']]
-        }
-      }
-      console.log('🧪 A1 Method:', 'sheets.spreadsheets.values.update')
-      console.log('🧪 A1 Params:', JSON.stringify(a1Params, null, 2))
-      
-      await sheets.spreadsheets.values.update(a1Params)
-      console.log('✅ A1 TEST PASSED')
-      
-      // Test headers
-      console.log('🧪 HEADERS TEST START')
-      const headersParams = {
-        spreadsheetId: masterSheetId,
-        range: `${tabName}!A1:L1`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-          values: [['Category', 'Account Name', 'Link', 'Comment', 'Handle', 'Follower Count', 'Content Type', 'Content Summary', 'Why Selected', 'Backup Comment', 'Profiles To Visit', 'Notes']]
-        }
-      }
-      console.log('🧪 HEADERS Method:', 'sheets.spreadsheets.values.update')
-      console.log('🧪 HEADERS Params:', JSON.stringify(headersParams, null, 2))
-      
-      await sheets.spreadsheets.values.update(headersParams)
-      console.log('✅ HEADERS TEST PASSED')
-      
-      // Test one engagement row
-      console.log('🧪 ONE ROW TEST START')
-      const oneRowParams = {
-        spreadsheetId: masterSheetId,
-        range: `${tabName}!A2:L2`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-          values: [engagementData[0] || ['test', 'test', 'test', 'test', 'test', 'test', 'test', 'test', 'test', 'test', 'test', 'test']]
-        }
-      }
-      console.log('🧪 ONE ROW Method:', 'sheets.spreadsheets.values.update')
-      console.log('🧪 ONE ROW Params:', JSON.stringify(oneRowParams, null, 2))
-      
-      await sheets.spreadsheets.values.update(oneRowParams)
-      console.log('✅ ONE ROW TEST PASSED')
-      
-      // Test full batch
-      console.log('🧪 FULL BATCH TEST START')
-      
-    } catch (testError: any) {
-      console.error('🚨 TEST FAILED:', JSON.stringify(testError, null, 2))
-      throw new Error(`Test failed: ${testError.message || 'Unknown test error'}`)
-    }
+    const dataResponse = await fetch(dataUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        values: engagementData,
+        valueInputOption: 'USER_ENTERED'
+      })
+    })
     
-    try {
-      const updateParams = {
-        spreadsheetId: masterSheetId,
-        range: dataRange,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-          values: engagementData
-        }
-      }
-      
-      console.log('🔍 RUNTIME DEBUG - Method:', 'sheets.spreadsheets.values.update')
-      console.log('🔍 RUNTIME DEBUG - Params:', JSON.stringify(updateParams, null, 2))
-      
-      const updateResult = await sheets.spreadsheets.values.update(updateParams)
-      console.log('Update successful:', updateResult.status)
-    } catch (updateError: any) {
-      console.error('Google Sheets Update Error:', JSON.stringify(updateError, null, 2))
-      throw new Error(`Failed to write engagement data: ${updateError.message || 'Unknown error'}`)
+    if (!dataResponse.ok) {
+      const errorText = await dataResponse.text()
+      console.error('Google Sheets API Error:', errorText)
+      throw new Error(`Failed to write engagement data: ${dataResponse.statusText} - ${errorText}`)
     }
     
     // Update Master Engagement Tracker with today's selections
@@ -436,16 +434,20 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
 
 async function updateMasterTracker(selectedAccounts: any, date: string) {
   try {
-    const auth = await getGoogleAuth()
-    const sheets = google.sheets({ version: 'v4', auth })
+    const accessToken = await getGoogleAuthToken()
     
     // Get current tracker data
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: MASTER_TRACKER_SHEET_ID,
-      range: 'A2:L100'
+    const trackerUrl = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_TRACKER_SHEET_ID}/values/A2:L100`
+    const response = await fetch(trackerUrl, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
     })
     
-    const trackerData = response.data.values || []
+    if (!response.ok) {
+      throw new Error(`Failed to fetch tracker data: ${response.statusText}`)
+    }
+    
+    const data = await response.json()
+    const trackerData = data.values || []
     
     // Update engagement tracking for selected accounts
     const allSelectedAccounts = [
@@ -462,14 +464,18 @@ async function updateMasterTracker(selectedAccounts: any, date: string) {
       if (rowIndex >= 0) {
         // Update last engaged date and increment engagement count
         const currentCount = parseInt(trackerData[rowIndex][7] || '0')
+        const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_TRACKER_SHEET_ID}/values/G${rowIndex + 2}:H${rowIndex + 2}`
         
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: MASTER_TRACKER_SHEET_ID,
-          range: `G${rowIndex + 2}:H${rowIndex + 2}`,
-          valueInputOption: 'USER_ENTERED',
-          requestBody: {
-            values: [[date, (currentCount + 1).toString()]]
-          }
+        await fetch(updateUrl, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            values: [[date, (currentCount + 1).toString()]],
+            valueInputOption: 'USER_ENTERED'
+          })
         })
       }
     }
@@ -550,7 +556,8 @@ export async function POST(request: NextRequest) {
     // Select accounts and create master engagement sheet FIRST - if this fails, stop entirely
     let sheetUrl: string
     try {
-      const selectedAccounts = await selectAccountsFromPools()
+      const accessToken = await getGoogleAuthToken()
+      const selectedAccounts = await selectAccountsFromPools(accessToken)
       sheetUrl = await createMasterEngagementSheet(date, taskTitle, selectedAccounts)
     } catch (sheetError) {
       console.error('Master engagement sheet creation failed, stopping task creation:', sheetError)
