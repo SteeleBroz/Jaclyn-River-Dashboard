@@ -344,6 +344,64 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
     
     console.log(`Writing ${engagementData.length} rows to range: ${dataRange}`)
     
+    // ISOLATED TEST SEQUENCE
+    try {
+      // Test A1 only
+      console.log('🧪 A1 TEST START')
+      const a1Params = {
+        spreadsheetId: masterSheetId,
+        range: `${tabName}!A1`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [['test']]
+        }
+      }
+      console.log('🧪 A1 Method:', 'sheets.spreadsheets.values.update')
+      console.log('🧪 A1 Params:', JSON.stringify(a1Params, null, 2))
+      
+      await sheets.spreadsheets.values.update(a1Params)
+      console.log('✅ A1 TEST PASSED')
+      
+      // Test headers
+      console.log('🧪 HEADERS TEST START')
+      const headersParams = {
+        spreadsheetId: masterSheetId,
+        range: `${tabName}!A1:L1`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [['Category', 'Account Name', 'Link', 'Comment', 'Handle', 'Follower Count', 'Content Type', 'Content Summary', 'Why Selected', 'Backup Comment', 'Profiles To Visit', 'Notes']]
+        }
+      }
+      console.log('🧪 HEADERS Method:', 'sheets.spreadsheets.values.update')
+      console.log('🧪 HEADERS Params:', JSON.stringify(headersParams, null, 2))
+      
+      await sheets.spreadsheets.values.update(headersParams)
+      console.log('✅ HEADERS TEST PASSED')
+      
+      // Test one engagement row
+      console.log('🧪 ONE ROW TEST START')
+      const oneRowParams = {
+        spreadsheetId: masterSheetId,
+        range: `${tabName}!A2:L2`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [engagementData[0] || ['test', 'test', 'test', 'test', 'test', 'test', 'test', 'test', 'test', 'test', 'test', 'test']]
+        }
+      }
+      console.log('🧪 ONE ROW Method:', 'sheets.spreadsheets.values.update')
+      console.log('🧪 ONE ROW Params:', JSON.stringify(oneRowParams, null, 2))
+      
+      await sheets.spreadsheets.values.update(oneRowParams)
+      console.log('✅ ONE ROW TEST PASSED')
+      
+      // Test full batch
+      console.log('🧪 FULL BATCH TEST START')
+      
+    } catch (testError: any) {
+      console.error('🚨 TEST FAILED:', JSON.stringify(testError, null, 2))
+      throw new Error(`Test failed: ${testError.message || 'Unknown test error'}`)
+    }
+    
     try {
       const updateParams = {
         spreadsheetId: masterSheetId,
