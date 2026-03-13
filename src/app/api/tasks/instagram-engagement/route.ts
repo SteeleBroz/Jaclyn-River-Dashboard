@@ -328,7 +328,8 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
         'Backup Comment', 'Profiles To Visit', 'Notes'
       ]
       
-      const headersUrl = `https://sheets.googleapis.com/v4/spreadsheets/${masterSheetId}/values/${encodeURIComponent(tabName)}!A1:L1`
+      const headerRange = `'${tabName}'!A1:L1`
+      const headersUrl = `https://sheets.googleapis.com/v4/spreadsheets/${masterSheetId}/values/${encodeURIComponent(headerRange)}`
       
       await fetch(headersUrl, {
         method: 'PUT',
