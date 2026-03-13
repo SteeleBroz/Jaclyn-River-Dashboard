@@ -488,7 +488,65 @@ async function updateMasterTracker(selectedAccounts: any, date: string) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { date } = body
+    const { date, cleanup } = body
+    
+    // Special cleanup mode
+    if (cleanup === 'master-sheet') {
+      const MASTER_SHEET_ID = '1wiMC0DjAfeTKFaBTuK0wdE-OUDBVPttkGzSwsjpYXso'
+      const accessToken = await getGoogleAuthToken()
+      
+      // Get all sheets/tabs
+      const sheetsApiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_SHEET_ID}`
+      const sheetInfoResponse = await fetch(sheetsApiUrl, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      })
+      
+      if (!sheetInfoResponse.ok) {
+        return NextResponse.json({ error: 'Failed to get sheet info' }, { status: 500 })
+      }
+      
+      const sheetInfo = await sheetInfoResponse.json()
+      const existingSheets = sheetInfo.sheets || []
+      
+      // Find tabs to delete (Mar 31 onwards test tabs)  
+      const tabsToDelete = existingSheets.filter((sheet: any) => {
+        const title = sheet.properties.title
+        return title.includes('Mar') || title.includes('Apr') || title.includes('May')
+      })
+      
+      if (tabsToDelete.length === 0) {
+        return NextResponse.json({ message: 'No test tabs to delete', tabsFound: existingSheets.map((s: any) => s.properties.title) })
+      }
+      
+      // Create batch delete requests
+      const deleteRequests = tabsToDelete.map((sheet: any) => ({
+        deleteSheet: {
+          sheetId: sheet.properties.sheetId
+        }
+      }))
+      
+      // Execute batch delete
+      const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_SHEET_ID}:batchUpdate`
+      const deleteResponse = await fetch(batchUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          requests: deleteRequests
+        })
+      })
+      
+      if (!deleteResponse.ok) {
+        return NextResponse.json({ error: 'Failed to delete tabs' }, { status: 500 })
+      }
+      
+      return NextResponse.json({ 
+        message: `Successfully deleted ${tabsToDelete.length} test tabs`,
+        deletedTabs: tabsToDelete.map((s: any) => s.properties.title)
+      })
+    }
     
     if (!date) {
       return NextResponse.json({ error: 'Date is required' }, { status: 400 })
