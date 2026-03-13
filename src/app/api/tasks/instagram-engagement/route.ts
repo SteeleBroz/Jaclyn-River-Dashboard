@@ -347,14 +347,15 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
     
     // Process all selected accounts
     const allAccounts = [
-      ...selectedAccounts.relationship.map((acc: any) => ({ ...acc, category: 'Relationship' })),
-      ...selectedAccounts.discovery.map((acc: any) => ({ ...acc, category: 'Discovery' })),
-      ...selectedAccounts.community.map((acc: any) => ({ ...acc, category: 'Community' }))
+      ...selectedAccounts.relationship.map((acc: any) => ({ account: acc, category: 'Relationship' })),
+      ...selectedAccounts.discovery.map((acc: any) => ({ account: acc, category: 'Discovery' })),
+      ...selectedAccounts.community.map((acc: any) => ({ account: acc, category: 'Community' }))
     ]
     
-    for (const accountArray of allAccounts) {
+    for (const accountData of allAccounts) {
+      const accountArray = accountData.account
       const [accountName, handle, , niche, followerCount] = accountArray
-      const category = accountArray.category
+      const category = accountData.category
       
       // Generate comments
       const comments = await generateEngagementComment(accountArray, category)
