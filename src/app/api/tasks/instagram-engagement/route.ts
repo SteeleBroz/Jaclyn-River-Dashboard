@@ -276,7 +276,6 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
       await sheets.spreadsheets.values.update({
         spreadsheetId: masterSheetId,
         range: `${tabName}!A1:L1`,
-        valueInputOption: 'USER_ENTERED',
         requestBody: {
           values: [headers]
         }
@@ -348,7 +347,6 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
       const updateResult = await sheets.spreadsheets.values.update({
         spreadsheetId: masterSheetId,
         range: dataRange,
-        valueInputOption: 'USER_ENTERED',
         requestBody: {
           values: engagementData
         }
@@ -403,7 +401,6 @@ async function updateMasterTracker(selectedAccounts: any, date: string) {
         await sheets.spreadsheets.values.update({
           spreadsheetId: MASTER_TRACKER_SHEET_ID,
           range: `G${rowIndex + 2}:H${rowIndex + 2}`,
-          valueInputOption: 'USER_ENTERED',
           requestBody: {
             values: [[date, (currentCount + 1).toString()]]
           }
