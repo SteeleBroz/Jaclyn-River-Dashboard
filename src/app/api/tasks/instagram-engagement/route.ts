@@ -344,14 +344,19 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
     
     console.log(`Writing ${engagementData.length} rows to range: ${dataRange}`)
     
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: masterSheetId,
-      range: dataRange,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: {
-        values: engagementData
-      }
-    })
+    try {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: masterSheetId,
+        range: dataRange,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: engagementData
+        }
+      })
+    } catch (updateError: any) {
+      console.error('Google Sheets Update Error:', updateError.message || updateError)
+      throw new Error(`Failed to write engagement data: ${updateError.message || 'Unknown error'}`)
+    }
     
     // Update Master Engagement Tracker with today's selections
     await updateMasterTracker(selectedAccounts, date)
