@@ -396,9 +396,15 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
       ])
     }
     
-    // Write engagement data to the daily tab  
+    // Write engagement data to the daily tab
+    if (engagementData.length === 0) {
+      throw new Error('No engagement data to write')
+    }
+    
     const dataRange = `'${tabName}'!A2:L${engagementData.length + 1}`
     const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${masterSheetId}/values/${encodeURIComponent(dataRange)}`
+    
+    console.log(`Writing ${engagementData.length} rows to range: ${dataRange}`)
     
     const dataResponse = await fetch(dataUrl, {
       method: 'PUT',
@@ -413,7 +419,9 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
     })
     
     if (!dataResponse.ok) {
-      throw new Error(`Failed to write engagement data: ${dataResponse.statusText}`)
+      const errorText = await dataResponse.text()
+      console.error('Google Sheets API Error:', errorText)
+      throw new Error(`Failed to write engagement data: ${dataResponse.statusText} - ${errorText}`)
     }
     
     // Update Master Engagement Tracker with today's selections
