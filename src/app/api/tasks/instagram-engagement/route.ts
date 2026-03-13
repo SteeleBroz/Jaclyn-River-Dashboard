@@ -273,12 +273,14 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
         'Backup Comment', 'Profiles To Visit', 'Notes'
       ]
       
-      await sheets.spreadsheets.values.update({
+      await sheets.spreadsheets.values.batchUpdate({
         spreadsheetId: masterSheetId,
-        range: `'${tabName}'!A1:L1`,
-        valueInputOption: 'USER_ENTERED',
         requestBody: {
-          values: [headers]
+          valueInputOption: 'USER_ENTERED',
+          data: [{
+            range: `'${tabName}'!A1:L1`,
+            values: [headers]
+          }]
         }
       })
     }
@@ -345,12 +347,14 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
     console.log(`Writing ${engagementData.length} rows to range: ${dataRange}`)
     
     try {
-      await sheets.spreadsheets.values.update({
+      await sheets.spreadsheets.values.batchUpdate({
         spreadsheetId: masterSheetId,
-        range: dataRange,
-        valueInputOption: 'USER_ENTERED',
         requestBody: {
-          values: engagementData
+          valueInputOption: 'USER_ENTERED',
+          data: [{
+            range: dataRange,
+            values: engagementData
+          }]
         }
       })
     } catch (updateError: any) {
@@ -399,12 +403,14 @@ async function updateMasterTracker(selectedAccounts: any, date: string) {
         // Update last engaged date and increment engagement count
         const currentCount = parseInt(trackerData[rowIndex][7] || '0')
         
-        await sheets.spreadsheets.values.update({
+        await sheets.spreadsheets.values.batchUpdate({
           spreadsheetId: MASTER_TRACKER_SHEET_ID,
-          range: `G${rowIndex + 2}:H${rowIndex + 2}`,
-          valueInputOption: 'USER_ENTERED',
           requestBody: {
-            values: [[date, (currentCount + 1).toString()]]
+            valueInputOption: 'USER_ENTERED',
+            data: [{
+              range: `G${rowIndex + 2}:H${rowIndex + 2}`,
+              values: [[date, (currentCount + 1).toString()]]
+            }]
           }
         })
       }
