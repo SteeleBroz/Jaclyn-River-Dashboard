@@ -64,7 +64,7 @@ async function selectAccountsFromPools(accessToken: string) {
     }
     
     const data = await response.json()
-    const accounts = data.values || []
+    const accounts = Array.isArray(data.values) ? data.values : []
     
     // Parse accounts and categorize
     const relationshipAccounts = accounts.filter((row: any[]) => row[2] === 'Relationship')
@@ -73,6 +73,8 @@ async function selectAccountsFromPools(accessToken: string) {
     
     // Account selection with rotation logic
     const selectWithRotation = (pool: any[], count: number, maxDaysAgo: number = 3) => {
+      if (!Array.isArray(pool) || pool.length === 0) return []
+      
       // Filter accounts that haven't been engaged recently
       const available = pool.filter(account => {
         const lastEngaged = account[6] // Last Engaged Date column
@@ -97,9 +99,9 @@ async function selectAccountsFromPools(accessToken: string) {
     const selectedCommunity = selectWithRotation(communityAccounts, 2, 1) // 1 day minimum gap
     
     return {
-      relationship: selectedRelationship,
-      discovery: selectedDiscovery,
-      community: selectedCommunity
+      relationship: selectedRelationship || [],
+      discovery: selectedDiscovery || [],
+      community: selectedCommunity || []
     }
     
   } catch (error) {
