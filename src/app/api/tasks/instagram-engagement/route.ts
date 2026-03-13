@@ -338,7 +338,8 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          values: [headers]
+          values: [headers],
+          valueInputOption: 'USER_ENTERED'
         })
       })
     }
@@ -405,7 +406,8 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        values: engagementData
+        values: engagementData,
+        valueInputOption: 'USER_ENTERED'
       })
     })
     
