@@ -67,9 +67,9 @@ async function selectAccountsFromPools(accessToken: string) {
     const accounts = data.values || []
     
     // Parse accounts and categorize
-    const relationshipAccounts = accounts.filter(row => row[2] === 'Relationship')
-    const discoveryAccounts = accounts.filter(row => row[2] === 'Discovery')  
-    const communityAccounts = accounts.filter(row => row[2] === 'Community')
+    const relationshipAccounts = accounts.filter((row: any[]) => row[2] === 'Relationship')
+    const discoveryAccounts = accounts.filter((row: any[]) => row[2] === 'Discovery')  
+    const communityAccounts = accounts.filter((row: any[]) => row[2] === 'Community')
     
     // Account selection with rotation logic
     const selectWithRotation = (pool: any[], count: number, maxDaysAgo: number = 3) => {
@@ -288,7 +288,7 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
     
     const sheetInfo = await sheetInfoResponse.json()
     const existingSheets = sheetInfo.sheets || []
-    const tabExists = existingSheets.some(sheet => sheet.properties.title === tabName)
+    const tabExists = existingSheets.some((sheet: any) => sheet.properties.title === tabName)
     
     if (!tabExists) {
       // Create new tab for today
@@ -345,9 +345,9 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
     
     // Process all selected accounts
     const allAccounts = [
-      ...selectedAccounts.relationship.map(acc => ({ ...acc, category: 'Relationship' })),
-      ...selectedAccounts.discovery.map(acc => ({ ...acc, category: 'Discovery' })),
-      ...selectedAccounts.community.map(acc => ({ ...acc, category: 'Community' }))
+      ...selectedAccounts.relationship.map((acc: any) => ({ ...acc, category: 'Relationship' })),
+      ...selectedAccounts.discovery.map((acc: any) => ({ ...acc, category: 'Discovery' })),
+      ...selectedAccounts.community.map((acc: any) => ({ ...acc, category: 'Community' }))
     ]
     
     for (const accountArray of allAccounts) {
@@ -440,7 +440,7 @@ async function updateMasterTracker(selectedAccounts: any, date: string) {
       const accountName = selectedAccount[0]
       
       // Find matching row in tracker
-      const rowIndex = trackerData.findIndex(row => row[0] === accountName)
+      const rowIndex = trackerData.findIndex((row: any[]) => row[0] === accountName)
       if (rowIndex >= 0) {
         // Update last engaged date and increment engagement count
         const currentCount = parseInt(trackerData[rowIndex][7] || '0')
@@ -547,12 +547,6 @@ export async function POST(request: NextRequest) {
     }
     
     // Create the task with Master Sheet link in description
-    const dateObj = new Date(date + 'T12:00:00')
-    const formattedDate = dateObj.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      timeZone: 'America/New_York'
-    })
     const taskDescription = `Daily Instagram Engagement - ${formattedDate} Tab: ${sheetUrl}`
     
     const { data: newTask, error: createError } = await supabase
