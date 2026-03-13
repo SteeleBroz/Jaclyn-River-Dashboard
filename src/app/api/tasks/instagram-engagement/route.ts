@@ -393,9 +393,9 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
       ])
     }
     
-    // Write engagement data to the daily tab
-    const dataRange = `${encodeURIComponent(tabName)}!A2:L${engagementData.length + 1}`
-    const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${masterSheetId}/values/${dataRange}`
+    // Write engagement data to the daily tab  
+    const dataRange = `'${tabName}'!A2:L${engagementData.length + 1}`
+    const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${masterSheetId}/values/${encodeURIComponent(dataRange)}`
     
     const dataResponse = await fetch(dataUrl, {
       method: 'PUT',
