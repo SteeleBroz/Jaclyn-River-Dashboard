@@ -325,7 +325,7 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
       ]
       
       const headerRange = `${tabName}!A1:L1`
-      const headersUrl = `https://sheets.googleapis.com/v4/spreadsheets/${masterSheetId}/values/${encodeURIComponent(headerRange)}`
+      const headersUrl = `https://sheets.googleapis.com/v4/spreadsheets/${masterSheetId}/values/${encodeURIComponent(headerRange)}?valueInputOption=USER_ENTERED`
       
       await fetch(headersUrl, {
         method: 'PUT',
@@ -334,8 +334,7 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          values: [headers],
-          valueInputOption: 'USER_ENTERED'
+          values: [headers]
         })
       })
     }
@@ -398,7 +397,7 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
     }
     
     const dataRange = `${tabName}!A2:L${engagementData.length + 1}`
-    const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${masterSheetId}/values/${encodeURIComponent(dataRange)}`
+    const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${masterSheetId}/values/${encodeURIComponent(dataRange)}?valueInputOption=USER_ENTERED`
     
     console.log(`Writing ${engagementData.length} rows to range: ${dataRange}`)
     
@@ -409,8 +408,7 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        values: engagementData,
-        valueInputOption: 'USER_ENTERED'
+        values: engagementData
       })
     })
     
@@ -464,7 +462,7 @@ async function updateMasterTracker(selectedAccounts: any, date: string) {
       if (rowIndex >= 0) {
         // Update last engaged date and increment engagement count
         const currentCount = parseInt(trackerData[rowIndex][7] || '0')
-        const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_TRACKER_SHEET_ID}/values/G${rowIndex + 2}:H${rowIndex + 2}`
+        const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_TRACKER_SHEET_ID}/values/G${rowIndex + 2}:H${rowIndex + 2}?valueInputOption=USER_ENTERED`
         
         await fetch(updateUrl, {
           method: 'PUT',
@@ -473,8 +471,7 @@ async function updateMasterTracker(selectedAccounts: any, date: string) {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            values: [[date, (currentCount + 1).toString()]],
-            valueInputOption: 'USER_ENTERED'
+            values: [[date, (currentCount + 1).toString()]]
           })
         })
       }
