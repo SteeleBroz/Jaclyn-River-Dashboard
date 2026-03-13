@@ -346,14 +346,23 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
     const engagementData = []
     
     // Process all selected accounts
+    const relationshipAccounts = Array.isArray(selectedAccounts.relationship) ? selectedAccounts.relationship : []
+    const discoveryAccounts = Array.isArray(selectedAccounts.discovery) ? selectedAccounts.discovery : []
+    const communityAccounts = Array.isArray(selectedAccounts.community) ? selectedAccounts.community : []
+    
     const allAccounts = [
-      ...selectedAccounts.relationship.map((acc: any) => ({ account: acc, category: 'Relationship' })),
-      ...selectedAccounts.discovery.map((acc: any) => ({ account: acc, category: 'Discovery' })),
-      ...selectedAccounts.community.map((acc: any) => ({ account: acc, category: 'Community' }))
+      ...relationshipAccounts.map((acc: any) => ({ account: acc, category: 'Relationship' })),
+      ...discoveryAccounts.map((acc: any) => ({ account: acc, category: 'Discovery' })),
+      ...communityAccounts.map((acc: any) => ({ account: acc, category: 'Community' }))
     ]
     
     for (const accountData of allAccounts) {
       const accountArray = accountData.account
+      if (!Array.isArray(accountArray) || accountArray.length < 5) {
+        console.warn('Invalid account data:', accountArray)
+        continue
+      }
+      
       const [accountName, handle, , niche, followerCount] = accountArray
       const category = accountData.category
       
