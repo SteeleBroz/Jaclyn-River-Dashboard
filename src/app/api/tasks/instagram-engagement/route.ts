@@ -490,7 +490,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { date, cleanup } = body
     
-    // Special cleanup mode
+    // Special cleanup mode - check this FIRST
     if (cleanup === 'master-sheet') {
       const MASTER_SHEET_ID = '1wiMC0DjAfeTKFaBTuK0wdE-OUDBVPttkGzSwsjpYXso'
       const accessToken = await getGoogleAuthToken()
