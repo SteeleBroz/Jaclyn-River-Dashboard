@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 const TEMPLATE_SHEET_ID = '1D74x4m2wkDIjmk7ELnfZmXE-v3iDdmOmkDRD1IljIYI'
 const THUMB_EQUITY_FOLDER_ID = '1MHM1ezP6N1IoHezz2Lr0hDezZleW3PXH'
 const ACCOUNT_POOLS_SHEET_ID = '1kkm06dyke9DbJK45MpWot_2Cahx-gBq94MfYoNCpgz8'
-const MASTER_TRACKER_SHEET_ID = '1Rt8ckpGPGu1esmL1_HIHIHkWZypXUSOl5dhAbTab2mY'
+const MASTER_TRACKER_SHEET_ID = '1wiMC0DjAfeTKFaBTuK0wdE-OUDBVPttkGzSwsjpYXso'
 const MASTER_ENGAGEMENT_SHEET_NAME = 'SteeleBroz Daily Engagement Master'
 
 async function getGoogleAuthToken() {
