@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
+import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday','overflow'] as const
 const DAY_LABELS: Record<string, string> = {
@@ -50,7 +50,7 @@ export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [weeklyNotes, setWeeklyNotes] = useState<WeeklyNote[]>([])
-  const [activeTab, setActiveTab] = useState<'jaclyn' | 'river' | 'grocery' | 'ideas' | 'digest' | 'sendouts'>('jaclyn')
+  const [activeTab, setActiveTab] = useState<'jaclyn' | 'river' | 'grocery' | 'ideas' | 'digest' | 'sendouts' | 'thumb-equity'>('jaclyn')
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day' | 'year'>('month')
   const [calendarDate, setCalendarDate] = useState(new Date())
@@ -98,6 +98,11 @@ export default function Home() {
     return false
   })
   
+  // Thumb Equity state
+  const [thumbEquityItems, setThumbEquityItems] = useState<ThumbEquityItem[]>([])
+  const [thumbEquityLoading, setThumbEquityLoading] = useState(false)
+  const [expandedBackup, setExpandedBackup] = useState<Record<number, boolean>>({})
+
   // Daily Digest state
   const [dailyDigest, setDailyDigest] = useState<{
     date: string;
@@ -743,7 +748,33 @@ export default function Home() {
     }
   }
 
-  useEffect(() => { 
+  // Thumb Equity functions
+  const fetchThumbEquity = useCallback(async () => {
+    setThumbEquityLoading(true)
+    try {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+      const { data } = await supabase
+        .from('thumb_equity_daily')
+        .select('*')
+        .eq('date', today)
+        .order('sort_order')
+      if (data) setThumbEquityItems(data)
+    } finally {
+      setThumbEquityLoading(false)
+    }
+  }, [])
+
+  const toggleThumbEquityItem = async (id: number, completed: boolean) => {
+    setThumbEquityItems(prev => prev.map(item =>
+      item.id === id ? { ...item, completed } : item
+    ))
+    await supabase
+      .from('thumb_equity_daily')
+      .update({ completed, updated_at: new Date().toISOString() })
+      .eq('id', id)
+  }
+
+  useEffect(() => {
     fetchData()
     fetchDigestData()
     fetchSendOutsData()
@@ -795,6 +826,13 @@ export default function Home() {
       clearInterval(intervalRefresh)
     }
   }, [fetchData])
+
+  // Fetch thumb equity data when tab is activated
+  useEffect(() => {
+    if (activeTab === 'thumb-equity') {
+      fetchThumbEquity()
+    }
+  }, [activeTab, fetchThumbEquity])
 
   const toggleComplete = async (task: Task) => {
     const updated = !task.completed
@@ -2936,6 +2974,161 @@ export default function Home() {
     )
   }
 
+  const renderThumbEquity = () => {
+    const completedCount = thumbEquityItems.filter(i => i.completed).length
+    const totalCount = thumbEquityItems.length
+    const storyTaps = thumbEquityItems.filter(i => i.is_story_tap)
+    const mainAccounts = thumbEquityItems.filter(i => !i.is_story_tap)
+
+    const todayLabel = new Date().toLocaleDateString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric',
+      timeZone: 'America/New_York'
+    })
+
+    const categoryBadge = (cat: string) => {
+      switch (cat) {
+        case 'Relationship': return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">🔵 Relationship</span>
+        case 'Discovery': return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300">🟡 Discovery</span>
+        case 'Community': return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-300">🟢 Community</span>
+        default: return <span className="text-xs text-gray-400">{cat}</span>
+      }
+    }
+
+    const renderAccountCard = (item: ThumbEquityItem) => (
+      <div
+        key={item.id}
+        className={`p-3 rounded-lg border transition-all ${
+          item.completed
+            ? 'bg-[#0d1117]/50 border-gray-700/50 opacity-60'
+            : 'bg-[#0d1117] border-gray-700 hover:border-teal-500/40'
+        }`}
+      >
+        <div className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            checked={item.completed}
+            onChange={() => toggleThumbEquityItem(item.id, !item.completed)}
+            className="w-5 h-5 mt-0.5 rounded border-gray-600 bg-[#1a1a2e] text-teal-500 focus:ring-teal-500 focus:ring-offset-0 shrink-0"
+          />
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {categoryBadge(item.category)}
+              <a
+                href={item.instagram_link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`font-medium hover:underline ${
+                  item.completed ? 'line-through text-gray-500' : 'text-teal-400 hover:text-teal-300'
+                }`}
+              >
+                {item.handle}
+              </a>
+              {item.niche && (
+                <span className="text-xs text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">{item.niche}</span>
+              )}
+              {item.follower_count && (
+                <span className="text-xs text-gray-500">{item.follower_count}</span>
+              )}
+            </div>
+            <div className={`text-sm ${item.completed ? 'line-through text-gray-600' : 'text-gray-300'}`}>
+              {item.primary_comment}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { navigator.clipboard.writeText(item.primary_comment); }}
+                className="text-xs text-gray-400 hover:text-teal-400 transition-colors"
+              >
+                📋 Copy
+              </button>
+              {item.backup_comment && (
+                <button
+                  onClick={() => setExpandedBackup(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+                  className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                >
+                  {expandedBackup[item.id] ? 'hide backup' : 'show backup'}
+                </button>
+              )}
+            </div>
+            {expandedBackup[item.id] && item.backup_comment && (
+              <div className="text-sm text-gray-400 italic border-l-2 border-gray-700 pl-2">
+                {item.backup_comment}
+                <button
+                  onClick={() => { navigator.clipboard.writeText(item.backup_comment!); }}
+                  className="ml-2 text-xs text-gray-500 hover:text-teal-400"
+                >
+                  📋
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+
+    if (thumbEquityLoading) {
+      return (
+        <div className="bg-[#16213e] rounded-xl p-6 text-center">
+          <div className="text-gray-400 animate-pulse">Loading Thumb Equity...</div>
+        </div>
+      )
+    }
+
+    if (thumbEquityItems.length === 0) {
+      return (
+        <div className="bg-[#16213e] rounded-xl p-6 text-center space-y-2">
+          <div className="text-2xl">👍</div>
+          <div className="text-gray-300 font-medium">No engagement tasks for today</div>
+          <div className="text-gray-500 text-sm">Tasks are generated automatically M-F at 6 AM ET</div>
+        </div>
+      )
+    }
+
+    return (
+      <div className="bg-[#16213e] rounded-xl p-3 md:p-4 space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-200">
+              👍 Thumb Equity — {todayLabel}
+            </h2>
+            <div className="text-sm text-gray-400 mt-0.5">
+              {completedCount}/{totalCount} complete
+            </div>
+          </div>
+          <button
+            onClick={fetchThumbEquity}
+            className="text-gray-400 hover:text-gray-200 text-sm px-2 py-1 rounded hover:bg-[#0d1117] transition-colors"
+          >
+            ↻ Refresh
+          </button>
+        </div>
+
+        {/* Progress bar */}
+        <div className="w-full bg-gray-800 rounded-full h-2">
+          <div
+            className="bg-teal-500 h-2 rounded-full transition-all duration-300"
+            style={{ width: totalCount > 0 ? `${(completedCount / totalCount) * 100}%` : '0%' }}
+          />
+        </div>
+
+        {/* Account cards */}
+        <div className="space-y-2">
+          {mainAccounts.map(renderAccountCard)}
+        </div>
+
+        {/* Stories to Tap section */}
+        {storyTaps.length > 0 && (
+          <div className="border-t border-gray-700 pt-4 mt-4">
+            <h3 className="text-sm font-medium text-gray-300 mb-2">📱 Stories to Tap</h3>
+            <div className="space-y-2">
+              {storyTaps.map(renderAccountCard)}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   const renderWeeklyBoard = (board: 'jaclyn' | 'river') => (
     <div className="bg-[#16213e] rounded-xl p-3 md:p-4">
       <div className="flex items-center justify-between mb-3 md:mb-4">
@@ -3015,11 +3208,13 @@ export default function Home() {
               {!isCollapsed && (
                 <div className="px-2 md:px-3 pb-2 md:pb-3 space-y-1 md:space-y-2" data-drop-day={day}>
                   {tasksForDay.map(task => (
-                    <div 
+                    <div
                       key={task.id}
                       data-task-id={task.id}
                       data-day={day}
-                      className="group relative flex items-center gap-2 md:gap-3 p-1 md:p-2 hover:bg-[#252545] rounded-lg transition-colors"
+                      className={`group relative flex items-center gap-2 md:gap-3 p-1 md:p-2 hover:bg-[#252545] rounded-lg transition-colors ${
+                        task.title.startsWith('Instagram Engagement') ? 'border-l-2 border-teal-500' : ''
+                      }`}
                     >
                       <input
                         type="checkbox"
@@ -3045,12 +3240,19 @@ export default function Home() {
                         )}
                         <div className="flex-1">
                           <span
-                            onClick={() => setEditingTask(task)}
+                            onClick={() => {
+                              if (task.title.startsWith('Instagram Engagement')) {
+                                setActiveTab('thumb-equity')
+                                fetchThumbEquity()
+                              } else {
+                                setEditingTask(task)
+                              }
+                            }}
                             className={`text-xs md:text-sm cursor-pointer block ${
                               task.completed ? 'line-through text-gray-500' : 'text-gray-200'
                             }`}
                           >
-                            {task.title}
+                            {task.title.startsWith('Instagram Engagement') ? `👍 ${task.title}` : task.title}
                           </span>
                           {task.notes && (
                             <div className="text-xs text-gray-400 mt-1 break-all">
@@ -3634,7 +3836,8 @@ export default function Home() {
             { id: 'grocery', label: 'Grocery List' },
             { id: 'ideas', label: 'Ideas' },
             { id: 'digest', label: 'Daily Digest' },
-            { id: 'sendouts', label: 'Send Outs' }
+            { id: 'sendouts', label: 'Send Outs' },
+            { id: 'thumb-equity', label: '👍 Thumb Equity' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -3657,6 +3860,7 @@ export default function Home() {
         {activeTab === 'ideas' && renderIdeas()}
         {activeTab === 'digest' && renderDailyDigest()}
         {activeTab === 'sendouts' && renderSendOuts()}
+        {activeTab === 'thumb-equity' && renderThumbEquity()}
         </div>
 
         {/* Calendar Panel */}

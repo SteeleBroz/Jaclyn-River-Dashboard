@@ -205,7 +205,7 @@ async function generateEngagementComment(accountData: any[], accountType: string
   }
 }
 
-async function createMasterEngagementSheet(date: string, taskTitle: string, selectedAccounts: any) {
+async function createMasterEngagementSheet(date: string, taskTitle: string, selectedAccounts: any): Promise<{ sheetUrl: string; accountRows: any[] }> {
   try {
     const accessToken = await getGoogleAuthToken()
     
@@ -340,41 +340,43 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
     }
     
     // Prepare engagement data
-    const engagementData = []
-    
+    const engagementData: string[][] = []
+    const accountRows: any[] = [] // Structured data for Supabase
+
     // Process all selected accounts
     const relationshipAccounts = Array.isArray(selectedAccounts.relationship) ? selectedAccounts.relationship : []
     const discoveryAccounts = Array.isArray(selectedAccounts.discovery) ? selectedAccounts.discovery : []
     const communityAccounts = Array.isArray(selectedAccounts.community) ? selectedAccounts.community : []
-    
+
     const allAccounts = [
       ...relationshipAccounts.map((acc: any) => ({ account: acc, category: 'Relationship' })),
       ...discoveryAccounts.map((acc: any) => ({ account: acc, category: 'Discovery' })),
       ...communityAccounts.map((acc: any) => ({ account: acc, category: 'Community' }))
     ]
-    
+
+    let sortOrder = 0
     for (const accountData of allAccounts) {
       const accountArray = accountData.account
       if (!Array.isArray(accountArray) || accountArray.length < 5) {
         console.warn('Invalid account data:', accountArray)
         continue
       }
-      
+
       const [accountName, handle, , niche, followerCount] = accountArray
       const category = accountData.category
-      
+
       // Generate comments
       const comments = await generateEngagementComment(accountArray, category)
-      
+
       // Create Instagram link (direct to profile for now - would need browser automation for specific posts)
       const cleanHandle = (handle || '').replace('@', '')
       const instagramLink = `https://instagram.com/${cleanHandle}`
-      
+
       // Determine why selected based on category
       const whySelected = category === 'Relationship' ? 'Relationship building - repeated engagement' :
                          category === 'Discovery' ? 'Testing new audience potential' :
                          'Community engagement - high follow-back potential'
-      
+
       engagementData.push([
         category || '',
         accountName || '',
@@ -389,6 +391,23 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
         '', // Profiles To Visit
         `Niche: ${niche || ''}`
       ])
+
+      accountRows.push({
+        date,
+        account_name: accountName || '',
+        handle: handle || '',
+        category,
+        niche: niche || null,
+        follower_count: followerCount || null,
+        instagram_link: instagramLink,
+        primary_comment: comments.primary || '',
+        backup_comment: comments.backup || null,
+        why_selected: whySelected || null,
+        content_summary: 'Recent posts analysis pending',
+        is_story_tap: false,
+        completed: false,
+        sort_order: sortOrder++,
+      })
     }
     
     // Write engagement data to the daily tab
@@ -422,7 +441,7 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
     await updateMasterTracker(selectedAccounts, date)
     
     console.log(`✅ Created daily tab "${tabName}" with ${engagementData.length} engagement opportunities`)
-    return `${masterSheetUrl}#gid=0` // Return master sheet URL
+    return { sheetUrl: `${masterSheetUrl}#gid=0`, accountRows }
     
   } catch (error) {
     console.error('Master engagement sheet creation failed:', error)
@@ -552,16 +571,32 @@ export async function POST(request: NextRequest) {
     
     // Select accounts and create master engagement sheet FIRST - if this fails, stop entirely
     let sheetUrl: string
+    let accountRows: any[] = []
     try {
       const accessToken = await getGoogleAuthToken()
       const selectedAccounts = await selectAccountsFromPools(accessToken)
-      sheetUrl = await createMasterEngagementSheet(date, taskTitle, selectedAccounts)
+      const result = await createMasterEngagementSheet(date, taskTitle, selectedAccounts)
+      sheetUrl = result.sheetUrl
+      accountRows = result.accountRows
     } catch (sheetError) {
       console.error('Master engagement sheet creation failed, stopping task creation:', sheetError)
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Failed to create master engagement sheet - task creation stopped',
         details: sheetError instanceof Error ? sheetError.message : 'Unknown error'
       }, { status: 500 })
+    }
+
+    // Write engagement data to thumb_equity_daily Supabase table
+    if (accountRows.length > 0) {
+      const { error: teError } = await supabase
+        .from('thumb_equity_daily')
+        .insert(accountRows)
+      if (teError) {
+        console.error('Failed to insert thumb_equity_daily rows:', teError)
+        // Non-blocking — Google Sheets is the primary store
+      } else {
+        console.log(`✅ Inserted ${accountRows.length} rows into thumb_equity_daily`)
+      }
     }
     
     // Create the task with Master Sheet link in description

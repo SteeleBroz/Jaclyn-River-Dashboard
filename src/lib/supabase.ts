@@ -104,3 +104,23 @@ export type IdeaItem = {
   created_at: string
   updated_at: string
 }
+
+export type ThumbEquityItem = {
+  id: number
+  date: string
+  account_name: string
+  handle: string
+  category: 'Relationship' | 'Discovery' | 'Community'
+  niche: string | null
+  follower_count: string | null
+  instagram_link: string
+  primary_comment: string
+  backup_comment: string | null
+  why_selected: string | null
+  content_summary: string | null
+  is_story_tap: boolean
+  completed: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
