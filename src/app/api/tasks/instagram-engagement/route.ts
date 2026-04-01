@@ -328,7 +328,7 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
       const headersUrl = `https://sheets.googleapis.com/v4/spreadsheets/${masterSheetId}/values/${encodeURIComponent(headerRange)}?valueInputOption=USER_ENTERED`
       
       await fetch(headersUrl, {
-        method: 'POST',
+        method: 'PUT',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
@@ -421,7 +421,7 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
     console.log(`Writing ${engagementData.length} rows to range: ${dataRange}`)
     
     const dataResponse = await fetch(dataUrl, {
-      method: 'POST',
+      method: 'PUT',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
@@ -484,7 +484,7 @@ async function updateMasterTracker(selectedAccounts: any, date: string) {
         const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_TRACKER_SHEET_ID}/values/G${rowIndex + 2}:H${rowIndex + 2}?valueInputOption=USER_ENTERED`
         
         await fetch(updateUrl, {
-          method: 'POST',
+          method: 'PUT',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json'
