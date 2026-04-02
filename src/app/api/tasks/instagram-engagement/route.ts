@@ -139,40 +139,45 @@ async function selectAccountsFromPools(accessToken: string) {
   }
 }
 
-// Comment pools by niche — each has questions, personal takes, and tag prompts
+// Comment pools by niche, no dashes, real IG tone, true to SteeleBroz voice
 const COMMENT_POOLS: Record<string, { questions: string[]; personalTakes: string[]; tagPrompts: string[] }> = {
   'Sports Media': {
     questions: [
       "How early are you seeing kids start to really lock in on one position?",
-      "What's been the most surprising trend you've noticed in youth baseball this year?",
-      "Curious — do you think travel ball helps or hurts long-term development?",
+      "Whats been the most surprising trend you've noticed in youth baseball this year?",
+      "Curious, do you think travel ball helps or hurts long term development?",
       "At what age do you think the mental game starts mattering more than the physical?",
-      "What would you tell a parent who's trying to figure out the right level for their kid?",
+      "What would you tell a parent whos trying to figure out the right level for their kid?",
+      "Real talk, is early specialization helping these kids or setting them back?",
     ],
     personalTakes: [
-      "We've seen this firsthand — the kids who stay process-focused end up going further than the ones chasing highlights",
+      "We see it all the time, the kids who stay process focused end up going further than the ones chasing highlights",
       "This is the kind of content that actually helps families make better decisions for their athletes",
-      "The behind-the-scenes of youth sports is where all the real growth happens — not the showcase clips",
-      "We talk about this a lot at home — it's not about being the best at 12, it's about still loving it at 18",
+      "The behind the scenes of youth sports is where all the real growth happens, not the showcase clips",
+      "We talk about this a lot at home, its not about being the best at 12 its about still loving it at 18",
+      "Content like this is what the youth sports space actually needs more of",
+      "This right here is what parents need to be paying attention to fr",
     ],
     tagPrompts: [
       "Every sports parent needs to see this one",
       "This is the kind of perspective coaches should be sharing with their families",
+      "Tag a sports parent who needs to see this today",
     ],
   },
   'Baseball Organization': {
     questions: [
       "How early are you seeing kids start to really lock in on one position?",
-      "What's been the most surprising trend you've noticed in youth baseball this year?",
-      "Curious — do you think travel ball helps or hurts long-term development?",
+      "Whats been the most surprising trend you've noticed in youth baseball this year?",
+      "Curious, do you think travel ball helps or hurts long term development?",
       "At what age do you think the mental game starts mattering more than the physical?",
-      "What would you tell a parent who's trying to figure out the right level for their kid?",
+      "What would you tell a parent whos trying to figure out the right level for their kid?",
     ],
     personalTakes: [
-      "We've seen this firsthand — the kids who stay process-focused end up going further than the ones chasing highlights",
+      "We see it all the time, the kids who stay process focused end up going further than the ones chasing highlights",
       "This is the kind of content that actually helps families make better decisions for their athletes",
-      "The behind-the-scenes of youth sports is where all the real growth happens — not the showcase clips",
-      "We talk about this a lot at home — it's not about being the best at 12, it's about still loving it at 18",
+      "The behind the scenes is where all the real growth happens honestly",
+      "We talk about this a lot at home, its not about being the best at 12 its about still loving it at 18",
+      "This hits different when you've lived it as a family",
     ],
     tagPrompts: [
       "Every sports parent needs to see this one",
@@ -181,31 +186,35 @@ const COMMENT_POOLS: Record<string, { questions: string[]; personalTakes: string
   },
   'Youth Athlete': {
     questions: [
-      "What does your pre-game routine look like? The mental side or just physical warmup?",
+      "What does your pre game routine look like? Mental side or just physical warmup?",
       "How long did it take to get that consistent? The reps behind this are real",
-      "Do you work on this with a coach or is this self-taught? Either way it's impressive",
-      "What's the one thing you'd tell someone just starting to take their training seriously?",
+      "Do you work on this with a coach or self taught? Either way its impressive",
+      "Whats the one thing youd tell someone just starting to take their training seriously?",
+      "How do you stay locked in on days you dont feel like showing up?",
     ],
     personalTakes: [
-      "You can tell this wasn't just for the camera — the focus is genuine",
-      "This is what people don't see — the quiet work that builds real confidence",
+      "You can tell this wasnt just for the camera, the focus is genuine",
+      "This is what people dont see, the quiet work that builds real confidence",
       "The intention behind every rep here is what makes the difference",
       "This kind of discipline at your age is rare. Keep building",
+      "The work speaks for itself here, no caption needed honestly",
+      "You can see the reps adding up fr, this doesnt happen overnight",
     ],
     tagPrompts: [
       "Any young athletes need to see what consistent work actually looks like",
+      "This is what putting in the work really looks like, no shortcuts",
     ],
   },
   'Baseball Creator': {
     questions: [
-      "What does your pre-game routine look like? The mental side or just physical warmup?",
+      "What does your pre game routine look like? Mental side or just physical warmup?",
       "How long did it take to get that consistent? The reps behind this are real",
-      "Do you work on this with a coach or is this self-taught? Either way it's impressive",
-      "What's the one thing you'd tell someone just starting to take their training seriously?",
+      "Do you work on this with a coach or self taught? Either way its impressive",
+      "Whats the one thing youd tell someone just starting to take their training seriously?",
     ],
     personalTakes: [
-      "You can tell this wasn't just for the camera — the focus is genuine",
-      "This is what people don't see — the quiet work that builds real confidence",
+      "You can tell this wasnt just for the camera, the focus is genuine",
+      "This is what people dont see, the quiet work that builds real confidence",
       "The intention behind every rep here is what makes the difference",
       "This kind of discipline at your age is rare. Keep building",
     ],
@@ -216,32 +225,37 @@ const COMMENT_POOLS: Record<string, { questions: string[]; personalTakes: string
   'Sports Parent': {
     questions: [
       "How do you balance supporting their goals without putting too much pressure on?",
-      "What's been the hardest part of the sports parent journey for your family?",
-      "Do your kids ever push back on the schedule or are they all-in?",
+      "Whats been the hardest part of the sports parent journey for your family?",
+      "Do your kids ever push back on the schedule or are they all in?",
       "How did you know when it was time to take it to the next level?",
+      "What do you wish someone told you when your kid first started?",
     ],
     personalTakes: [
       "This is the stuff that matters more than any tournament trophy",
-      "We went through something similar — the journey teaches you as much as it teaches them",
+      "We went through something similar, the journey teaches you as much as it teaches them",
       "The families that get this right are the ones who keep perspective on what really matters",
-      "These moments go fast — glad you're capturing them",
+      "These moments go fast, glad youre capturing them",
+      "This is so real, we feel this in our house too",
+      "Yep, this is the part nobody talks about but every sports family lives it",
     ],
     tagPrompts: [
       "Every sports family needs this reminder right now",
+      "If you know you know, tag a sports parent",
     ],
   },
   'Sports Parenting': {
     questions: [
       "How do you balance supporting their goals without putting too much pressure on?",
-      "What's been the hardest part of the sports parent journey for your family?",
-      "Do your kids ever push back on the schedule or are they all-in?",
+      "Whats been the hardest part of the sports parent journey for your family?",
+      "Do your kids ever push back on the schedule or are they all in?",
       "How did you know when it was time to take it to the next level?",
     ],
     personalTakes: [
       "This is the stuff that matters more than any tournament trophy",
-      "We went through something similar — the journey teaches you as much as it teaches them",
-      "The families that get this right are the ones who keep perspective on what really matters",
-      "These moments go fast — glad you're capturing them",
+      "We went through something similar, the journey teaches you as much as it teaches them",
+      "The families that get this right are the ones who keep perspective",
+      "These moments go fast, glad youre capturing them",
+      "This hits home for real",
     ],
     tagPrompts: [
       "Every sports family needs this reminder right now",
@@ -251,34 +265,37 @@ const COMMENT_POOLS: Record<string, { questions: string[]; personalTakes: string
     questions: [
       "At what age do you start introducing this concept? Or does it depend on the kid?",
       "How do you adjust this for different skill levels within the same group?",
-      "What's the biggest mistake you see parents making when it comes to training at home?",
+      "Whats the biggest mistake you see parents making when it comes to training at home?",
       "Do you find athletes retain this better through repetition or game situations?",
+      "How do you keep it fun while still pushing them to grow?",
     ],
     personalTakes: [
       "This is the kind of coaching that builds athletes, not just players",
       "You can tell this comes from years of actually working with kids, not just theory",
       "The way you break this down makes it actionable for any family watching",
       "Fundamentals like this are what separate good development from chasing highlights",
+      "More coaches need to teach it like this honestly",
     ],
     tagPrompts: [
-      "Parents looking for the right kind of coaching — this is what it looks like",
+      "Parents looking for the right kind of coaching, this is what it looks like",
+      "If your kid has a coach like this, hold on to them",
     ],
   },
   'Training': {
     questions: [
       "At what age do you start introducing this concept? Or does it depend on the kid?",
       "How do you adjust this for different skill levels within the same group?",
-      "What's the biggest mistake you see parents making when it comes to training at home?",
+      "Whats the biggest mistake you see parents making when it comes to training at home?",
       "Do you find athletes retain this better through repetition or game situations?",
     ],
     personalTakes: [
       "This is the kind of coaching that builds athletes, not just players",
-      "You can tell this comes from years of actually working with kids, not just theory",
+      "You can tell this comes from experience, not just theory",
       "The way you break this down makes it actionable for any family watching",
       "Fundamentals like this are what separate good development from chasing highlights",
     ],
     tagPrompts: [
-      "Parents looking for the right kind of coaching — this is what it looks like",
+      "Parents looking for the right kind of coaching, this is what it looks like",
     ],
   },
   'Sports Brand': {
@@ -286,14 +303,17 @@ const COMMENT_POOLS: Record<string, { questions: string[]; personalTakes: string
       "What was the design process like for this? Did you get input from athletes?",
       "How does this hold up for kids who are training 4-5 days a week?",
       "What age group are you seeing the most demand from?",
+      "Are yall planning to expand this line?",
     ],
     personalTakes: [
       "You can tell this was designed by people who actually understand what athletes need",
-      "The attention to detail here shows — form meeting function",
-      "We appreciate brands that build for performance, not just aesthetics",
+      "The attention to detail here shows, form meeting function",
+      "We appreciate brands that build for performance not just aesthetics",
+      "Quality shows and this is quality right here",
     ],
     tagPrompts: [
       "Any athlete families looking for quality gear should check this out",
+      "This is the kind of brand that actually gets it",
     ],
   },
   'Baseball Product': {
@@ -304,8 +324,8 @@ const COMMENT_POOLS: Record<string, { questions: string[]; personalTakes: string
     ],
     personalTakes: [
       "You can tell this was designed by people who actually understand what athletes need",
-      "The attention to detail here shows — form meeting function",
-      "We appreciate brands that build for performance, not just aesthetics",
+      "The attention to detail here shows, form meeting function",
+      "We appreciate brands that build for performance not just aesthetics",
     ],
     tagPrompts: [
       "Any athlete families looking for quality gear should check this out",
@@ -316,14 +336,17 @@ const COMMENT_POOLS: Record<string, { questions: string[]; personalTakes: string
       "What age groups are playing this weekend? We love seeing the local scene",
       "How has the league been growing? Feels like more families are getting involved",
       "Any standout moments from the season so far?",
+      "When does registration open for the next season?",
     ],
     personalTakes: [
-      "This is what it's all about — community, competition, and kids having fun",
+      "This is what its all about, community competition and kids having fun",
       "Love seeing the local youth sports scene thriving",
       "These grassroots programs are the foundation everything else is built on",
+      "Nothing beats local ball, this is where the love for the game starts",
     ],
     tagPrompts: [
       "Local families need to know about this program",
+      "If youre in the area get your kids involved in this",
     ],
   },
   'Community': {
@@ -333,7 +356,7 @@ const COMMENT_POOLS: Record<string, { questions: string[]; personalTakes: string
       "Any standout moments from the season so far?",
     ],
     personalTakes: [
-      "This is what it's all about — community, competition, and kids having fun",
+      "This is what its all about, community competition and kids having fun",
       "Love seeing the local youth sports scene thriving",
       "These grassroots programs are the foundation everything else is built on",
     ],
@@ -347,36 +370,42 @@ const DEFAULT_COMMENT_POOL = {
   questions: [
     "What inspired this? Would love to hear the story behind it",
     "How has the response been from your community?",
-    "What's next for you guys? Seems like momentum is building",
+    "Whats next for yall? Seems like momentum is building",
+    "How long have you been working on this?",
   ],
   personalTakes: [
-    "The authenticity here stands out — you can tell this is genuine",
+    "The authenticity here stands out, you can tell this is genuine",
     "This kind of content creates real value for the people who need it",
-    "There's a depth here that resonates with families who live this daily",
+    "Theres a depth here that resonates with families who live this daily",
+    "This is fire, keep going",
   ],
   tagPrompts: [
-    "This deserves more attention from the community",
+    "More people need to see this honestly",
+    "This deserves way more attention",
   ],
 }
 
 // Category-aware backup comment pools
 const BACKUP_COMMENTS: Record<string, string[]> = {
   Relationship: [
-    "We've been following your journey and it keeps getting better",
+    "We been following your journey and it keeps getting better",
     "Always appreciate the perspective you bring to this space",
-    "This is why we keep coming back to your content — it's real",
+    "This is why we keep coming back to your content, its always real",
     "The consistency you show is something our family really respects",
+    "Yall always bring it, respect",
   ],
   Discovery: [
-    "Just came across this and had to stop scrolling — great stuff",
-    "This popped up in our feed and it's exactly the kind of content we look for",
+    "Just came across this and had to stop scrolling, great stuff",
+    "This popped up in our feed and its exactly the kind of content we look for",
     "New to your page but this is a strong first impression",
-    "The quality here is obvious — looking forward to seeing more",
+    "The quality here is obvious, looking forward to seeing more",
+    "Instant follow after seeing this tbh",
   ],
   Community: [
     "Love seeing the local community rally around this",
     "This is the kind of grassroots energy that makes youth sports special",
-    "Supporting programs like this is what it's all about",
+    "Supporting programs like this is what its all about",
+    "This is good for the community fr",
   ],
 }
 
@@ -401,12 +430,13 @@ async function generateEngagementComment(accountData: any[], accountType: string
     primaryComment = pickRandom(pool.tagPrompts)
   }
 
-  // Warm up Relationship comments — reference "we" and shared experiences
+  // Warm up Relationship comments, reference "we" and shared experiences
   if (accountType === 'Relationship' && Math.random() < 0.3) {
     const warmPrefixes = [
-      "We see this a lot — ",
-      "This resonates with us — ",
-      "Our family relates to this — ",
+      "We see this a lot, ",
+      "This resonates with us, ",
+      "Our family relates to this, ",
+      "We feel this, ",
     ]
     if (typeRoll >= 0.45 && typeRoll < 0.85) {
       // Only prepend to personal takes to keep questions clean
@@ -423,6 +453,7 @@ async function generateEngagementComment(accountData: any[], accountType: string
     backup: backupComment,
   }
 }
+
 
 async function createMasterEngagementSheet(date: string, taskTitle: string, selectedAccounts: any): Promise<{ sheetUrl: string; accountRows: any[] }> {
   try {
