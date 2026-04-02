@@ -827,7 +827,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Create the task with Master Sheet link in description
-    const taskDescription = `Daily Instagram Engagement - ${formattedDate} Tab: ${sheetUrl}`
+    const taskDescription = `Tap to open Thumb Equity tab`
     
     const { data: newTask, error: createError } = await supabase
       .from('tasks')
