@@ -67,32 +67,65 @@ async function selectAccountsFromPools(accessToken: string) {
     const discoveryAccounts = accounts.filter((row: any[]) => row[2] === 'Discovery')  
     const communityAccounts = accounts.filter((row: any[]) => row[2] === 'Community')
     
-    // Account selection with rotation logic
-    const selectWithRotation = (pool: any[], count: number, maxDaysAgo: number = 3) => {
+    // Weighted scoring for smarter rotation
+    const scoreAndSelect = (pool: any[], count: number) => {
       if (!Array.isArray(pool) || pool.length === 0) return []
-      
-      // Filter accounts that haven't been engaged recently
-      const available = pool.filter(account => {
-        const lastEngaged = account[6] // Last Engaged Date column
-        if (!lastEngaged) return true
-        
-        const daysSinceEngaged = Math.floor((Date.now() - new Date(lastEngaged).getTime()) / (1000 * 60 * 60 * 24))
-        return daysSinceEngaged >= maxDaysAgo
+
+      // Find max engagement count in pool for inverse scoring
+      const maxEngagement = Math.max(...pool.map(a => parseInt(a[7] || '0')), 1)
+
+      // Score each account
+      const scored = pool.map(account => {
+        const lastEngaged = account[6]
+        let daysSinceEngaged = 30 // default for never-engaged accounts
+        if (lastEngaged) {
+          daysSinceEngaged = Math.max(0, Math.floor((Date.now() - new Date(lastEngaged).getTime()) / (1000 * 60 * 60 * 24)))
+        }
+        const engagementCount = parseInt(account[7] || '0')
+        const score = (daysSinceEngaged * 2) + (maxEngagement - engagementCount)
+        return { account, score, daysSinceEngaged }
       })
-      
-      // If not enough available, include all accounts
-      const selectionPool = available.length >= count ? available : pool
-      
-      // Sort by engagement count (ascending) to prioritize least engaged
-      selectionPool.sort((a, b) => parseInt(a[7] || '0') - parseInt(b[7] || '0'))
-      
-      return selectionPool.slice(0, count)
+
+      // Sort by score descending (higher = more deserving of engagement)
+      scored.sort((a, b) => b.score - a.score)
+
+      // Take top 2N candidates, then randomly select N from them
+      const candidateCount = Math.min(count * 2, scored.length)
+      const candidates = scored.slice(0, candidateCount)
+
+      // Fisher-Yates shuffle on candidates, then take first N
+      for (let i = candidates.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [candidates[i], candidates[j]] = [candidates[j], candidates[i]]
+      }
+
+      return candidates.slice(0, count).map(c => c.account)
     }
-    
-    // Select accounts according to M-F system requirements
-    const selectedRelationship = selectWithRotation(relationshipAccounts, 4, 2) // 2 days minimum gap
-    const selectedDiscovery = selectWithRotation(discoveryAccounts, 4, 1) // 1 day minimum gap
-    const selectedCommunity = selectWithRotation(communityAccounts, 2, 1) // 1 day minimum gap
+
+    // Force-include Relationship accounts not engaged in 4+ days
+    const forceIncludeRelationship = relationshipAccounts.filter((account: any[]) => {
+      const lastEngaged = account[6]
+      if (!lastEngaged) return true // never engaged = force include
+      const daysSince = Math.floor((Date.now() - new Date(lastEngaged).getTime()) / (1000 * 60 * 60 * 24))
+      return daysSince >= 4
+    })
+
+    // Select Relationship: force-include overdue ones, fill remaining slots with scoring
+    let selectedRelationship: any[] = []
+    const forceCount = Math.min(forceIncludeRelationship.length, 4)
+    const forcedAccounts = forceIncludeRelationship.slice(0, forceCount)
+    selectedRelationship = [...forcedAccounts]
+
+    if (selectedRelationship.length < 4) {
+      const remainingPool = relationshipAccounts.filter(
+        (a: any[]) => !selectedRelationship.some((s: any[]) => s[0] === a[0])
+      )
+      const additional = scoreAndSelect(remainingPool, 4 - selectedRelationship.length)
+      selectedRelationship = [...selectedRelationship, ...additional]
+    }
+
+    const selectedDiscovery = scoreAndSelect(discoveryAccounts, 4)
+    const selectedCommunity = scoreAndSelect(communityAccounts, 2)
     
     return {
       relationship: selectedRelationship || [],
@@ -106,102 +139,288 @@ async function selectAccountsFromPools(accessToken: string) {
   }
 }
 
+// Comment pools by niche — each has questions, personal takes, and tag prompts
+const COMMENT_POOLS: Record<string, { questions: string[]; personalTakes: string[]; tagPrompts: string[] }> = {
+  'Sports Media': {
+    questions: [
+      "How early are you seeing kids start to really lock in on one position?",
+      "What's been the most surprising trend you've noticed in youth baseball this year?",
+      "Curious — do you think travel ball helps or hurts long-term development?",
+      "At what age do you think the mental game starts mattering more than the physical?",
+      "What would you tell a parent who's trying to figure out the right level for their kid?",
+    ],
+    personalTakes: [
+      "We've seen this firsthand — the kids who stay process-focused end up going further than the ones chasing highlights",
+      "This is the kind of content that actually helps families make better decisions for their athletes",
+      "The behind-the-scenes of youth sports is where all the real growth happens — not the showcase clips",
+      "We talk about this a lot at home — it's not about being the best at 12, it's about still loving it at 18",
+    ],
+    tagPrompts: [
+      "Every sports parent needs to see this one",
+      "This is the kind of perspective coaches should be sharing with their families",
+    ],
+  },
+  'Baseball Organization': {
+    questions: [
+      "How early are you seeing kids start to really lock in on one position?",
+      "What's been the most surprising trend you've noticed in youth baseball this year?",
+      "Curious — do you think travel ball helps or hurts long-term development?",
+      "At what age do you think the mental game starts mattering more than the physical?",
+      "What would you tell a parent who's trying to figure out the right level for their kid?",
+    ],
+    personalTakes: [
+      "We've seen this firsthand — the kids who stay process-focused end up going further than the ones chasing highlights",
+      "This is the kind of content that actually helps families make better decisions for their athletes",
+      "The behind-the-scenes of youth sports is where all the real growth happens — not the showcase clips",
+      "We talk about this a lot at home — it's not about being the best at 12, it's about still loving it at 18",
+    ],
+    tagPrompts: [
+      "Every sports parent needs to see this one",
+      "This is the kind of perspective coaches should be sharing with their families",
+    ],
+  },
+  'Youth Athlete': {
+    questions: [
+      "What does your pre-game routine look like? The mental side or just physical warmup?",
+      "How long did it take to get that consistent? The reps behind this are real",
+      "Do you work on this with a coach or is this self-taught? Either way it's impressive",
+      "What's the one thing you'd tell someone just starting to take their training seriously?",
+    ],
+    personalTakes: [
+      "You can tell this wasn't just for the camera — the focus is genuine",
+      "This is what people don't see — the quiet work that builds real confidence",
+      "The intention behind every rep here is what makes the difference",
+      "This kind of discipline at your age is rare. Keep building",
+    ],
+    tagPrompts: [
+      "Any young athletes need to see what consistent work actually looks like",
+    ],
+  },
+  'Baseball Creator': {
+    questions: [
+      "What does your pre-game routine look like? The mental side or just physical warmup?",
+      "How long did it take to get that consistent? The reps behind this are real",
+      "Do you work on this with a coach or is this self-taught? Either way it's impressive",
+      "What's the one thing you'd tell someone just starting to take their training seriously?",
+    ],
+    personalTakes: [
+      "You can tell this wasn't just for the camera — the focus is genuine",
+      "This is what people don't see — the quiet work that builds real confidence",
+      "The intention behind every rep here is what makes the difference",
+      "This kind of discipline at your age is rare. Keep building",
+    ],
+    tagPrompts: [
+      "Any young athletes need to see what consistent work actually looks like",
+    ],
+  },
+  'Sports Parent': {
+    questions: [
+      "How do you balance supporting their goals without putting too much pressure on?",
+      "What's been the hardest part of the sports parent journey for your family?",
+      "Do your kids ever push back on the schedule or are they all-in?",
+      "How did you know when it was time to take it to the next level?",
+    ],
+    personalTakes: [
+      "This is the stuff that matters more than any tournament trophy",
+      "We went through something similar — the journey teaches you as much as it teaches them",
+      "The families that get this right are the ones who keep perspective on what really matters",
+      "These moments go fast — glad you're capturing them",
+    ],
+    tagPrompts: [
+      "Every sports family needs this reminder right now",
+    ],
+  },
+  'Sports Parenting': {
+    questions: [
+      "How do you balance supporting their goals without putting too much pressure on?",
+      "What's been the hardest part of the sports parent journey for your family?",
+      "Do your kids ever push back on the schedule or are they all-in?",
+      "How did you know when it was time to take it to the next level?",
+    ],
+    personalTakes: [
+      "This is the stuff that matters more than any tournament trophy",
+      "We went through something similar — the journey teaches you as much as it teaches them",
+      "The families that get this right are the ones who keep perspective on what really matters",
+      "These moments go fast — glad you're capturing them",
+    ],
+    tagPrompts: [
+      "Every sports family needs this reminder right now",
+    ],
+  },
+  'Coaching': {
+    questions: [
+      "At what age do you start introducing this concept? Or does it depend on the kid?",
+      "How do you adjust this for different skill levels within the same group?",
+      "What's the biggest mistake you see parents making when it comes to training at home?",
+      "Do you find athletes retain this better through repetition or game situations?",
+    ],
+    personalTakes: [
+      "This is the kind of coaching that builds athletes, not just players",
+      "You can tell this comes from years of actually working with kids, not just theory",
+      "The way you break this down makes it actionable for any family watching",
+      "Fundamentals like this are what separate good development from chasing highlights",
+    ],
+    tagPrompts: [
+      "Parents looking for the right kind of coaching — this is what it looks like",
+    ],
+  },
+  'Training': {
+    questions: [
+      "At what age do you start introducing this concept? Or does it depend on the kid?",
+      "How do you adjust this for different skill levels within the same group?",
+      "What's the biggest mistake you see parents making when it comes to training at home?",
+      "Do you find athletes retain this better through repetition or game situations?",
+    ],
+    personalTakes: [
+      "This is the kind of coaching that builds athletes, not just players",
+      "You can tell this comes from years of actually working with kids, not just theory",
+      "The way you break this down makes it actionable for any family watching",
+      "Fundamentals like this are what separate good development from chasing highlights",
+    ],
+    tagPrompts: [
+      "Parents looking for the right kind of coaching — this is what it looks like",
+    ],
+  },
+  'Sports Brand': {
+    questions: [
+      "What was the design process like for this? Did you get input from athletes?",
+      "How does this hold up for kids who are training 4-5 days a week?",
+      "What age group are you seeing the most demand from?",
+    ],
+    personalTakes: [
+      "You can tell this was designed by people who actually understand what athletes need",
+      "The attention to detail here shows — form meeting function",
+      "We appreciate brands that build for performance, not just aesthetics",
+    ],
+    tagPrompts: [
+      "Any athlete families looking for quality gear should check this out",
+    ],
+  },
+  'Baseball Product': {
+    questions: [
+      "What was the design process like for this? Did you get input from athletes?",
+      "How does this hold up for kids who are training 4-5 days a week?",
+      "What age group are you seeing the most demand from?",
+    ],
+    personalTakes: [
+      "You can tell this was designed by people who actually understand what athletes need",
+      "The attention to detail here shows — form meeting function",
+      "We appreciate brands that build for performance, not just aesthetics",
+    ],
+    tagPrompts: [
+      "Any athlete families looking for quality gear should check this out",
+    ],
+  },
+  'Local League': {
+    questions: [
+      "What age groups are playing this weekend? We love seeing the local scene",
+      "How has the league been growing? Feels like more families are getting involved",
+      "Any standout moments from the season so far?",
+    ],
+    personalTakes: [
+      "This is what it's all about — community, competition, and kids having fun",
+      "Love seeing the local youth sports scene thriving",
+      "These grassroots programs are the foundation everything else is built on",
+    ],
+    tagPrompts: [
+      "Local families need to know about this program",
+    ],
+  },
+  'Community': {
+    questions: [
+      "What age groups are playing this weekend? We love seeing the local scene",
+      "How has the league been growing? Feels like more families are getting involved",
+      "Any standout moments from the season so far?",
+    ],
+    personalTakes: [
+      "This is what it's all about — community, competition, and kids having fun",
+      "Love seeing the local youth sports scene thriving",
+      "These grassroots programs are the foundation everything else is built on",
+    ],
+    tagPrompts: [
+      "Local families need to know about this program",
+    ],
+  },
+}
+
+const DEFAULT_COMMENT_POOL = {
+  questions: [
+    "What inspired this? Would love to hear the story behind it",
+    "How has the response been from your community?",
+    "What's next for you guys? Seems like momentum is building",
+  ],
+  personalTakes: [
+    "The authenticity here stands out — you can tell this is genuine",
+    "This kind of content creates real value for the people who need it",
+    "There's a depth here that resonates with families who live this daily",
+  ],
+  tagPrompts: [
+    "This deserves more attention from the community",
+  ],
+}
+
+// Category-aware backup comment pools
+const BACKUP_COMMENTS: Record<string, string[]> = {
+  Relationship: [
+    "We've been following your journey and it keeps getting better",
+    "Always appreciate the perspective you bring to this space",
+    "This is why we keep coming back to your content — it's real",
+    "The consistency you show is something our family really respects",
+  ],
+  Discovery: [
+    "Just came across this and had to stop scrolling — great stuff",
+    "This popped up in our feed and it's exactly the kind of content we look for",
+    "New to your page but this is a strong first impression",
+    "The quality here is obvious — looking forward to seeing more",
+  ],
+  Community: [
+    "Love seeing the local community rally around this",
+    "This is the kind of grassroots energy that makes youth sports special",
+    "Supporting programs like this is what it's all about",
+  ],
+}
+
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
+
 async function generateEngagementComment(accountData: any[], accountType: string) {
-  const [accountName, handle, category, niche, followerCount] = accountData
-  
-  // SteeleBroz voice guidelines from the document
-  const steeleBrozVoice = {
-    grounded: true,
-    reflective: true,
-    real: true,
-    parentAware: true,
-    emotionallyIntelligent: true,
-    disciplined: true,
-    neverLoud: true,
-    neverCorny: true,
-    neverGeneric: true,
-    neverSalesy: true,
-    neverAttentionSeeking: true
+  const [accountName, handle, , niche] = accountData
+
+  // Get the comment pool for this niche, or use default
+  const pool = COMMENT_POOLS[niche || ''] || DEFAULT_COMMENT_POOL
+
+  // Randomly select comment type: question, personal take, or tag prompt
+  const typeRoll = Math.random()
+  let primaryComment: string
+  if (typeRoll < 0.45) {
+    primaryComment = pickRandom(pool.questions)
+  } else if (typeRoll < 0.85) {
+    primaryComment = pickRandom(pool.personalTakes)
+  } else {
+    primaryComment = pickRandom(pool.tagPrompts)
   }
-  
-  // Generate comments based on niche and account type
-  let comments = []
-  
-  switch (niche) {
-    case 'Sports Media':
-    case 'Baseball Organization':
-      comments = [
-        "The way you highlight the process behind the performance matters. Families need to see what goes into building these moments.",
-        "This kind of content helps parents understand what their kids are actually working toward. Real perspective.",
-        "You captured something here that resonates with anyone who's been in these environments. Authentic approach.",
-        "The detail you show in this matters more than the highlight itself. It's the foundation that counts."
-      ]
-      break
-      
-    case 'Youth Athlete':
-    case 'Baseball Creator':
-      comments = [
-        "The discipline in this approach shows. You can tell this wasn't just for the camera.",
-        "This is the kind of moment that builds real confidence. The work when no one's watching.",
-        "You can see the intention behind every movement here. That's what separates commitment from just showing up.",
-        "The focus in this is evident. This kind of preparation is what creates lasting results."
-      ]
-      break
-      
-    case 'Sports Parent':
-    case 'Sports Parenting':
-      comments = [
-        "This captures what so many sports families actually experience. Real, not idealized.",
-        "The way you approach this resonates with parents who understand the bigger picture.",
-        "This kind of perspective helps other families navigate these moments with more clarity.",
-        "You're highlighting something important that parents need to hear. Grounded wisdom."
-      ]
-      break
-      
-    case 'Coaching':
-    case 'Training':
-      comments = [
-        "The way you break this down makes it accessible without oversimplifying. Real coaching approach.",
-        "This kind of instruction builds understanding, not just performance. That's what creates lasting growth.",
-        "The fundamentals you emphasize here are what separate good coaching from great coaching.",
-        "You can tell this comes from experience, not just theory. That depth shows."
-      ]
-      break
-      
-    case 'Sports Brand':
-    case 'Baseball Product':
-      comments = [
-        "The functionality behind this shows. You can tell this was built by people who understand the game.",
-        "This kind of attention to detail in design reflects real understanding of what athletes need.",
-        "The practical application here is clear. Built for performance, not just appearance.",
-        "You can see the thought process that went into this. Form following function."
-      ]
-      break
-      
-    default:
-      comments = [
-        "The authenticity in this approach shows. Real connection with what matters.",
-        "This kind of content creates genuine value for people who understand the process.",
-        "The way you present this feels grounded and intentional. That makes a difference.",
-        "You captured something here that resonates with families who live this daily."
-      ]
+
+  // Warm up Relationship comments — reference "we" and shared experiences
+  if (accountType === 'Relationship' && Math.random() < 0.3) {
+    const warmPrefixes = [
+      "We see this a lot — ",
+      "This resonates with us — ",
+      "Our family relates to this — ",
+    ]
+    if (typeRoll >= 0.45 && typeRoll < 0.85) {
+      // Only prepend to personal takes to keep questions clean
+      primaryComment = pickRandom(warmPrefixes) + primaryComment.charAt(0).toLowerCase() + primaryComment.slice(1)
+    }
   }
-  
-  // Add backup comments
-  const backupComments = [
-    "The intentionality behind this is clear. That kind of focus creates real results.",
-    "This reflects the kind of thinking that builds lasting success. Process-focused approach.",
-    "The depth in this perspective comes through. Experience-based wisdom.",
-    "You're highlighting what actually matters in these moments. Real insight."
-  ]
-  
-  // Return random selection with backup
-  const primaryComment = comments[Math.floor(Math.random() * comments.length)]
-  const backupComment = backupComments[Math.floor(Math.random() * backupComments.length)]
-  
+
+  // Category-aware backup
+  const backupPool = BACKUP_COMMENTS[accountType] || BACKUP_COMMENTS['Discovery']
+  const backupComment = pickRandom(backupPool)
+
   return {
     primary: primaryComment,
-    backup: backupComment
+    backup: backupComment,
   }
 }
 
@@ -392,6 +611,14 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
         `Niche: ${niche || ''}`
       ])
 
+      // Set is_story_tap based on category:
+      // Relationship = always true, Discovery = 30% chance, Community = false
+      const isStoryTap = category === 'Relationship'
+        ? true
+        : category === 'Discovery'
+          ? Math.random() < 0.3
+          : false
+
       accountRows.push({
         date,
         account_name: accountName || '',
@@ -404,7 +631,7 @@ async function createMasterEngagementSheet(date: string, taskTitle: string, sele
         backup_comment: comments.backup || null,
         why_selected: whySelected || null,
         content_summary: 'Recent posts analysis pending',
-        is_story_tap: false,
+        is_story_tap: isStoryTap,
         completed: false,
         sort_order: sortOrder++,
       })

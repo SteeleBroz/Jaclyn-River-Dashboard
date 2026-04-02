@@ -102,6 +102,11 @@ export default function Home() {
   const [thumbEquityItems, setThumbEquityItems] = useState<ThumbEquityItem[]>([])
   const [thumbEquityLoading, setThumbEquityLoading] = useState(false)
   const [expandedBackup, setExpandedBackup] = useState<Record<number, boolean>>({})
+  const [yesterdayThreads, setYesterdayThreads] = useState<ThumbEquityItem[]>([])
+  const [dismissedThreads, setDismissedThreads] = useState<Set<number>>(new Set())
+  const [yesterdayExpanded, setYesterdayExpanded] = useState(false)
+  const [weeklyPulse, setWeeklyPulse] = useState<{ total: number; completed: number; rate: number; strongestPool: string; strongestRate: number; repeatConnections: string[] } | null>(null)
+  const [weeklyPulseDismissed, setWeeklyPulseDismissed] = useState(false)
 
   // Daily Digest state
   const [dailyDigest, setDailyDigest] = useState<{
@@ -759,6 +764,70 @@ export default function Home() {
         .eq('date', today)
         .order('sort_order')
       if (data) setThumbEquityItems(data)
+
+      // Fetch yesterday's completed items for "Check Yesterday's Replies"
+      const yesterday = new Date()
+      yesterday.setDate(yesterday.getDate() - 1)
+      const yesterdayStr = yesterday.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+      const { data: yData } = await supabase
+        .from('thumb_equity_daily')
+        .select('*')
+        .eq('date', yesterdayStr)
+        .eq('completed', true)
+        .limit(4)
+      if (yData) setYesterdayThreads(yData)
+
+      // Monday Weekly Pulse — fetch last week's data if today is Monday
+      const now = new Date()
+      const nyDay = parseInt(now.toLocaleDateString('en-US', { weekday: 'narrow', timeZone: 'America/New_York' }).length > 0 ? String(new Date(now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) + 'T12:00:00').getDay()) : '0')
+      if (nyDay === 1) {
+        // Last Monday = 7 days ago, Last Friday = 3 days ago
+        const lastMonday = new Date(now)
+        lastMonday.setDate(lastMonday.getDate() - 7)
+        const lastFriday = new Date(now)
+        lastFriday.setDate(lastFriday.getDate() - 3)
+        const lastMondayStr = lastMonday.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+        const lastFridayStr = lastFriday.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+
+        const { data: weekData } = await supabase
+          .from('thumb_equity_daily')
+          .select('*')
+          .gte('date', lastMondayStr)
+          .lte('date', lastFridayStr)
+
+        if (weekData && weekData.length > 0) {
+          const total = weekData.length
+          const completed = weekData.filter(i => i.completed).length
+          const rate = Math.round((completed / total) * 100)
+
+          // Strongest pool
+          const pools = ['Relationship', 'Discovery', 'Community'] as const
+          let strongestPool = 'Relationship'
+          let strongestRate = 0
+          for (const pool of pools) {
+            const poolItems = weekData.filter(i => i.category === pool)
+            if (poolItems.length > 0) {
+              const poolRate = Math.round((poolItems.filter(i => i.completed).length / poolItems.length) * 100)
+              if (poolRate > strongestRate) {
+                strongestRate = poolRate
+                strongestPool = pool
+              }
+            }
+          }
+
+          // Repeat connections: handles engaged 2+ times
+          const handleCounts: Record<string, number> = {}
+          for (const item of weekData.filter(i => i.completed)) {
+            handleCounts[item.handle] = (handleCounts[item.handle] || 0) + 1
+          }
+          const repeatConnections = Object.entries(handleCounts)
+            .filter(([, count]) => count >= 2)
+            .map(([handle]) => handle)
+            .slice(0, 5)
+
+          setWeeklyPulse({ total, completed, rate, strongestPool, strongestRate, repeatConnections })
+        }
+      }
     } finally {
       setThumbEquityLoading(false)
     }
@@ -2977,13 +3046,32 @@ export default function Home() {
   const renderThumbEquity = () => {
     const completedCount = thumbEquityItems.filter(i => i.completed).length
     const totalCount = thumbEquityItems.length
-    const storyTaps = thumbEquityItems.filter(i => i.is_story_tap)
-    const mainAccounts = thumbEquityItems.filter(i => !i.is_story_tap)
+
+    // Upgrade 3: Sort accounts — story-tap first, then by category priority (Relationship > Discovery > Community)
+    const categoryOrder: Record<string, number> = { Relationship: 0, Discovery: 1, Community: 2 }
+    const sortedItems = [...thumbEquityItems].sort((a, b) => {
+      if (a.is_story_tap !== b.is_story_tap) return a.is_story_tap ? -1 : 1
+      return (categoryOrder[a.category] ?? 3) - (categoryOrder[b.category] ?? 3)
+    })
 
     const todayLabel = new Date().toLocaleDateString('en-US', {
       weekday: 'short', month: 'short', day: 'numeric',
       timeZone: 'America/New_York'
     })
+
+    // Weekly tips pool for Monday pulse
+    const weeklyTips = [
+      "Ask a question in every comment this week \u2014 questions get 2x more replies",
+      "Focus on Story replies this week \u2014 DM conversations are where real relationships form",
+      "Try engaging with people who commented on your Discovery accounts \u2014 find your people in the wild",
+      "This week, try leaving your comment within 30 minutes of someone posting \u2014 early comments get more visibility",
+      "Pick one Relationship account and have a genuine DM conversation this week",
+      "Save-worthy content > likes. If you post this week, make it something parents would bookmark",
+      "Check if any of yesterday\u2019s comments got replies \u2014 closing the loop is what builds loyalty",
+      "Try tagging a friend in one of your comments this week \u2014 cross-pollination grows communities",
+      "This week, focus quality over quantity. One great conversation > five generic comments",
+      "Look at which accounts engage back with you \u2014 those are your future collaborators",
+    ]
 
     const categoryBadge = (cat: string) => {
       switch (cat) {
@@ -3013,6 +3101,11 @@ export default function Home() {
           <div className="flex-1 min-w-0 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               {categoryBadge(item.category)}
+              {item.is_story_tap && (
+                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 animate-pulse">
+                  👀 Story first
+                </span>
+              )}
               <a
                 href={item.instagram_link}
                 target="_blank"
@@ -3075,16 +3168,111 @@ export default function Home() {
 
     if (thumbEquityItems.length === 0) {
       return (
-        <div className="bg-[#16213e] rounded-xl p-6 text-center space-y-2">
-          <div className="text-2xl">👍</div>
-          <div className="text-gray-300 font-medium">No engagement tasks for today</div>
-          <div className="text-gray-500 text-sm">Tasks are generated automatically M-F at 6 AM ET</div>
+        <div className="space-y-4">
+          {/* Show Yesterday's Threads even when no today tasks */}
+          {yesterdayThreads.length > 0 && (() => {
+            const visibleThreads = yesterdayThreads.filter(t => !dismissedThreads.has(t.id))
+            if (visibleThreads.length === 0) return null
+            return (
+              <div className="bg-[#1a1a2e]/50 border-l-2 border-amber-500/40 rounded-lg p-3 space-y-2">
+                <button
+                  onClick={() => setYesterdayExpanded(!yesterdayExpanded)}
+                  className="flex items-center justify-between w-full text-left"
+                >
+                  <span className="text-sm font-medium text-gray-300">
+                    💬 Check Yesterday&apos;s Replies
+                    <span className="ml-2 text-xs bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded-full">{visibleThreads.length}</span>
+                  </span>
+                  <span className="text-gray-500 text-xs">{yesterdayExpanded ? '▲' : '▼'}</span>
+                </button>
+                {yesterdayExpanded && (
+                  <div className="space-y-1.5 pt-1">
+                    {visibleThreads.map(t => (
+                      <div key={t.id} className="flex items-center gap-2 text-sm">
+                        <a href={t.instagram_link} target="_blank" rel="noopener noreferrer" className="text-teal-400 hover:underline shrink-0">{t.handle}</a>
+                        {categoryBadge(t.category)}
+                        <span className="text-gray-500 truncate flex-1">{t.primary_comment.length > 60 ? t.primary_comment.slice(0, 60) + '...' : t.primary_comment}</span>
+                        <button onClick={() => setDismissedThreads(prev => { const next = new Set(Array.from(prev)); next.add(t.id); return next })} className="text-xs text-gray-500 hover:text-green-400 shrink-0">✓ Checked</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+          <div className="bg-[#16213e] rounded-xl p-6 text-center space-y-2">
+            <div className="text-2xl">👍</div>
+            <div className="text-gray-300 font-medium">No engagement tasks for today</div>
+            <div className="text-gray-500 text-sm">Tasks are generated automatically M-F at 6 AM ET</div>
+          </div>
         </div>
       )
     }
 
     return (
       <div className="bg-[#16213e] rounded-xl p-3 md:p-4 space-y-4">
+        {/* Upgrade 2: Yesterday's Threads */}
+        {yesterdayThreads.length > 0 && (() => {
+          const visibleThreads = yesterdayThreads.filter(t => !dismissedThreads.has(t.id))
+          if (visibleThreads.length === 0) return null
+          return (
+            <div className="bg-[#1a1a2e]/50 border-l-2 border-amber-500/40 rounded-lg p-3 space-y-2">
+              <button
+                onClick={() => setYesterdayExpanded(!yesterdayExpanded)}
+                className="flex items-center justify-between w-full text-left"
+              >
+                <span className="text-sm font-medium text-gray-300">
+                  💬 Check Yesterday&apos;s Replies
+                  <span className="ml-2 text-xs bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded-full">{visibleThreads.length}</span>
+                </span>
+                <span className="text-gray-500 text-xs">{yesterdayExpanded ? '▲' : '▼'}</span>
+              </button>
+              {yesterdayExpanded && (
+                <div className="space-y-1.5 pt-1">
+                  {visibleThreads.map(t => (
+                    <div key={t.id} className="flex items-center gap-2 text-sm">
+                      <a href={t.instagram_link} target="_blank" rel="noopener noreferrer" className="text-teal-400 hover:underline shrink-0">{t.handle}</a>
+                      {categoryBadge(t.category)}
+                      <span className="text-gray-500 truncate flex-1">{t.primary_comment.length > 60 ? t.primary_comment.slice(0, 60) + '...' : t.primary_comment}</span>
+                      <button onClick={() => setDismissedThreads(prev => { const next = new Set(Array.from(prev)); next.add(t.id); return next })} className="text-xs text-gray-500 hover:text-green-400 shrink-0">✓ Checked</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })()}
+
+        {/* Upgrade 5: Monday Weekly Pulse */}
+        {weeklyPulse && !weeklyPulseDismissed && (
+          <div className="bg-gradient-to-r from-teal-900/30 to-blue-900/30 border border-teal-500/20 rounded-lg p-4 relative">
+            <button
+              onClick={() => setWeeklyPulseDismissed(true)}
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-300 text-sm"
+            >
+              ✕
+            </button>
+            <div className="space-y-2">
+              <div className="text-sm font-semibold text-gray-200">📊 Last Week&apos;s Pulse</div>
+              <div className="h-px bg-teal-500/20" />
+              <div className="text-sm text-gray-300">
+                Engaged: <span className="text-white font-medium">{weeklyPulse.completed}/{weeklyPulse.total}</span> accounts <span className="text-gray-400">({weeklyPulse.rate}%)</span>
+              </div>
+              <div className="text-sm text-gray-300">
+                Strongest: <span className="text-white font-medium">{weeklyPulse.strongestPool}</span> pool <span className="text-gray-400">({weeklyPulse.strongestRate}% completion)</span>
+              </div>
+              {weeklyPulse.repeatConnections.length > 0 && (
+                <div className="text-sm text-gray-300">
+                  Repeat connections: <span className="text-teal-400">{weeklyPulse.repeatConnections.join(', ')}</span>
+                </div>
+              )}
+              <div className="text-sm text-gray-400 italic mt-1">
+                💡 {weeklyTips[Math.floor(new Date().getTime() / (1000 * 60 * 60 * 24 * 7)) % weeklyTips.length]}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -3111,20 +3299,10 @@ export default function Home() {
           />
         </div>
 
-        {/* Account cards */}
+        {/* Account cards — story-tap accounts first with badges, sorted by category */}
         <div className="space-y-2">
-          {mainAccounts.map(renderAccountCard)}
+          {sortedItems.map(renderAccountCard)}
         </div>
-
-        {/* Stories to Tap section */}
-        {storyTaps.length > 0 && (
-          <div className="border-t border-gray-700 pt-4 mt-4">
-            <h3 className="text-sm font-medium text-gray-300 mb-2">📱 Stories to Tap</h3>
-            <div className="space-y-2">
-              {storyTaps.map(renderAccountCard)}
-            </div>
-          </div>
-        )}
       </div>
     )
   }
