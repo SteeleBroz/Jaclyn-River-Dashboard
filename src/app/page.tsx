@@ -107,6 +107,10 @@ export default function Home() {
   const [yesterdayExpanded, setYesterdayExpanded] = useState(false)
   const [weeklyPulse, setWeeklyPulse] = useState<{ total: number; completed: number; rate: number; strongestPool: string; strongestRate: number; repeatConnections: string[] } | null>(null)
   const [weeklyPulseDismissed, setWeeklyPulseDismissed] = useState(false)
+  const [captionInputs, setCaptionInputs] = useState<Record<number, string>>({})
+  const [generatingComment, setGeneratingComment] = useState<Record<number, boolean>>({})
+  const [generatedComments, setGeneratedComments] = useState<Record<number, string>>({})
+  const [captionExpanded, setCaptionExpanded] = useState<Record<number, boolean>>({})
 
   // Daily Digest state
   const [dailyDigest, setDailyDigest] = useState<{
@@ -841,6 +845,34 @@ export default function Home() {
       .from('thumb_equity_daily')
       .update({ completed, updated_at: new Date().toISOString() })
       .eq('id', id)
+  }
+
+  const generateCommentFromCaption = async (item: ThumbEquityItem) => {
+    const caption = captionInputs[item.id]
+    if (!caption?.trim()) return
+
+    setGeneratingComment(prev => ({ ...prev, [item.id]: true }))
+    try {
+      const res = await fetch('/api/tasks/instagram-engagement/generate-comment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          caption,
+          handle: item.handle,
+          niche: item.niche,
+          category: item.category,
+          accountName: item.account_name,
+        }),
+      })
+      const data = await res.json()
+      if (data.comment) {
+        setGeneratedComments(prev => ({ ...prev, [item.id]: data.comment }))
+      }
+    } catch (e) {
+      console.error('Failed to generate comment', e)
+    } finally {
+      setGeneratingComment(prev => ({ ...prev, [item.id]: false }))
+    }
   }
 
   useEffect(() => {
@@ -3151,6 +3183,49 @@ export default function Home() {
                 >
                   📋
                 </button>
+              </div>
+            )}
+            {/* Caption paste section */}
+            {!item.completed && (
+              <div className="mt-2">
+                <button
+                  onClick={() => setCaptionExpanded(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+                  className="text-xs text-gray-500 hover:text-teal-400 transition-colors"
+                >
+                  ✏️ {captionExpanded[item.id] ? 'hide caption input' : 'paste caption for a real comment'}
+                </button>
+
+                {captionExpanded[item.id] && (
+                  <div className="mt-2 space-y-2">
+                    <textarea
+                      value={captionInputs[item.id] || ''}
+                      onChange={(e) => setCaptionInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
+                      placeholder="Paste their caption here..."
+                      rows={3}
+                      className="w-full text-xs bg-[#1a1a2e] border border-gray-700 rounded-lg p-2 text-gray-300 placeholder-gray-600 resize-none focus:outline-none focus:border-teal-500/50"
+                    />
+                    <button
+                      onClick={() => generateCommentFromCaption(item)}
+                      disabled={!captionInputs[item.id]?.trim() || generatingComment[item.id]}
+                      className="text-xs px-3 py-1.5 bg-teal-600/20 text-teal-400 border border-teal-500/30 rounded-lg hover:bg-teal-600/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {generatingComment[item.id] ? 'Generating...' : '✨ Generate comment'}
+                    </button>
+
+                    {generatedComments[item.id] && (
+                      <div className="p-2 bg-teal-900/20 border border-teal-500/20 rounded-lg space-y-1">
+                        <div className="text-xs text-teal-400/70">✨ Based on their post:</div>
+                        <div className="text-sm text-gray-200">{generatedComments[item.id]}</div>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(generatedComments[item.id])}
+                          className="text-xs text-gray-400 hover:text-teal-400 transition-colors"
+                        >
+                          📋 Copy
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
