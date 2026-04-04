@@ -111,6 +111,9 @@ export default function Home() {
   const [generatingComment, setGeneratingComment] = useState<Record<number, boolean>>({})
   const [generatedComments, setGeneratedComments] = useState<Record<number, string>>({})
   const [captionExpanded, setCaptionExpanded] = useState<Record<number, boolean>>({})
+  const [selectedDate, setSelectedDate] = useState(() =>
+    new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+  )
 
   // Daily Digest state
   const [dailyDigest, setDailyDigest] = useState<{
@@ -761,18 +764,17 @@ export default function Home() {
   const fetchThumbEquity = useCallback(async () => {
     setThumbEquityLoading(true)
     try {
-      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
       const { data } = await supabase
         .from('thumb_equity_daily')
         .select('*')
-        .eq('date', today)
+        .eq('date', selectedDate)
         .order('sort_order')
       if (data) setThumbEquityItems(data)
 
-      // Fetch yesterday's completed items for "Check Yesterday's Replies"
-      const yesterday = new Date()
-      yesterday.setDate(yesterday.getDate() - 1)
-      const yesterdayStr = yesterday.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+      // Fetch yesterday's completed items relative to selectedDate
+      const prevDay = new Date(selectedDate + 'T12:00:00')
+      prevDay.setDate(prevDay.getDate() - 1)
+      const yesterdayStr = prevDay.toISOString().slice(0, 10)
       const { data: yData } = await supabase
         .from('thumb_equity_daily')
         .select('*')
@@ -835,7 +837,7 @@ export default function Home() {
     } finally {
       setThumbEquityLoading(false)
     }
-  }, [])
+  }, [selectedDate])
 
   const toggleThumbEquityItem = async (id: number, completed: boolean) => {
     setThumbEquityItems(prev => prev.map(item =>
@@ -3086,10 +3088,17 @@ export default function Home() {
       return (categoryOrder[a.category] ?? 3) - (categoryOrder[b.category] ?? 3)
     })
 
-    const todayLabel = new Date().toLocaleDateString('en-US', {
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+    const isToday = selectedDate === todayStr
+    const dateLabel = new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', {
       weekday: 'short', month: 'short', day: 'numeric',
-      timeZone: 'America/New_York'
     })
+
+    const navigateDate = (direction: 'prev' | 'next') => {
+      const d = new Date(selectedDate + 'T12:00:00')
+      d.setDate(d.getDate() + (direction === 'prev' ? -1 : 1))
+      setSelectedDate(d.toISOString().slice(0, 10))
+    }
 
     // Weekly tips pool for Monday pulse
     const weeklyTips = [
@@ -3352,7 +3361,7 @@ export default function Home() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-gray-200">
-              👍 Thumb Equity — {todayLabel}
+              👍 Thumb Equity — {dateLabel}
             </h2>
             <div className="text-sm text-gray-400 mt-0.5">
               {completedCount}/{totalCount} complete
@@ -3373,6 +3382,45 @@ export default function Home() {
             style={{ width: totalCount > 0 ? `${(completedCount / totalCount) * 100}%` : '0%' }}
           />
         </div>
+
+        {/* Date navigator */}
+        <div className="flex items-center justify-center gap-3">
+          <button
+            onClick={() => navigateDate('prev')}
+            className="text-gray-400 hover:text-teal-400 transition-colors text-lg px-1"
+          >
+            ‹
+          </button>
+          <span className="text-gray-300 text-sm font-medium">
+            {dateLabel}
+          </span>
+          {isToday ? (
+            <span className="text-xs bg-teal-500/20 text-teal-400 px-2 py-0.5 rounded-full font-medium">
+              Today
+            </span>
+          ) : (
+            <button
+              onClick={() => setSelectedDate(todayStr)}
+              className="text-xs text-gray-400 hover:text-teal-400 transition-colors px-2 py-0.5"
+            >
+              Today
+            </button>
+          )}
+          <button
+            onClick={() => navigateDate('next')}
+            disabled={isToday}
+            className={`text-lg px-1 transition-colors ${isToday ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:text-teal-400'}`}
+          >
+            ›
+          </button>
+        </div>
+
+        {/* No data message for past days */}
+        {totalCount === 0 && !thumbEquityLoading && (
+          <div className="text-center text-gray-500 text-sm py-4">
+            No engagement data for {dateLabel}
+          </div>
+        )}
 
         {/* Account cards — story-tap accounts first with badges, sorted by category */}
         <div className="space-y-2">
