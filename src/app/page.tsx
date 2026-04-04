@@ -3543,8 +3543,18 @@ export default function Home() {
                           <span
                             onClick={() => {
                               if (task.title.startsWith('Instagram Engagement')) {
+                                // Parse the date from the task title e.g. "Instagram Engagement - Apr 3"
+                                const titleMatch = task.title.match(/Instagram Engagement - (.+)/)
+                                if (titleMatch) {
+                                  const parsedDate = new Date(titleMatch[1] + ' 2026')
+                                  if (!isNaN(parsedDate.getTime())) {
+                                    const yyyy = parsedDate.getFullYear()
+                                    const mm = String(parsedDate.getMonth() + 1).padStart(2, '0')
+                                    const dd = String(parsedDate.getDate()).padStart(2, '0')
+                                    setSelectedDate(`${yyyy}-${mm}-${dd}`)
+                                  }
+                                }
                                 setActiveTab('thumb-equity')
-                                fetchThumbEquity()
                               } else {
                                 setEditingTask(task)
                               }

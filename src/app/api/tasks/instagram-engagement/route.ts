@@ -777,12 +777,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid date format. Use YYYY-MM-DD' }, { status: 400 })
     }
     
-    // Validate it's a weekday (Mon-Fri), unless force=true for catch-up sessions
+    // Weekdays only (Mon-Fri) — no weekends
     const targetDate = new Date(date + 'T12:00:00')
     const dayOfWeek = targetDate.getDay()
-    const isForced = body?.force === true
-    if ((dayOfWeek === 0 || dayOfWeek === 6) && !isForced) {
-      return NextResponse.json({ error: 'Instagram engagement tasks are only created for weekdays' }, { status: 400 })
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      return NextResponse.json({ error: 'Instagram engagement is M-F only. Enjoy your weekend.' }, { status: 400 })
     }
     
     // Calculate week_start (Monday of the target date's week)
