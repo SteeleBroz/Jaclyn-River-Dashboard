@@ -37,7 +37,7 @@ Caption: "${caption}"
 Write ONE comment that feels real and directly responds to something specific in this caption. Keep it under 2 sentences. Return only the comment, no quotes, no labels.`
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -52,7 +52,7 @@ Write ONE comment that feels real and directly responds to something specific in
             },
           ],
           generationConfig: {
-            maxOutputTokens: 150,
+            maxOutputTokens: 500,
             temperature: 0.85,
           },
         }),
