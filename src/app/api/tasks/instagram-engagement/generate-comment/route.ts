@@ -72,8 +72,20 @@ Write ONE comment that feels real and directly responds to something specific in
       return Response.json({ error: 'Failed to generate comment' }, { status: 500 })
     }
 
-    // Strip any surrounding quotes Gemini might add
-    const cleaned = comment.replace(/^["']|["']$/g, '').trim()
+    // Strip surrounding quotes, then ensure the comment ends on a complete sentence
+    let cleaned = comment.replace(/^["']|["']$/g, '').trim()
+    // If the last character isn't punctuation, trim to the last complete sentence
+    if (!/[.!?,]$/.test(cleaned)) {
+      const lastPunct = Math.max(
+        cleaned.lastIndexOf('.'),
+        cleaned.lastIndexOf('!'),
+        cleaned.lastIndexOf('?'),
+        cleaned.lastIndexOf(',')
+      )
+      if (lastPunct > cleaned.length / 2) {
+        cleaned = cleaned.substring(0, lastPunct + 1).trim()
+      }
+    }
 
     return Response.json({ comment: cleaned })
   } catch (error) {
