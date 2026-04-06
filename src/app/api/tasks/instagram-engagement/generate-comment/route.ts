@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { caption, imageBase64, imageMimeType, handle, niche, category } = body
 
+    // Require either caption text or an image
     if (!caption?.trim() && !imageBase64) {
       return Response.json({ error: 'Caption or image is required' }, { status: 400 })
     }
