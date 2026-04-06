@@ -111,6 +111,7 @@ export default function Home() {
   const [generatingComment, setGeneratingComment] = useState<Record<number, boolean>>({})
   const [generatedComments, setGeneratedComments] = useState<Record<number, string>>({})
   const [captionExpanded, setCaptionExpanded] = useState<Record<number, boolean>>({})
+  const [uploadedImages, setUploadedImages] = useState<Record<number, { base64: string; mimeType: string; preview: string }>>({})
   const [selectedDate, setSelectedDate] = useState(() =>
     new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
   )
@@ -872,6 +873,54 @@ export default function Home() {
       }
     } catch (e) {
       console.error('Failed to generate comment', e)
+    } finally {
+      setGeneratingComment(prev => ({ ...prev, [item.id]: false }))
+    }
+  }
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, itemId: number) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string
+      const [header, base64] = dataUrl.split(',')
+      const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg'
+
+      setUploadedImages(prev => ({
+        ...prev,
+        [itemId]: { base64, mimeType, preview: dataUrl }
+      }))
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
+  const generateCommentFromImage = async (item: ThumbEquityItem) => {
+    const imageData = uploadedImages[item.id]
+    if (!imageData) return
+
+    setGeneratingComment(prev => ({ ...prev, [item.id]: true }))
+    try {
+      const res = await fetch('/api/tasks/instagram-engagement/generate-comment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: imageData.base64,
+          imageMimeType: imageData.mimeType,
+          handle: item.handle,
+          niche: item.niche,
+          category: item.category,
+          accountName: item.account_name,
+        }),
+      })
+      const data = await res.json()
+      if (data.comment) {
+        setGeneratedComments(prev => ({ ...prev, [item.id]: data.comment }))
+      }
+    } catch (e) {
+      console.error('Failed to generate comment from image', e)
     } finally {
       setGeneratingComment(prev => ({ ...prev, [item.id]: false }))
     }
@@ -3194,47 +3243,102 @@ export default function Home() {
                 </button>
               </div>
             )}
-            {/* Caption paste section */}
+            {/* Screenshot upload + caption paste section */}
             {!item.completed && (
-              <div className="mt-2">
-                <button
-                  onClick={() => setCaptionExpanded(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
-                  className="text-xs text-gray-500 hover:text-teal-400 transition-colors"
-                >
-                  ✏️ {captionExpanded[item.id] ? 'hide caption input' : 'paste caption for a real comment'}
-                </button>
+              <div className="mt-2 space-y-2">
 
-                {captionExpanded[item.id] && (
-                  <div className="mt-2 space-y-2">
-                    <textarea
-                      value={captionInputs[item.id] || ''}
-                      onChange={(e) => setCaptionInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
-                      placeholder="Paste their caption here..."
-                      rows={3}
-                      className="w-full text-xs bg-[#1a1a2e] border border-gray-700 rounded-lg p-2 text-gray-300 placeholder-gray-600 resize-none focus:outline-none focus:border-teal-500/50"
-                    />
-                    <button
-                      onClick={() => generateCommentFromCaption(item)}
-                      disabled={!captionInputs[item.id]?.trim() || generatingComment[item.id]}
-                      className="text-xs px-3 py-1.5 bg-teal-600/20 text-teal-400 border border-teal-500/30 rounded-lg hover:bg-teal-600/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {generatingComment[item.id] ? 'Generating...' : '✨ Generate comment'}
-                    </button>
-
-                    {generatedComments[item.id] && (
-                      <div className="p-2 bg-teal-900/20 border border-teal-500/20 rounded-lg space-y-1">
-                        <div className="text-xs text-teal-400/70">✨ Based on their post:</div>
-                        <div className="text-sm text-gray-200">{generatedComments[item.id]}</div>
+                {/* Primary: Screenshot upload */}
+                <div>
+                  {!uploadedImages[item.id] ? (
+                    <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-500 hover:text-teal-400 transition-colors">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => handleImageUpload(e, item.id)}
+                      />
+                      📸 upload screenshot to get a real comment
+                    </label>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <img
+                          src={uploadedImages[item.id].preview}
+                          alt="Post screenshot"
+                          className="w-12 h-12 object-cover rounded-lg border border-gray-700"
+                        />
+                        <div className="flex-1 text-xs text-gray-400">Screenshot ready</div>
                         <button
-                          onClick={() => navigator.clipboard.writeText(generatedComments[item.id])}
-                          className="text-xs text-gray-400 hover:text-teal-400 transition-colors"
+                          onClick={() => setUploadedImages(prev => { const n = {...prev}; delete n[item.id]; return n })}
+                          className="text-xs text-gray-600 hover:text-red-400"
                         >
-                          📋 Copy
+                          ✕
                         </button>
                       </div>
-                    )}
+                      <button
+                        onClick={() => generateCommentFromImage(item)}
+                        disabled={generatingComment[item.id]}
+                        className="text-xs px-3 py-1.5 bg-teal-600/20 text-teal-400 border border-teal-500/30 rounded-lg hover:bg-teal-600/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors w-full"
+                      >
+                        {generatingComment[item.id] ? 'Reading post...' : '✨ Generate comment'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Generated comment result */}
+                {generatedComments[item.id] && (
+                  <div className="p-2 bg-teal-900/20 border border-teal-500/20 rounded-lg space-y-1">
+                    <div className="text-xs text-teal-400/70">✨ Based on their post:</div>
+                    <div className="text-sm text-gray-200">{generatedComments[item.id]}</div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => navigator.clipboard.writeText(generatedComments[item.id])}
+                        className="text-xs text-gray-400 hover:text-teal-400 transition-colors"
+                      >
+                        📋 Copy
+                      </button>
+                      <button
+                        onClick={() => {
+                          setGeneratedComments(prev => { const n = {...prev}; delete n[item.id]; return n })
+                          setUploadedImages(prev => { const n = {...prev}; delete n[item.id]; return n })
+                        }}
+                        className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
+                      >
+                        Try again
+                      </button>
+                    </div>
                   </div>
                 )}
+
+                {/* Secondary: Manual caption paste (collapsible fallback) */}
+                <div>
+                  <button
+                    onClick={() => setCaptionExpanded(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+                    className="text-xs text-gray-600 hover:text-gray-500 transition-colors"
+                  >
+                    {captionExpanded[item.id] ? '▲ hide' : '✏️ paste caption instead'}
+                  </button>
+                  {captionExpanded[item.id] && (
+                    <div className="mt-2 space-y-2">
+                      <textarea
+                        value={captionInputs[item.id] || ''}
+                        onChange={(e) => setCaptionInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
+                        placeholder="Paste their caption here..."
+                        rows={3}
+                        className="w-full text-xs bg-[#1a1a2e] border border-gray-700 rounded-lg p-2 text-gray-300 placeholder-gray-600 resize-none focus:outline-none focus:border-teal-500/50"
+                      />
+                      <button
+                        onClick={() => generateCommentFromCaption(item)}
+                        disabled={!captionInputs[item.id]?.trim() || generatingComment[item.id]}
+                        className="text-xs px-3 py-1.5 bg-teal-600/20 text-teal-400 border border-teal-500/30 rounded-lg hover:bg-teal-600/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {generatingComment[item.id] ? 'Generating...' : '✨ Generate comment'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
               </div>
             )}
           </div>

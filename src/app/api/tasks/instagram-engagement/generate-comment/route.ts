@@ -27,10 +27,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { caption, handle, niche, category } = body
+    const { caption, imageBase64, imageMimeType, handle, niche, category } = body
 
-    if (!caption?.trim()) {
-      return Response.json({ error: 'Caption is required' }, { status: 400 })
+    if (!caption?.trim() && !imageBase64) {
+      return Response.json({ error: 'Caption or image is required' }, { status: 400 })
     }
 
     const userPrompt = `Write a comment for this Instagram post from ${handle} (${niche}, ${category} account).
@@ -38,6 +38,28 @@ export async function POST(request: NextRequest) {
 Caption: "${caption}"
 
 Write ONE raw, real comment that reacts to something specific in this caption. Think sports parent texting another parent, not a brand commenting. Keep it to 1 sentence, 2 max. Return only the comment.`
+
+    const contents = imageBase64 ? [
+      {
+        role: 'user',
+        parts: [
+          {
+            inline_data: {
+              mime_type: imageMimeType || 'image/jpeg',
+              data: imageBase64,
+            }
+          },
+          {
+            text: `This is a screenshot of an Instagram post from ${handle} (${niche}, ${category} account). Look at everything in this image: the caption text, the visual content, the type of post (photo/reel/carousel). Write ONE comment that feels real and directly reacts to what you see. Think sports parent texting another parent, not a brand commenting. Keep it to 1 sentence, 2 max. Return only the comment.`
+          }
+        ]
+      }
+    ] : [
+      {
+        role: 'user',
+        parts: [{ text: userPrompt }],
+      }
+    ]
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
@@ -48,12 +70,7 @@ Write ONE raw, real comment that reacts to something specific in this caption. T
           system_instruction: {
             parts: [{ text: SYSTEM_PROMPT }],
           },
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: userPrompt }],
-            },
-          ],
+          contents,
           generationConfig: {
             maxOutputTokens: 500,
             temperature: 0.95,
