@@ -882,18 +882,28 @@ export default function Home() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string
-      const [header, base64] = dataUrl.split(',')
-      const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg'
-
+    // Compress image client-side before storing (keeps payload under Vercel's 4.5MB limit)
+    const img = new window.Image()
+    const objectUrl = URL.createObjectURL(file)
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      // Scale down to max 1200px wide while keeping aspect ratio
+      const maxW = 1200
+      const scale = img.width > maxW ? maxW / img.width : 1
+      canvas.width = img.width * scale
+      canvas.height = img.height * scale
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      // Export as JPEG at 80% quality — plenty for Gemini Vision
+      const compressed = canvas.toDataURL('image/jpeg', 0.8)
+      const [header, base64] = compressed.split(',')
+      URL.revokeObjectURL(objectUrl)
       setUploadedImages(prev => ({
         ...prev,
-        [itemId]: { base64, mimeType, preview: dataUrl }
+        [itemId]: { base64, mimeType: 'image/jpeg', preview: compressed }
       }))
     }
-    reader.readAsDataURL(file)
+    img.src = objectUrl
     e.target.value = ''
   }
 
@@ -902,10 +912,14 @@ export default function Home() {
     if (!imageData) return
 
     setGeneratingComment(prev => ({ ...prev, [item.id]: true }))
+    setGeneratedComments(prev => { const n = {...prev}; delete n[item.id]; return n })
     try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 25000) // 25s timeout
       const res = await fetch('/api/tasks/instagram-engagement/generate-comment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           imageBase64: imageData.base64,
           imageMimeType: imageData.mimeType,
@@ -915,11 +929,18 @@ export default function Home() {
           accountName: item.account_name,
         }),
       })
+      clearTimeout(timeout)
       const data = await res.json()
       if (data.comment) {
         setGeneratedComments(prev => ({ ...prev, [item.id]: data.comment }))
+      } else {
+        setGeneratedComments(prev => ({ ...prev, [item.id]: '⚠️ Could not generate. Try again or paste caption instead.' }))
       }
-    } catch (e) {
+    } catch (e: any) {
+      const msg = e?.name === 'AbortError'
+        ? '⚠️ Took too long. Try a smaller screenshot or paste caption instead.'
+        : '⚠️ Something went wrong. Try again or paste caption instead.'
+      setGeneratedComments(prev => ({ ...prev, [item.id]: msg }))
       console.error('Failed to generate comment from image', e)
     } finally {
       setGeneratingComment(prev => ({ ...prev, [item.id]: false }))
