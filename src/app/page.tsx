@@ -878,7 +878,7 @@ export default function Home() {
     }
   }
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, itemId: number) => {
+  const handleScreenshotUpload = (e: React.ChangeEvent<HTMLInputElement>, itemId: number) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -3255,7 +3255,7 @@ export default function Home() {
                         type="file"
                         accept="image/*"
                         className="hidden"
-                        onChange={(e) => handleImageUpload(e, item.id)}
+                        onChange={(e) => handleScreenshotUpload(e, item.id)}
                       />
                       📸 upload screenshot to get a real comment
                     </label>
