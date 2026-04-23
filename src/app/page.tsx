@@ -2470,20 +2470,20 @@ export default function Home() {
     }
 
     return (
-      <div className="bg-[#16213e] rounded-xl p-3 md:p-6 mt-3 md:mt-6">
+      <div className="bg-[#fffaf6] rounded-xl p-3 md:p-6 mt-3 md:mt-6">
         {/* Calendar Header */}
         <div className="flex items-center justify-between mb-2 md:mb-6">
           <div className="flex items-center gap-1 md:gap-4">
-            <h2 className="text-base md:text-xl font-bold text-white">Calendar</h2>
-            <div className="flex gap-1 bg-[#1a1a2e] rounded-lg p-1">
+            <h2 className="text-base md:text-xl font-bold text-[#6f5460]">Calendar</h2>
+            <div className="flex gap-1 bg-[#f3e5ea] rounded-lg p-1">
               {(['month', 'week', 'day', 'year'] as const).map(view => (
                 <button
                   key={view}
                   onClick={() => setCalendarView(view)}
                   className={`px-1 md:px-3 py-0.5 md:py-1 rounded text-xs md:text-sm font-medium transition-all ${
                     calendarView === view 
-                      ? 'bg-blue-600 text-white' 
-                      : 'text-gray-400 hover:text-white hover:bg-[#252545]'
+                      ? 'bg-blue-600 text-[#6f5460]' 
+                      : 'text-[#a68592] hover:text-[#6f5460] hover:bg-[#252545]'
                   }`}
                 >
                   {view.charAt(0).toUpperCase() + view.slice(1)}
@@ -2493,23 +2493,23 @@ export default function Home() {
           </div>
           
           <div className="flex items-center gap-1 md:gap-4">
-            <div className="text-xs md:text-lg font-medium text-white">{getCalendarTitle()}</div>
+            <div className="text-xs md:text-lg font-medium text-[#6f5460]">{getCalendarTitle()}</div>
             <div className="flex gap-1">
               <button
                 onClick={() => navigateCalendar('prev')}
-                className="p-1 md:p-2 text-gray-400 hover:text-white transition-colors"
+                className="p-1 md:p-2 text-[#a68592] hover:text-[#6f5460] transition-colors"
               >
                 ←
               </button>
               <button
                 onClick={() => setCalendarDate(new Date())}
-                className="px-2 md:px-3 py-0.5 md:py-1 text-xs md:text-sm bg-[#1a1a2e] text-gray-400 hover:text-white rounded transition-colors"
+                className="px-2 md:px-3 py-0.5 md:py-1 text-xs md:text-sm bg-[#f3e5ea] text-[#a68592] hover:text-[#6f5460] rounded transition-colors"
               >
                 Today
               </button>
               <button
                 onClick={() => navigateCalendar('next')}
-                className="p-1 md:p-2 text-gray-400 hover:text-white transition-colors"
+                className="p-1 md:p-2 text-[#a68592] hover:text-[#6f5460] transition-colors"
               >
                 →
               </button>
@@ -2524,7 +2524,7 @@ export default function Home() {
               {/* Day headers */}
               <div className="grid grid-cols-7 gap-px mb-2">
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <div key={day} className="p-2 text-center text-sm font-medium text-gray-400">
+                  <div key={day} className="p-2 text-center text-sm font-medium text-[#a68592]">
                     {day}
                   </div>
                 ))}
@@ -2538,7 +2538,7 @@ export default function Home() {
                   return (
                     <div
                       key={index}
-                      className={`min-h-[80px] md:min-h-[100px] p-1 md:p-2 bg-[#1a1a2e] border border-gray-700 cursor-pointer hover:bg-[#202040] transition-colors ${
+                      className={`min-h-[80px] md:min-h-[100px] p-1 md:p-2 bg-[#f3e5ea] border border-[#e4cfd7] cursor-pointer hover:bg-[#ecd8e1] transition-colors ${
                         !isCurrentMonth(day) ? 'opacity-50' : ''
                       } ${isToday(day) ? 'ring-2 ring-blue-500' : ''} ${
                         isPastDate ? 'bg-gray-900 opacity-60' : ''
@@ -2547,7 +2547,7 @@ export default function Home() {
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop(e, day)}
                     >
-                      <div className={`text-xs md:text-sm mb-1 ${isToday(day) ? 'font-bold text-blue-400' : isPastDate ? 'text-gray-500' : 'text-gray-300'}`}>
+                      <div className={`text-xs md:text-sm mb-1 ${isToday(day) ? 'font-bold text-blue-400' : isPastDate ? 'text-[#b497a1]' : 'text-[#8b6f79]'}`}>
                         {day.getDate()}
                       </div>
                       <div className="space-y-1">
@@ -2563,13 +2563,13 @@ export default function Home() {
                             onClick={(e) => { e.stopPropagation(); editEvent(event) }}
                             title={calendarView === 'month' ? 'Drag to reschedule or click to edit' : 'Click to edit'}
                           >
-                            <span className={isPastEvent(event) ? 'line-through text-gray-400 opacity-60' : ''}>
+                            <span className={isPastEvent(event) ? 'line-through text-[#a68592] opacity-60' : ''}>
                               {event.time && `${formatEventTime(event.time)} `}{event.title}
                             </span>
                           </div>
                         ))}
                         {dayEvents.length > 3 && (
-                          <div className="text-xs text-gray-500">+{dayEvents.length - 3} more</div>
+                          <div className="text-xs text-[#b497a1]">+{dayEvents.length - 3} more</div>
                         )}
                       </div>
                     </div>
@@ -2585,10 +2585,10 @@ export default function Home() {
                 {generateCalendarDays().map((day, index) => {
                   const dayEvents = getEventsForDate(day)
                   return (
-                    <div key={index} className={`bg-[#1a1a2e] rounded-lg p-3 ${
+                    <div key={index} className={`bg-[#f3e5ea] rounded-lg p-3 ${
                       isPastDay(day.toISOString().split('T')[0]) ? 'bg-gray-900 opacity-60' : ''
                     }`}>
-                      <div className={`text-center mb-3 ${isToday(day) ? 'font-bold text-blue-400' : isPastDay(day.toISOString().split('T')[0]) ? 'text-gray-500' : 'text-gray-300'}`}>
+                      <div className={`text-center mb-3 ${isToday(day) ? 'font-bold text-blue-400' : isPastDay(day.toISOString().split('T')[0]) ? 'text-[#b497a1]' : 'text-[#8b6f79]'}`}>
                         <div className="text-xs">{day.toLocaleDateString('en-US', { weekday: 'short' })}</div>
                         <div className="text-lg">{day.getDate()}</div>
                       </div>
@@ -2600,14 +2600,14 @@ export default function Home() {
                             style={{ backgroundColor: getFolderColor(event.folder || 'PERSONAL') + '40', color: getFolderColor(event.folder || 'PERSONAL') }}
                             onClick={() => editEvent(event)}
                           >
-                            <span className={isPastEvent(event) ? 'line-through text-gray-400 opacity-60' : ''}>
+                            <span className={isPastEvent(event) ? 'line-through text-[#a68592] opacity-60' : ''}>
                               {event.time && `${formatEventTime(event.time)} `}{event.title}
                             </span>
                           </div>
                         ))}
                         <button
                           onClick={() => addEvent(day.toISOString().split('T')[0])}
-                          className="w-full text-xs text-gray-500 hover:text-gray-300 p-1 transition-colors"
+                          className="w-full text-xs text-[#b497a1] hover:text-[#8b6f79] p-1 transition-colors"
                         >
                           + Add
                         </button>
@@ -2620,9 +2620,9 @@ export default function Home() {
           )}
 
           {calendarView === 'day' && (
-            <div className="bg-[#1a1a2e] rounded-lg p-4">
+            <div className="bg-[#f3e5ea] rounded-lg p-4">
               <div className="mb-4">
-                <div className="text-lg font-medium text-white">
+                <div className="text-lg font-medium text-[#6f5460]">
                   {currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                 </div>
               </div>
@@ -2635,14 +2635,14 @@ export default function Home() {
                     onClick={() => editEvent(event)}
                   >
                     <div>
-                      <div className={`font-medium ${isPastEvent(event) ? 'line-through text-gray-400 opacity-60' : 'text-white'}`}>
+                      <div className={`font-medium ${isPastEvent(event) ? 'line-through text-[#a68592] opacity-60' : 'text-[#6f5460]'}`}>
                         {event.title}
                       </div>
-                      {event.time && <div className="text-sm text-gray-400">{formatEventTime(event.time)}</div>}
+                      {event.time && <div className="text-sm text-[#a68592]">{formatEventTime(event.time)}</div>}
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); deleteEventById(event.id) }}
-                      className="text-gray-500 hover:text-red-400 transition-colors"
+                      className="text-[#b497a1] hover:text-red-400 transition-colors"
                     >
                       ×
                     </button>
@@ -2650,7 +2650,7 @@ export default function Home() {
                 ))}
                 <button
                   onClick={() => addEvent(currentDate.toISOString().split('T')[0])}
-                  className="w-full p-3 text-gray-500 hover:text-white bg-[#1a1a2e] hover:bg-[#252545] rounded-lg transition-colors border-2 border-dashed border-gray-600"
+                  className="w-full p-3 text-[#b497a1] hover:text-[#6f5460] bg-[#f3e5ea] hover:bg-[#252545] rounded-lg transition-colors border-2 border-dashed border-gray-600"
                 >
                   + Add Event
                 </button>
@@ -2669,16 +2669,16 @@ export default function Home() {
                 return (
                   <div 
                     key={index} 
-                    className="bg-[#1a1a2e] rounded-lg p-3 cursor-pointer hover:bg-[#202040] transition-colors"
+                    className="bg-[#f3e5ea] rounded-lg p-3 cursor-pointer hover:bg-[#ecd8e1] transition-colors"
                     onClick={() => {
                       setCalendarDate(month)
                       setCalendarView('month')
                     }}
                   >
-                    <div className="font-medium text-white mb-2">
+                    <div className="font-medium text-[#6f5460] mb-2">
                       {month.toLocaleDateString('en-US', { month: 'long' })}
                     </div>
-                    <div className="text-sm text-gray-400">
+                    <div className="text-sm text-[#a68592]">
                       {monthEvents.length} events
                     </div>
                   </div>
@@ -2692,21 +2692,21 @@ export default function Home() {
   }
 
   const renderCalendarPanel = () => (
-    <div className="w-full md:w-80 bg-[#16213e] rounded-xl p-3 md:p-4 h-full flex flex-col">
+    <div className="w-full md:w-80 bg-[#fffaf6] rounded-xl p-3 md:p-4 h-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-bold text-white">
+        <h3 className="text-lg font-bold text-[#6f5460]">
           {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
         </h3>
         <div className="flex gap-1">
           <button
             onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
-            className="p-1 text-gray-400 hover:text-white transition-colors"
+            className="p-1 text-[#a68592] hover:text-[#6f5460] transition-colors"
           >
             ‹
           </button>
           <button
             onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
-            className="p-1 text-gray-400 hover:text-white transition-colors"
+            className="p-1 text-[#a68592] hover:text-[#6f5460] transition-colors"
           >
             ›
           </button>
@@ -2715,13 +2715,13 @@ export default function Home() {
 
       <div className="flex flex-col flex-1 min-h-0">
         <div className="flex items-center justify-between mb-2">
-          <h4 className="text-sm font-medium text-gray-300">This Week's Events</h4>
-          <label className="flex items-center gap-2 text-xs text-gray-400">
+          <h4 className="text-sm font-medium text-[#8b6f79]">This Week's Events</h4>
+          <label className="flex items-center gap-2 text-xs text-[#a68592]">
             <input
               type="checkbox"
               checked={hidePastThisWeek}
               onChange={(e) => setHidePastThisWeek(e.target.checked)}
-              className="w-3 h-3 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+              className="w-3 h-3 rounded border-gray-600 bg-[#f3e5ea] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
             />
             Hide Past
           </label>
@@ -2734,14 +2734,14 @@ export default function Home() {
               return (
                 <div 
                   key={event.id} 
-                  className={`p-2 bg-[#1a1a2e] rounded-lg border-l-4 cursor-pointer hover:bg-[#202040] transition-colors ${isPast ? 'opacity-60' : ''}`}
+                  className={`p-2 bg-[#f3e5ea] rounded-lg border-l-4 cursor-pointer hover:bg-[#ecd8e1] transition-colors ${isPast ? 'opacity-60' : ''}`}
                   style={{ borderLeftColor: getFolderColor(event.folder || 'PERSONAL') }}
                   onClick={() => editEvent(event)}
                 >
-                  <div className={`font-medium text-sm ${isPast ? 'line-through text-gray-400 opacity-60' : 'text-white'}`}>
+                  <div className={`font-medium text-sm ${isPast ? 'line-through text-[#a68592] opacity-60' : 'text-[#6f5460]'}`}>
                     {event.title}
                   </div>
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-[#a68592]">
                     {formatEventDate(event.date)}
                     {event.time && ` • ${toNYTimeDisplay(event.date + 'T' + event.time + ':00')}`}
                   </div>
@@ -2749,7 +2749,7 @@ export default function Home() {
               )
             })}
           {getThisWeekEvents().filter(event => !hidePastEvents || !isPastEvent(event)).length === 0 && (
-            <div className="text-sm text-gray-500 italic">
+            <div className="text-sm text-[#b497a1] italic">
               {hidePastEvents ? 'No upcoming events this week' : 'No events this week'}
             </div>
           )}
@@ -2773,11 +2773,11 @@ export default function Home() {
             }
             setEditingEvent(newEvent)
           }}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-lg text-sm font-medium transition-colors"
+          className="w-full bg-blue-600 hover:bg-blue-700 text-[#6f5460] py-2 px-3 rounded-lg text-sm font-medium transition-colors"
         >
           Add Event
         </button>
-        <button className="w-full bg-gray-700 hover:bg-gray-600 text-white py-2 px-3 rounded-lg text-sm font-medium transition-colors">
+        <button className="w-full bg-gray-700 hover:bg-gray-600 text-[#6f5460] py-2 px-3 rounded-lg text-sm font-medium transition-colors">
           Full Calendar
         </button>
       </div>
@@ -2805,47 +2805,97 @@ export default function Home() {
     return 'weekend'
   }
   const renderSectionCard = (title: string, content: React.ReactNode) => (
-    <details className="bg-[#16213e] rounded-2xl overflow-hidden group">
+    <details className="bg-[#fffaf6] rounded-2xl overflow-hidden group">
       <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between text-sm text-gray-200 font-medium">
-        <span>{title}</span><span className="text-gray-500 group-open:rotate-180 transition-transform">⌄</span>
+        <span>{title}</span><span className="text-[#b497a1] group-open:rotate-180 transition-transform">⌄</span>
       </summary>
-      <div className="px-4 pb-4 text-sm text-gray-300">{content}</div>
+      <div className="px-4 pb-4 text-sm text-[#8b6f79]">{content}</div>
     </details>
   )
   const renderTodayView = () => {
     const dayType = getDayType()
     const todayTasks = getTodayTasks('jaclyn').filter(task => task.folder !== 'daily-digest' && task.folder !== 'send-outs')
     const todayEvents = getTodayEvents()
+    const visibleTasks = todayTasks.filter(task => !task.completed)
+    const checkedTasks = todayTasks.filter(task => task.completed)
     return (
-      <div className="space-y-4">
-        <div className="bg-[#16213e] rounded-3xl p-5 md:p-6">
+      <div className="space-y-5">
+        <div className="bg-[#fffaf6] rounded-[28px] p-5 md:p-7 border border-[#eedee4] shadow-sm">
           <div className="flex flex-col gap-2 mb-5">
-            <div className="text-xs uppercase tracking-[0.28em] text-gray-500">STEELE LIFE</div>
-            <div className="text-2xl md:text-3xl font-semibold text-white">Aligned. Abundant. Present.</div>
-            <div className="text-sm text-gray-400">{getTodayDate()}</div>
+            <div className="text-xs uppercase tracking-[0.28em] text-[#b497a1]">STEELE LIFE</div>
+            <div className="text-2xl md:text-3xl font-semibold text-[#6f5460]">Aligned. Abundant. Present.</div>
+            <div className="text-sm text-[#a68592]">{getTodayDate()}</div>
           </div>
-          <div className="bg-[#1a1a2e] rounded-2xl p-4 mb-4">
-            <div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-2">Today</div>
-            <div className="text-base md:text-lg text-white font-medium">{dayType === 'mission' ? 'Mission Day' : dayType === 'support' ? 'Optional Support Day' : dayType === 'reset' ? 'Reset Day' : 'Weekend Rhythm'}</div>
-            <div className="text-sm text-gray-400 mt-1">Today supports the life we’re building.</div>
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="bg-[#1a1a2e] rounded-2xl p-4"><div className="text-xs text-gray-500 uppercase tracking-[0.2em] mb-2">Phase</div><div className="text-white font-medium">{getCurrentPhase()}</div></div>
-            <div className="bg-[#1a1a2e] rounded-2xl p-4"><div className="text-xs text-gray-500 uppercase tracking-[0.2em] mb-2">Notifications</div><div className="text-white font-medium">15 min</div><div className="text-sm text-gray-400 mt-1">Emails + sports chats + school apps/messages</div></div>
-            <div className="bg-[#1a1a2e] rounded-2xl p-4"><div className="text-xs text-gray-500 uppercase tracking-[0.2em] mb-2">Focus</div><div className="text-white font-medium">{todayTasks[0]?.title || (dayType === 'support' ? 'If I have extra time' : dayType === 'reset' ? 'Friday Reset' : '2-hour Mission Block')}</div><div className="text-sm text-gray-400 mt-1">{dayType === 'support' ? 'Clear 1 Life Admin item · Finish a paused mission · Review calendar · Tidy Capture' : dayType === 'reset' ? 'Close week, choose next 2 missions, prep Monday' : 'Do the next thing, not everything'}</div></div>
-          </div>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="space-y-3">
-            {renderSectionCard('More for Today', <div className="space-y-3"><div><div className="text-white font-medium">Presence</div><div className="text-gray-400">Phone at door by 3:30 · When today is done, be here now</div></div><div><div className="text-white font-medium">Workout</div><div className="text-gray-400">Strength / Stretching · Walk or Pickleball</div></div><div><div className="text-white font-medium">Ground</div><div className="text-gray-400">3 slow breaths · Relax shoulders · Do the next thing, not everything</div></div><div><button onClick={() => setActiveTab('thumb-equity')} className="text-teal-400 hover:text-teal-300 transition-colors">Open today’s Thumb Equity tab →</button></div></div>)}
-            {renderSectionCard('This Week Snapshot', <div className="space-y-2"><div className="text-white">2 business missions max · 1 optional bonus mission · 1 weekly admin focus</div><div className="text-gray-400">Planning support without making This Week the landing page.</div></div>)}
-          </div>
-          <div className="bg-[#16213e] rounded-3xl p-5">
-            <div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">Today’s Events</div>
-            <div className="space-y-3">
-              {todayEvents.length ? todayEvents.map(event => <div key={event.id} className="bg-[#1a1a2e] rounded-2xl p-3 border-l-4" style={{ borderLeftColor: getFolderColor(event.folder || 'PERSONAL') }}><div className="text-white font-medium">{event.title}</div><div className="text-sm text-gray-400">{formatEventDate(event.date)}{event.time ? ` • ${toNYTimeDisplay(event.date + 'T' + event.time + ':00')}` : ''}</div></div>) : <div className="text-sm text-gray-500 italic">No time-specific events today.</div>}
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="bg-[#f8edf1] rounded-2xl p-4">
+              <div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-2">Today</div>
+              <div className="text-base md:text-lg text-[#6f5460] font-medium">{dayType === 'mission' ? 'Mission Day' : dayType === 'support' ? 'Optional Support Day' : dayType === 'reset' ? 'Reset Day' : 'Weekend Rhythm'}</div>
+              <div className="text-sm text-[#a68592] mt-1">Today supports the life we’re building.</div>
+            </div>
+            <div className="bg-[#f7f1e8] rounded-2xl p-4">
+              <div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-2">Phase</div>
+              <div className="text-[#6f5460] font-medium">{getCurrentPhase()}</div>
+            </div>
+            <div className="bg-[#eef6ee] rounded-2xl p-4">
+              <div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-2">Notifications</div>
+              <div className="text-[#6f5460] font-medium">15 min</div>
+              <div className="text-sm text-[#a68592] mt-1">Emails + sports chats + school apps/messages</div>
+            </div>
+            <div className="bg-[#f3eefb] rounded-2xl p-4">
+              <div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-2">Focus</div>
+              <div className="text-[#6f5460] font-medium">{todayTasks[0]?.title || (dayType === 'support' ? 'If I have extra time' : dayType === 'reset' ? 'Friday Reset' : '2-hour Mission Block')}</div>
+              <div className="text-sm text-[#a68592] mt-1">{dayType === 'support' ? 'Suggestions only, not obligations.' : dayType === 'reset' ? 'Close week, choose next 2 missions, prep Monday.' : 'Do the next thing, not everything.'}</div>
             </div>
           </div>
+
+          <div className="mt-5 pt-5 border-t border-[#eedee4]">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-1">Today checklist</div>
+                <div className="text-sm text-[#a68592]">Everything for today stays visible first.</div>
+              </div>
+              <button onClick={() => toggleHideCompleted('jaclyn')} className="text-sm text-[#a68592] hover:text-[#6f5460] transition-colors">
+                {hideCompleted['jaclyn'] ? 'Show checked' : 'Hide checked'}
+              </button>
+            </div>
+            <div className="space-y-2">
+              {(hideCompleted['jaclyn'] ? visibleTasks : todayTasks).map(task => (
+                <div key={task.id} className="bg-[#f8edf1] rounded-2xl px-4 py-3 flex items-start gap-3 border border-[#eedee4]">
+                  <input
+                    type="checkbox"
+                    checked={task.completed}
+                    onChange={() => toggleComplete(task)}
+                    className="w-4 h-4 mt-1 rounded border-[#d8bcc7] bg-white text-[#c08497] focus:ring-[#c08497] focus:ring-offset-0"
+                  />
+                  <button onClick={() => setEditingTask(task)} className="flex-1 text-left">
+                    <div className={`text-sm font-medium ${task.completed ? 'line-through text-[#b497a1]' : 'text-[#6f5460]'}`}>{task.title}</div>
+                    {task.notes && <div className="text-xs text-[#a68592] mt-1 break-all">{task.notes}</div>}
+                  </button>
+                  <button onClick={() => deleteTask(task.id)} className="text-[#b497a1] hover:text-[#9f6b7c] transition-colors text-sm">Delete</button>
+                </div>
+              ))}
+              {!todayTasks.length && <div className="text-sm text-[#b497a1] italic">No task blocks scheduled for today.</div>}
+            </div>
+            {!hideCompleted['jaclyn'] && checkedTasks.length > 0 && <div className="text-xs text-[#b497a1] mt-3">Completed today: {checkedTasks.length}</div>}
+          </div>
+
+          <div className="mt-5 pt-5 border-t border-[#eedee4]">
+            <div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-3">Today’s Events</div>
+            <div className="space-y-3">
+              {todayEvents.length ? todayEvents.map(event => <div key={event.id} className="bg-[#fff7ef] rounded-2xl p-4 border-l-4" style={{ borderLeftColor: getFolderColor(event.folder || 'PERSONAL') }}><div className="text-[#6f5460] font-medium">{event.title}</div><div className="text-sm text-[#a68592]">{formatEventDate(event.date)}{event.time ? ` • ${toNYTimeDisplay(event.date + 'T' + event.time + ':00')}` : ''}</div></div>) : <div className="text-sm text-[#b497a1] italic">No time-specific events today.</div>}
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-2 border-t border-[#ead8df]"></div>
+
+        <div className="space-y-3">
+          {renderSectionCard('More for Today', <div className="space-y-3"><div><div className="text-[#6f5460] font-medium">Presence</div><div className="text-[#a68592]">Phone at door by 3:30 · When today is done, be here now</div></div><div><div className="text-[#6f5460] font-medium">Workout</div><div className="text-[#a68592]">Strength / Stretching · Walk or Pickleball</div></div><div><div className="text-[#6f5460] font-medium">Ground</div><div className="text-[#a68592]">3 slow breaths · Relax shoulders · Do the next thing, not everything</div></div><div><button onClick={() => setActiveTab('thumb-equity')} className="text-[#9f6b7c] hover:text-[#7e5361] transition-colors">Open today’s Thumb Equity tab →</button></div></div>)}
+          {renderSectionCard('This Week', <div className="space-y-2"><div className="text-[#6f5460]">2 business missions max · 1 optional bonus mission · 1 weekly admin focus</div><div className="text-[#a68592]">Planning support without making This Week the landing page.</div></div>)}
+          {renderSectionCard('SteeleBroz Road Map', <div className="space-y-2"><div className="text-[#6f5460]">Current phase and milestone planning live here.</div><button onClick={() => setActiveTab('roadmap')} className="text-[#9f6b7c] hover:text-[#7e5361] transition-colors">Open Road Map →</button></div>)}
+          {renderSectionCard('Life Admin', <div className="space-y-2"><div className="text-[#6f5460]">Capture, this week, waiting/scheduled, done.</div><button onClick={() => setActiveTab('life-admin')} className="text-[#9f6b7c] hover:text-[#7e5361] transition-colors">Open Life Admin →</button></div>)}
+          {renderSectionCard('Parking Lot', <div className="space-y-2"><div className="text-[#6f5460]">Home, Personal, Kids, SteeleBroz buckets.</div><button onClick={() => setActiveTab('parking-lot')} className="text-[#9f6b7c] hover:text-[#7e5361] transition-colors">Open Parking Lot →</button></div>)}
         </div>
       </div>
     )
@@ -2856,24 +2906,24 @@ export default function Home() {
     const weeklyAdminFocus = jaclynTasks.find(task => task.day_of_week === 'overflow')
     return (
       <div className="space-y-4">
-        <div className="bg-[#16213e] rounded-3xl p-5 md:p-6"><div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4"><div><div className="text-xs uppercase tracking-[0.28em] text-gray-500 mb-2">This Week</div><h2 className="text-2xl font-semibold text-white">Current execution context</h2><p className="text-sm text-gray-400 mt-1">Road Map strip, weekly missions, and weekly admin focus.</p></div><div className="text-sm text-gray-400">{weekRange}</div></div></div>
-        <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]"><div className="bg-[#16213e] rounded-3xl p-5"><div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">Road Map strip</div><div className="text-white font-medium mb-1">{getCurrentPhase()}</div><div className="text-sm text-gray-400 mb-4">Active milestone and phase context for the current week.</div><div className="w-full h-2 rounded-full bg-[#1a1a2e] overflow-hidden"><div className="h-full bg-teal-500 w-1/3"></div></div></div><div className="bg-[#16213e] rounded-3xl p-5"><div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">Weekly limits</div><div className="space-y-2 text-sm text-gray-300"><div>2 business missions max</div><div>1 optional bonus mission</div><div>1 weekly admin focus</div></div></div></div>
-        <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]"><div className="bg-[#16213e] rounded-3xl p-5"><div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-white">Weekly Missions</h3><span className="text-xs text-gray-500">Top 2 + bonus</span></div><div className="space-y-3">{missionCandidates.slice(0, 3).map((task, idx) => <button key={task.id} onClick={() => setEditingTask(task)} className="w-full text-left bg-[#1a1a2e] rounded-2xl p-4 hover:bg-[#202040] transition-colors"><div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-2">{idx === 2 ? 'Bonus Mission' : `Mission ${idx + 1}`}</div><div className="text-white font-medium">{task.title}</div><div className="text-sm text-gray-400 mt-1">{task.day_of_week ? DAY_LABELS[task.day_of_week] : 'This week'} · {task.priority || 'normal priority'}</div></button>)}{!missionCandidates.length && <div className="text-sm text-gray-500 italic">No weekly missions selected yet.</div>}</div></div><div className="bg-[#16213e] rounded-3xl p-5"><div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-white">Weekly Admin Focus</h3><span className="text-xs text-gray-500">1 focus</span></div>{weeklyAdminFocus ? <button onClick={() => setEditingTask(weeklyAdminFocus)} className="w-full text-left bg-[#1a1a2e] rounded-2xl p-4 hover:bg-[#202040] transition-colors"><div className="text-white font-medium">{weeklyAdminFocus.title}</div><div className="text-sm text-gray-400 mt-1">Overflow / weekly admin area</div></button> : <div className="text-sm text-gray-500 italic">No weekly admin focus selected yet.</div>}</div></div>
+        <div className="bg-[#fffaf6] rounded-3xl p-5 md:p-6"><div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4"><div><div className="text-xs uppercase tracking-[0.28em] text-[#b497a1] mb-2">This Week</div><h2 className="text-2xl font-semibold text-[#6f5460]">Current execution context</h2><p className="text-sm text-[#a68592] mt-1">Road Map strip, weekly missions, and weekly admin focus.</p></div><div className="text-sm text-[#a68592]">{weekRange}</div></div></div>
+        <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]"><div className="bg-[#fffaf6] rounded-3xl p-5"><div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-3">Road Map strip</div><div className="text-[#6f5460] font-medium mb-1">{getCurrentPhase()}</div><div className="text-sm text-[#a68592] mb-4">Active milestone and phase context for the current week.</div><div className="w-full h-2 rounded-full bg-[#f3e5ea] overflow-hidden"><div className="h-full bg-teal-500 w-1/3"></div></div></div><div className="bg-[#fffaf6] rounded-3xl p-5"><div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-3">Weekly limits</div><div className="space-y-2 text-sm text-[#8b6f79]"><div>2 business missions max</div><div>1 optional bonus mission</div><div>1 weekly admin focus</div></div></div></div>
+        <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]"><div className="bg-[#fffaf6] rounded-3xl p-5"><div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-[#6f5460]">Weekly Missions</h3><span className="text-xs text-[#b497a1]">Top 2 + bonus</span></div><div className="space-y-3">{missionCandidates.slice(0, 3).map((task, idx) => <button key={task.id} onClick={() => setEditingTask(task)} className="w-full text-left bg-[#f3e5ea] rounded-2xl p-4 hover:bg-[#ecd8e1] transition-colors"><div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-2">{idx === 2 ? 'Bonus Mission' : `Mission ${idx + 1}`}</div><div className="text-[#6f5460] font-medium">{task.title}</div><div className="text-sm text-[#a68592] mt-1">{task.day_of_week ? DAY_LABELS[task.day_of_week] : 'This week'} · {task.priority || 'normal priority'}</div></button>)}{!missionCandidates.length && <div className="text-sm text-[#b497a1] italic">No weekly missions selected yet.</div>}</div></div><div className="bg-[#fffaf6] rounded-3xl p-5"><div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-[#6f5460]">Weekly Admin Focus</h3><span className="text-xs text-[#b497a1]">1 focus</span></div>{weeklyAdminFocus ? <button onClick={() => setEditingTask(weeklyAdminFocus)} className="w-full text-left bg-[#f3e5ea] rounded-2xl p-4 hover:bg-[#ecd8e1] transition-colors"><div className="text-[#6f5460] font-medium">{weeklyAdminFocus.title}</div><div className="text-sm text-[#a68592] mt-1">Overflow / weekly admin area</div></button> : <div className="text-sm text-[#b497a1] italic">No weekly admin focus selected yet.</div>}</div></div>
       </div>
     )
   }
   const renderRoadMapView = () => (
     <div className="space-y-4">
-      <div className="bg-[#16213e] rounded-3xl p-5 md:p-6"><div className="text-xs uppercase tracking-[0.28em] text-gray-500 mb-2">SteeleBroz Road Map</div><h2 className="text-2xl font-semibold text-white">Strategic view</h2><p className="text-sm text-gray-400 mt-1">Editable strategic direction; current week should only change deliberately.</p></div>
-      <div className="grid gap-4">{ROADMAP_PHASES.map((phase, index) => <div key={phase.name} className="bg-[#16213e] rounded-3xl p-5"><div className="flex items-center gap-3 mb-3"><div className="w-8 h-8 rounded-full bg-teal-500/20 text-teal-300 flex items-center justify-center text-sm font-semibold">{index + 1}</div><h3 className="text-lg font-semibold text-white">{phase.name}</h3></div><p className="text-sm text-gray-300 mb-4">{phase.goal}</p><div className="grid gap-2 md:grid-cols-2">{phase.milestones.map(item => <div key={item} className="bg-[#1a1a2e] rounded-2xl px-4 py-3 text-sm text-gray-300">{item}</div>)}</div></div>)}</div>
+      <div className="bg-[#fffaf6] rounded-3xl p-5 md:p-6"><div className="text-xs uppercase tracking-[0.28em] text-[#b497a1] mb-2">SteeleBroz Road Map</div><h2 className="text-2xl font-semibold text-[#6f5460]">Strategic view</h2><p className="text-sm text-[#a68592] mt-1">Editable strategic direction; current week should only change deliberately.</p></div>
+      <div className="grid gap-4">{ROADMAP_PHASES.map((phase, index) => <div key={phase.name} className="bg-[#fffaf6] rounded-3xl p-5"><div className="flex items-center gap-3 mb-3"><div className="w-8 h-8 rounded-full bg-teal-500/20 text-teal-300 flex items-center justify-center text-sm font-semibold">{index + 1}</div><h3 className="text-lg font-semibold text-[#6f5460]">{phase.name}</h3></div><p className="text-sm text-[#8b6f79] mb-4">{phase.goal}</p><div className="grid gap-2 md:grid-cols-2">{phase.milestones.map(item => <div key={item} className="bg-[#f3e5ea] rounded-2xl px-4 py-3 text-sm text-[#8b6f79]">{item}</div>)}</div></div>)}</div>
     </div>
   )
   const renderLifeAdminView = () => {
     const buckets = [{ title: 'Capture', store: 'random' as const, hint: 'Quick offload before deciding.' }, { title: 'This Week', store: 'publix' as const, hint: 'Current life-admin focus.' }, { title: 'Waiting / Scheduled', store: 'costco' as const, hint: 'Handled later or already planned.' }]
     return (
       <div className="space-y-4">
-        <div className="bg-[#16213e] rounded-3xl p-5 md:p-6"><div className="text-xs uppercase tracking-[0.28em] text-gray-500 mb-2">Life Admin</div><h2 className="text-2xl font-semibold text-white">Concrete life logistics</h2><p className="text-sm text-gray-400 mt-1">Capture, this week, waiting/scheduled, and done — separate from daily notifications.</p></div>
-        <div className="grid gap-4 lg:grid-cols-3">{buckets.map(bucket => <div key={bucket.title} className="bg-[#16213e] rounded-3xl p-5"><div className="flex items-center justify-between mb-3"><h3 className="text-lg font-semibold text-white">{bucket.title}</h3><span className="text-xs text-gray-500">{getGroceryItemsByStore(bucket.store).length}</span></div><div className="text-sm text-gray-400 mb-4">{bucket.hint}</div><div className="space-y-2">{getGroceryItemsByStore(bucket.store).slice(0, 8).map(item => <div key={item.id} className="bg-[#1a1a2e] rounded-2xl px-4 py-3 flex items-center gap-3"><input type="checkbox" checked={item.checked} onChange={() => toggleGroceryItemChecked(item.id, !item.checked)} className="w-4 h-4 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0" /><span className={`text-sm ${item.checked ? 'line-through text-gray-500' : 'text-gray-200'}`}>{item.text}</span></div>)}{!getGroceryItemsByStore(bucket.store).length && <div className="text-sm text-gray-500 italic">No items here yet.</div>}</div></div>)}</div>
+        <div className="bg-[#fffaf6] rounded-3xl p-5 md:p-6"><div className="text-xs uppercase tracking-[0.28em] text-[#b497a1] mb-2">Life Admin</div><h2 className="text-2xl font-semibold text-[#6f5460]">Concrete life logistics</h2><p className="text-sm text-[#a68592] mt-1">Capture, this week, waiting/scheduled, and done — separate from daily notifications.</p></div>
+        <div className="grid gap-4 lg:grid-cols-3">{buckets.map(bucket => <div key={bucket.title} className="bg-[#fffaf6] rounded-3xl p-5"><div className="flex items-center justify-between mb-3"><h3 className="text-lg font-semibold text-[#6f5460]">{bucket.title}</h3><span className="text-xs text-[#b497a1]">{getGroceryItemsByStore(bucket.store).length}</span></div><div className="text-sm text-[#a68592] mb-4">{bucket.hint}</div><div className="space-y-2">{getGroceryItemsByStore(bucket.store).slice(0, 8).map(item => <div key={item.id} className="bg-[#f3e5ea] rounded-2xl px-4 py-3 flex items-center gap-3"><input type="checkbox" checked={item.checked} onChange={() => toggleGroceryItemChecked(item.id, !item.checked)} className="w-4 h-4 rounded border-gray-600 bg-[#f3e5ea] text-blue-500 focus:ring-blue-500 focus:ring-offset-0" /><span className={`text-sm ${item.checked ? 'line-through text-[#b497a1]' : 'text-gray-200'}`}>{item.text}</span></div>)}{!getGroceryItemsByStore(bucket.store).length && <div className="text-sm text-[#b497a1] italic">No items here yet.</div>}</div></div>)}</div>
       </div>
     )
   }
@@ -2882,14 +2932,14 @@ export default function Home() {
     const ideasByKey = (listKey: IdeaItem['list_key']) => ideaItems.filter(item => item.list_key === listKey && !item.completed).sort((a, b) => a.sort_order - b.sort_order)
     return (
       <div className="space-y-4">
-        <div className="bg-[#16213e] rounded-3xl p-5 md:p-6"><div className="text-xs uppercase tracking-[0.28em] text-gray-500 mb-2">Parking Lot</div><h2 className="text-2xl font-semibold text-white">Hold ideas without hijacking execution</h2><p className="text-sm text-gray-400 mt-1">Area-based buckets for Home, Personal, Kids, and SteeleBroz.</p></div>
-        <div className="grid gap-4 lg:grid-cols-2">{buckets.map(bucket => <div key={bucket.title} className="bg-[#16213e] rounded-3xl p-5"><div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-white">{bucket.title}</h3><span className="text-xs text-gray-500">{ideasByKey(bucket.key).length}</span></div><div className="space-y-2">{ideasByKey(bucket.key).slice(0, 8).map(item => <div key={item.id} className="bg-[#1a1a2e] rounded-2xl px-4 py-3"><div className="text-sm text-white">{item.text}</div><div className="text-xs text-gray-500 mt-1">Capture now, sort later.</div></div>)}{!ideasByKey(bucket.key).length && <div className="text-sm text-gray-500 italic">No parked items yet.</div>}</div></div>)}</div>
+        <div className="bg-[#fffaf6] rounded-3xl p-5 md:p-6"><div className="text-xs uppercase tracking-[0.28em] text-[#b497a1] mb-2">Parking Lot</div><h2 className="text-2xl font-semibold text-[#6f5460]">Hold ideas without hijacking execution</h2><p className="text-sm text-[#a68592] mt-1">Area-based buckets for Home, Personal, Kids, and SteeleBroz.</p></div>
+        <div className="grid gap-4 lg:grid-cols-2">{buckets.map(bucket => <div key={bucket.title} className="bg-[#fffaf6] rounded-3xl p-5"><div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-[#6f5460]">{bucket.title}</h3><span className="text-xs text-[#b497a1]">{ideasByKey(bucket.key).length}</span></div><div className="space-y-2">{ideasByKey(bucket.key).slice(0, 8).map(item => <div key={item.id} className="bg-[#f3e5ea] rounded-2xl px-4 py-3"><div className="text-sm text-[#6f5460]">{item.text}</div><div className="text-xs text-[#b497a1] mt-1">Capture now, sort later.</div></div>)}{!ideasByKey(bucket.key).length && <div className="text-sm text-[#b497a1] italic">No parked items yet.</div>}</div></div>)}</div>
       </div>
     )
   }
   const renderCalendarView = () => (
     <div className="space-y-4">
-      <div className="bg-[#16213e] rounded-3xl p-5 md:p-6"><div className="text-xs uppercase tracking-[0.28em] text-gray-500 mb-2">Calendar</div><h2 className="text-2xl font-semibold text-white">Date-and-events truth source</h2><p className="text-sm text-gray-400 mt-1">Appointments, field trips, practices, launches, send dates, and scheduled commitments.</p></div>
+      <div className="bg-[#fffaf6] rounded-3xl p-5 md:p-6"><div className="text-xs uppercase tracking-[0.28em] text-[#b497a1] mb-2">Calendar</div><h2 className="text-2xl font-semibold text-[#6f5460]">Date-and-events truth source</h2><p className="text-sm text-[#a68592] mt-1">Appointments, field trips, practices, launches, send dates, and scheduled commitments.</p></div>
       {renderFullCalendar()}
     </div>
   )
@@ -2899,12 +2949,12 @@ export default function Home() {
     const tabKey = type === 'daily-digest' ? 'digest' : 'sendouts'
     
     return (
-      <div className="bg-[#16213e] rounded-xl p-3 md:p-4">
+      <div className="bg-[#fffaf6] rounded-xl p-3 md:p-4">
         <div className="flex items-center justify-between mb-3 md:mb-4">
-          <h2 className="text-base md:text-lg font-bold text-white">{title}</h2>
+          <h2 className="text-base md:text-lg font-bold text-[#6f5460]">{title}</h2>
           <button
             onClick={() => setHideCompleted(prev => ({ ...prev, [tabKey]: !prev[tabKey] }))}
-            className="text-xs text-gray-400 hover:text-white transition-colors"
+            className="text-xs text-[#a68592] hover:text-[#6f5460] transition-colors"
           >
             {hideCompleted[tabKey] ? 'Show' : 'Hide'} completed
           </button>
@@ -2912,17 +2962,17 @@ export default function Home() {
 
         <div className="space-y-2">
           {items.map(item => (
-            <div key={item.id} className="flex items-center gap-3 p-2 hover:bg-[#1a1a2e] rounded-lg transition-colors group">
+            <div key={item.id} className="flex items-center gap-3 p-2 hover:bg-[#f3e5ea] rounded-lg transition-colors group">
               <input
                 type="checkbox"
                 checked={item.completed}
                 onChange={() => toggleComplete(item)}
-                className="w-4 h-4 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                className="w-4 h-4 rounded border-gray-600 bg-[#f3e5ea] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
               />
               <span
                 onClick={() => setEditingTask(item)}
                 className={`text-sm cursor-pointer flex-1 ${
-                  item.completed ? 'line-through text-gray-500' : 'text-gray-200'
+                  item.completed ? 'line-through text-[#b497a1]' : 'text-gray-200'
                 }`}
               >
                 {item.title}
@@ -2932,7 +2982,7 @@ export default function Home() {
           
           <button
             onClick={() => addChecklistItem(type)}
-            className="w-full text-left text-xs text-gray-500 hover:text-gray-300 px-2 py-2 transition-colors"
+            className="w-full text-left text-xs text-[#b497a1] hover:text-[#8b6f79] px-2 py-2 transition-colors"
           >
             + Add item...
           </button>
@@ -2943,7 +2993,7 @@ export default function Home() {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="text-xl text-gray-400 animate-pulse">Loading...</div>
+      <div className="text-xl text-[#a68592] animate-pulse">Loading...</div>
     </div>
   )
 
@@ -2951,12 +3001,12 @@ export default function Home() {
     const notes = getWeeklyNotes(author)
     
     return (
-      <div className="bg-[#1a1a2e] rounded-lg p-3 mb-4">
+      <div className="bg-[#f3e5ea] rounded-lg p-3 mb-4">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium text-gray-300">Weekly Notes</h3>
+          <h3 className="text-sm font-medium text-[#8b6f79]">Weekly Notes</h3>
           <button
             onClick={() => addWeeklyNote(author)}
-            className="text-xs text-gray-400 hover:text-white transition-colors"
+            className="text-xs text-[#a68592] hover:text-[#6f5460] transition-colors"
           >
             + Add note
           </button>
@@ -2964,12 +3014,12 @@ export default function Home() {
         
         <div className="space-y-2 max-h-32 overflow-y-auto">
           {notes.map(note => (
-            <div key={note.id} className="flex items-start gap-2 p-2 bg-[#16213e] rounded text-xs">
+            <div key={note.id} className="flex items-start gap-2 p-2 bg-[#fffaf6] rounded text-xs">
               <input
                 type="checkbox"
                 checked={note.seen}
                 onChange={() => markNoteSeen(note)}
-                className="w-3 h-3 mt-0.5 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0 shrink-0"
+                className="w-3 h-3 mt-0.5 rounded border-gray-600 bg-[#f3e5ea] text-blue-500 focus:ring-blue-500 focus:ring-offset-0 shrink-0"
               />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
@@ -2978,10 +3028,10 @@ export default function Home() {
                   }`}>
                     {note.author}
                   </span>
-                  <span className="text-gray-500 text-xs">{formatNoteTime(note.created_at)}</span>
+                  <span className="text-[#b497a1] text-xs">{formatNoteTime(note.created_at)}</span>
                   <button
                     onClick={() => deleteWeeklyNote(note.id)}
-                    className="text-gray-500 hover:text-red-400 transition-colors ml-auto"
+                    className="text-[#b497a1] hover:text-red-400 transition-colors ml-auto"
                     title="Delete note"
                   >
                     ×
@@ -2994,7 +3044,7 @@ export default function Home() {
             </div>
           ))}
           {notes.length === 0 && (
-            <div className="text-xs text-gray-500 italic py-2">No notes this week</div>
+            <div className="text-xs text-[#b497a1] italic py-2">No notes this week</div>
           )}
         </div>
       </div>
@@ -3022,20 +3072,20 @@ export default function Home() {
     return (
       <div className="space-y-3 md:space-y-6">
         {/* Today's RSS Digest */}
-        <div className="bg-[#16213e] rounded-xl p-3 md:p-4">
+        <div className="bg-[#fffaf6] rounded-xl p-3 md:p-4">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-white">Daily Digest</h2>
+            <h2 className="text-lg font-bold text-[#6f5460]">Daily Digest</h2>
             <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 text-xs text-gray-400">
+              <label className="flex items-center gap-2 text-xs text-[#a68592]">
                 <input
                   type="checkbox"
                   checked={hideRead}
                   onChange={(e) => setHideRead(e.target.checked)}
-                  className="w-3 h-3 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                  className="w-3 h-3 rounded border-gray-600 bg-[#f3e5ea] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
                 />
                 Hide Read
               </label>
-              <div className="text-xs text-gray-400">
+              <div className="text-xs text-[#a68592]">
                 {dailyDigest ? formatDateNY(dailyDigest.date) : 'Loading...'}
               </div>
             </div>
@@ -3047,16 +3097,16 @@ export default function Home() {
                 const text = dailyDigest[key as keyof typeof dailyDigest] as string
                 const isRead = dailyDigest[readKey as keyof typeof dailyDigest] as boolean
                 return (
-                  <div key={key} className="flex items-start gap-3 p-3 bg-[#1a1a2e] rounded-lg">
+                  <div key={key} className="flex items-start gap-3 p-3 bg-[#f3e5ea] rounded-lg">
                     <input
                       type="checkbox"
                       checked={isRead}
                       onChange={(e) => markDigestItemRead(category, e.target.checked)}
-                      className="w-4 h-4 mt-1 rounded border-gray-600 bg-[#16213e] text-green-500 focus:ring-green-500 focus:ring-offset-0 shrink-0"
+                      className="w-4 h-4 mt-1 rounded border-gray-600 bg-[#fffaf6] text-green-500 focus:ring-green-500 focus:ring-offset-0 shrink-0"
                       title="Mark as read"
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs text-gray-400 mb-1 font-medium">{label}</div>
+                      <div className="text-xs text-[#a68592] mb-1 font-medium">{label}</div>
                       <div className="text-gray-200 text-sm leading-relaxed">{text}</div>
                     </div>
                     <button
@@ -3070,14 +3120,14 @@ export default function Home() {
                 )
               })}
               {visibleCategories.length === 0 && hideRead && (
-                <div className="text-center text-gray-400 py-4">
+                <div className="text-center text-[#a68592] py-4">
                   <div className="text-sm">All items marked as read</div>
                   <div className="text-xs mt-1">Uncheck "Hide Read" to see them</div>
                 </div>
               )}
             </div>
           ) : (
-            <div className="text-center text-gray-400 py-8">
+            <div className="text-center text-[#a68592] py-8">
               <div className="text-sm">Digest generates daily at 5:00 AM ET</div>
               <div className="text-xs mt-1">Next update: {new Date().toLocaleDateString('en-US', { weekday: 'long' })}</div>
             </div>
@@ -3086,13 +3136,13 @@ export default function Home() {
 
         {/* Saved Items */}
         {savedDigestItems.length > 0 && (
-          <div className="bg-[#16213e] rounded-xl p-3 md:p-4">
+          <div className="bg-[#fffaf6] rounded-xl p-3 md:p-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-md font-bold text-white">Saved</h3>
+              <h3 className="text-md font-bold text-[#6f5460]">Saved</h3>
               <select
                 value={savedFilter}
                 onChange={(e) => setSavedFilter(e.target.value)}
-                className="bg-[#1a1a2e] text-white rounded px-2 py-1 text-xs border border-gray-700 outline-none"
+                className="bg-[#f3e5ea] text-[#6f5460] rounded px-2 py-1 text-xs border border-[#e4cfd7] outline-none"
               >
                 <option value="All">All Categories</option>
                 <option value="World">World</option>
@@ -3105,16 +3155,16 @@ export default function Home() {
 
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {filteredSavedItems.map(item => (
-                <div key={item.id} className="p-3 bg-[#1a1a2e] rounded-lg">
+                <div key={item.id} className="p-3 bg-[#f3e5ea] rounded-lg">
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <span className="text-xs text-blue-400 font-medium">{item.category}</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-[#b497a1]">
                         {new Date(item.date_saved).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </span>
                       <button
                         onClick={() => deleteSavedItem(item.id)}
-                        className="text-gray-500 hover:text-red-400 transition-colors"
+                        className="text-[#b497a1] hover:text-red-400 transition-colors"
                         title="Delete saved item"
                       >
                         🗑️
@@ -3125,7 +3175,7 @@ export default function Home() {
                 </div>
               ))}
               {filteredSavedItems.length === 0 && (
-                <div className="text-center text-gray-500 py-4 text-sm">
+                <div className="text-center text-[#b497a1] py-4 text-sm">
                   No saved items in {savedFilter === 'All' ? 'any category' : savedFilter}
                 </div>
               )}
@@ -3160,20 +3210,20 @@ export default function Home() {
     return (
       <div className="space-y-3 md:space-y-6">
         {/* Today's Send Outs */}
-        <div className="bg-[#16213e] rounded-xl p-3 md:p-4">
+        <div className="bg-[#fffaf6] rounded-xl p-3 md:p-4">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-white">Send Outs</h2>
+            <h2 className="text-lg font-bold text-[#6f5460]">Send Outs</h2>
             <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 text-xs text-gray-400">
+              <label className="flex items-center gap-2 text-xs text-[#a68592]">
                 <input
                   type="checkbox"
                   checked={hideSent}
                   onChange={(e) => setHideSent(e.target.checked)}
-                  className="w-3 h-3 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                  className="w-3 h-3 rounded border-gray-600 bg-[#f3e5ea] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
                 />
                 Hide Sent
               </label>
-              <div className="text-xs text-gray-400">
+              <div className="text-xs text-[#a68592]">
                 {sendOuts ? formatDateNY(sendOuts.date) : 'Loading...'}
               </div>
             </div>
@@ -3185,16 +3235,16 @@ export default function Home() {
                 const text = sendOuts[key as keyof typeof sendOuts] as string
                 const isSent = sendOuts[sentKey as keyof typeof sendOuts] as boolean
                 return (
-                  <div key={key} className="flex items-start gap-3 p-3 bg-[#1a1a2e] rounded-lg">
+                  <div key={key} className="flex items-start gap-3 p-3 bg-[#f3e5ea] rounded-lg">
                     <input
                       type="checkbox"
                       checked={isSent}
                       onChange={(e) => markSendOutSent(category.toLowerCase(), e.target.checked)}
-                      className="w-4 h-4 mt-1 rounded border-gray-600 bg-[#16213e] text-green-500 focus:ring-green-500 focus:ring-offset-0 shrink-0"
+                      className="w-4 h-4 mt-1 rounded border-gray-600 bg-[#fffaf6] text-green-500 focus:ring-green-500 focus:ring-offset-0 shrink-0"
                       title="Mark as sent"
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs text-gray-400 mb-1 font-medium">{label}</div>
+                      <div className="text-xs text-[#a68592] mb-1 font-medium">{label}</div>
                       <div className="text-gray-200 text-sm leading-relaxed">{text}</div>
                     </div>
                     <button
@@ -3208,20 +3258,20 @@ export default function Home() {
                 )
               })}
               {visibleRecipients.length === 0 && activeRecipients.length > 0 && hideSent && (
-                <div className="text-center text-gray-400 py-4">
+                <div className="text-center text-[#a68592] py-4">
                   <div className="text-sm">All messages marked as sent</div>
                   <div className="text-xs mt-1">Uncheck "Hide Sent" to see them</div>
                 </div>
               )}
               {activeRecipients.length === 0 && (
-                <div className="text-center text-gray-400 py-8">
+                <div className="text-center text-[#a68592] py-8">
                   <div className="text-sm">No messages scheduled for today</div>
                   <div className="text-xs mt-1">Messages generate weekdays at 5:00 AM ET</div>
                 </div>
               )}
             </div>
           ) : (
-            <div className="text-center text-gray-400 py-8">
+            <div className="text-center text-[#a68592] py-8">
               <div className="text-sm">Messages generate weekdays at 5:00 AM ET</div>
               <div className="text-xs mt-1">Next generation: Monday morning</div>
             </div>
@@ -3230,24 +3280,24 @@ export default function Home() {
 
         {/* Saved Messages */}
         {savedSendOuts.length > 0 && (
-          <div className="bg-[#16213e] rounded-xl p-3 md:p-4">
+          <div className="bg-[#fffaf6] rounded-xl p-3 md:p-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-md font-bold text-white">Saved</h3>
-              <div className="text-xs text-gray-400">{savedSendOuts.length} saved messages</div>
+              <h3 className="text-md font-bold text-[#6f5460]">Saved</h3>
+              <div className="text-xs text-[#a68592]">{savedSendOuts.length} saved messages</div>
             </div>
 
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {savedSendOuts.map(item => (
-                <div key={item.id} className="p-3 bg-[#1a1a2e] rounded-lg">
+                <div key={item.id} className="p-3 bg-[#f3e5ea] rounded-lg">
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <span className="text-xs text-purple-400 font-medium">{item.category}</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-[#b497a1]">
                         {new Date(item.date_saved).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </span>
                       <button
                         onClick={() => deleteSavedSendOut(item.id)}
-                        className="text-gray-500 hover:text-red-400 transition-colors"
+                        className="text-[#b497a1] hover:text-red-400 transition-colors"
                         title="Delete saved message"
                       >
                         🗑️
@@ -3309,7 +3359,7 @@ export default function Home() {
         case 'Relationship': return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">🔵 Relationship</span>
         case 'Discovery': return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300">🟡 Discovery</span>
         case 'Community': return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-300">🟢 Community</span>
-        default: return <span className="text-xs text-gray-400">{cat}</span>
+        default: return <span className="text-xs text-[#a68592]">{cat}</span>
       }
     }
 
@@ -3318,8 +3368,8 @@ export default function Home() {
         key={item.id}
         className={`p-3 rounded-lg border transition-all ${
           item.completed
-            ? 'bg-[#0d1117]/50 border-gray-700/50 opacity-60'
-            : 'bg-[#0d1117] border-gray-700 hover:border-teal-500/40'
+            ? 'bg-[#0d1117]/50 border-[#e4cfd7]/50 opacity-60'
+            : 'bg-[#0d1117] border-[#e4cfd7] hover:border-teal-500/40'
         }`}
       >
         <div className="flex items-start gap-3">
@@ -3327,7 +3377,7 @@ export default function Home() {
             type="checkbox"
             checked={item.completed}
             onChange={() => toggleThumbEquityItem(item.id, !item.completed)}
-            className="w-5 h-5 mt-0.5 rounded border-gray-600 bg-[#1a1a2e] text-teal-500 focus:ring-teal-500 focus:ring-offset-0 shrink-0"
+            className="w-5 h-5 mt-0.5 rounded border-gray-600 bg-[#f3e5ea] text-teal-500 focus:ring-teal-500 focus:ring-offset-0 shrink-0"
           />
           <div className="flex-1 min-w-0 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -3342,43 +3392,43 @@ export default function Home() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className={`font-medium hover:underline ${
-                  item.completed ? 'line-through text-gray-500' : 'text-teal-400 hover:text-teal-300'
+                  item.completed ? 'line-through text-[#b497a1]' : 'text-teal-400 hover:text-teal-300'
                 }`}
               >
                 {item.handle}
               </a>
               {item.niche && (
-                <span className="text-xs text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">{item.niche}</span>
+                <span className="text-xs text-[#b497a1] bg-gray-800 px-1.5 py-0.5 rounded">{item.niche}</span>
               )}
               {item.follower_count && (
-                <span className="text-xs text-gray-500">{item.follower_count}</span>
+                <span className="text-xs text-[#b497a1]">{item.follower_count}</span>
               )}
             </div>
-            <div className={`text-sm ${item.completed ? 'line-through text-gray-600' : 'text-gray-300'}`}>
+            <div className={`text-sm ${item.completed ? 'line-through text-gray-600' : 'text-[#8b6f79]'}`}>
               {item.primary_comment}
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => { navigator.clipboard.writeText(item.primary_comment); }}
-                className="text-xs text-gray-400 hover:text-teal-400 transition-colors"
+                className="text-xs text-[#a68592] hover:text-teal-400 transition-colors"
               >
                 📋 Copy
               </button>
               {item.backup_comment && (
                 <button
                   onClick={() => setExpandedBackup(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
-                  className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                  className="text-xs text-[#b497a1] hover:text-[#8b6f79] transition-colors"
                 >
                   {expandedBackup[item.id] ? 'hide backup' : 'show backup'}
                 </button>
               )}
             </div>
             {expandedBackup[item.id] && item.backup_comment && (
-              <div className="text-sm text-gray-400 italic border-l-2 border-gray-700 pl-2">
+              <div className="text-sm text-[#a68592] italic border-l-2 border-[#e4cfd7] pl-2">
                 {item.backup_comment}
                 <button
                   onClick={() => { navigator.clipboard.writeText(item.backup_comment!); }}
-                  className="ml-2 text-xs text-gray-500 hover:text-teal-400"
+                  className="ml-2 text-xs text-[#b497a1] hover:text-teal-400"
                 >
                   📋
                 </button>
@@ -3391,7 +3441,7 @@ export default function Home() {
                 {/* Primary: Screenshot upload */}
                 <div>
                   {!uploadedImages[item.id] ? (
-                    <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-500 hover:text-teal-400 transition-colors">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs text-[#b497a1] hover:text-teal-400 transition-colors">
                       <input
                         type="file"
                         accept="image/*"
@@ -3406,9 +3456,9 @@ export default function Home() {
                         <img
                           src={uploadedImages[item.id].preview}
                           alt="Post screenshot"
-                          className="w-12 h-12 object-cover rounded-lg border border-gray-700"
+                          className="w-12 h-12 object-cover rounded-lg border border-[#e4cfd7]"
                         />
-                        <div className="flex-1 text-xs text-gray-400">Screenshot ready</div>
+                        <div className="flex-1 text-xs text-[#a68592]">Screenshot ready</div>
                         <button
                           onClick={() => setUploadedImages(prev => { const n = {...prev}; delete n[item.id]; return n })}
                           className="text-xs text-gray-600 hover:text-red-400"
@@ -3435,7 +3485,7 @@ export default function Home() {
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() => navigator.clipboard.writeText(generatedComments[item.id])}
-                        className="text-xs text-gray-400 hover:text-teal-400 transition-colors"
+                        className="text-xs text-[#a68592] hover:text-teal-400 transition-colors"
                       >
                         📋 Copy
                       </button>
@@ -3444,7 +3494,7 @@ export default function Home() {
                           setGeneratedComments(prev => { const n = {...prev}; delete n[item.id]; return n })
                           setUploadedImages(prev => { const n = {...prev}; delete n[item.id]; return n })
                         }}
-                        className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
+                        className="text-xs text-gray-600 hover:text-[#a68592] transition-colors"
                       >
                         Try again
                       </button>
@@ -3456,7 +3506,7 @@ export default function Home() {
                 <div>
                   <button
                     onClick={() => setCaptionExpanded(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
-                    className="text-xs text-gray-600 hover:text-gray-500 transition-colors"
+                    className="text-xs text-gray-600 hover:text-[#b497a1] transition-colors"
                   >
                     {captionExpanded[item.id] ? '▲ hide' : '✏️ paste caption instead'}
                   </button>
@@ -3467,7 +3517,7 @@ export default function Home() {
                         onChange={(e) => setCaptionInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
                         placeholder="Paste their caption here..."
                         rows={3}
-                        className="w-full text-xs bg-[#1a1a2e] border border-gray-700 rounded-lg p-2 text-gray-300 placeholder-gray-600 resize-none focus:outline-none focus:border-teal-500/50"
+                        className="w-full text-xs bg-[#f3e5ea] border border-[#e4cfd7] rounded-lg p-2 text-[#8b6f79] placeholder-gray-600 resize-none focus:outline-none focus:border-teal-500/50"
                       />
                       <button
                         onClick={() => generateCommentFromCaption(item)}
@@ -3489,8 +3539,8 @@ export default function Home() {
 
     if (thumbEquityLoading) {
       return (
-        <div className="bg-[#16213e] rounded-xl p-6 text-center">
-          <div className="text-gray-400 animate-pulse">Loading Thumb Equity...</div>
+        <div className="bg-[#fffaf6] rounded-xl p-6 text-center">
+          <div className="text-[#a68592] animate-pulse">Loading Thumb Equity...</div>
         </div>
       )
     }
@@ -3503,16 +3553,16 @@ export default function Home() {
             const visibleThreads = yesterdayThreads.filter(t => !dismissedThreads.has(t.id))
             if (visibleThreads.length === 0) return null
             return (
-              <div className="bg-[#1a1a2e]/50 border-l-2 border-amber-500/40 rounded-lg p-3 space-y-2">
+              <div className="bg-[#f3e5ea]/50 border-l-2 border-amber-500/40 rounded-lg p-3 space-y-2">
                 <button
                   onClick={() => setYesterdayExpanded(!yesterdayExpanded)}
                   className="flex items-center justify-between w-full text-left"
                 >
-                  <span className="text-sm font-medium text-gray-300">
+                  <span className="text-sm font-medium text-[#8b6f79]">
                     💬 Check Yesterday&apos;s Replies
                     <span className="ml-2 text-xs bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded-full">{visibleThreads.length}</span>
                   </span>
-                  <span className="text-gray-500 text-xs">{yesterdayExpanded ? '▲' : '▼'}</span>
+                  <span className="text-[#b497a1] text-xs">{yesterdayExpanded ? '▲' : '▼'}</span>
                 </button>
                 {yesterdayExpanded && (
                   <div className="space-y-1.5 pt-1">
@@ -3520,8 +3570,8 @@ export default function Home() {
                       <div key={t.id} className="flex items-center gap-2 text-sm">
                         <a href={t.instagram_link} target="_blank" rel="noopener noreferrer" className="text-teal-400 hover:underline shrink-0">{t.handle}</a>
                         {categoryBadge(t.category)}
-                        <span className="text-gray-500 truncate flex-1">{t.primary_comment.length > 60 ? t.primary_comment.slice(0, 60) + '...' : t.primary_comment}</span>
-                        <button onClick={() => setDismissedThreads(prev => { const next = new Set(Array.from(prev)); next.add(t.id); return next })} className="text-xs text-gray-500 hover:text-green-400 shrink-0">✓ Checked</button>
+                        <span className="text-[#b497a1] truncate flex-1">{t.primary_comment.length > 60 ? t.primary_comment.slice(0, 60) + '...' : t.primary_comment}</span>
+                        <button onClick={() => setDismissedThreads(prev => { const next = new Set(Array.from(prev)); next.add(t.id); return next })} className="text-xs text-[#b497a1] hover:text-green-400 shrink-0">✓ Checked</button>
                       </div>
                     ))}
                   </div>
@@ -3529,32 +3579,32 @@ export default function Home() {
               </div>
             )
           })()}
-          <div className="bg-[#16213e] rounded-xl p-6 text-center space-y-2">
+          <div className="bg-[#fffaf6] rounded-xl p-6 text-center space-y-2">
             <div className="text-2xl">👍</div>
-            <div className="text-gray-300 font-medium">No engagement tasks for today</div>
-            <div className="text-gray-500 text-sm">Tasks are generated automatically M-F at 6 AM ET</div>
+            <div className="text-[#8b6f79] font-medium">No engagement tasks for today</div>
+            <div className="text-[#b497a1] text-sm">Tasks are generated automatically M-F at 6 AM ET</div>
           </div>
         </div>
       )
     }
 
     return (
-      <div className="bg-[#16213e] rounded-xl p-3 md:p-4 space-y-4">
+      <div className="bg-[#fffaf6] rounded-xl p-3 md:p-4 space-y-4">
         {/* Upgrade 2: Yesterday's Threads */}
         {yesterdayThreads.length > 0 && (() => {
           const visibleThreads = yesterdayThreads.filter(t => !dismissedThreads.has(t.id))
           if (visibleThreads.length === 0) return null
           return (
-            <div className="bg-[#1a1a2e]/50 border-l-2 border-amber-500/40 rounded-lg p-3 space-y-2">
+            <div className="bg-[#f3e5ea]/50 border-l-2 border-amber-500/40 rounded-lg p-3 space-y-2">
               <button
                 onClick={() => setYesterdayExpanded(!yesterdayExpanded)}
                 className="flex items-center justify-between w-full text-left"
               >
-                <span className="text-sm font-medium text-gray-300">
+                <span className="text-sm font-medium text-[#8b6f79]">
                   💬 Check Yesterday&apos;s Replies
                   <span className="ml-2 text-xs bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded-full">{visibleThreads.length}</span>
                 </span>
-                <span className="text-gray-500 text-xs">{yesterdayExpanded ? '▲' : '▼'}</span>
+                <span className="text-[#b497a1] text-xs">{yesterdayExpanded ? '▲' : '▼'}</span>
               </button>
               {yesterdayExpanded && (
                 <div className="space-y-1.5 pt-1">
@@ -3562,8 +3612,8 @@ export default function Home() {
                     <div key={t.id} className="flex items-center gap-2 text-sm">
                       <a href={t.instagram_link} target="_blank" rel="noopener noreferrer" className="text-teal-400 hover:underline shrink-0">{t.handle}</a>
                       {categoryBadge(t.category)}
-                      <span className="text-gray-500 truncate flex-1">{t.primary_comment.length > 60 ? t.primary_comment.slice(0, 60) + '...' : t.primary_comment}</span>
-                      <button onClick={() => setDismissedThreads(prev => { const next = new Set(Array.from(prev)); next.add(t.id); return next })} className="text-xs text-gray-500 hover:text-green-400 shrink-0">✓ Checked</button>
+                      <span className="text-[#b497a1] truncate flex-1">{t.primary_comment.length > 60 ? t.primary_comment.slice(0, 60) + '...' : t.primary_comment}</span>
+                      <button onClick={() => setDismissedThreads(prev => { const next = new Set(Array.from(prev)); next.add(t.id); return next })} className="text-xs text-[#b497a1] hover:text-green-400 shrink-0">✓ Checked</button>
                     </div>
                   ))}
                 </div>
@@ -3577,25 +3627,25 @@ export default function Home() {
           <div className="bg-gradient-to-r from-teal-900/30 to-blue-900/30 border border-teal-500/20 rounded-lg p-4 relative">
             <button
               onClick={() => setWeeklyPulseDismissed(true)}
-              className="absolute top-2 right-2 text-gray-500 hover:text-gray-300 text-sm"
+              className="absolute top-2 right-2 text-[#b497a1] hover:text-[#8b6f79] text-sm"
             >
               ✕
             </button>
             <div className="space-y-2">
               <div className="text-sm font-semibold text-gray-200">📊 Last Week&apos;s Pulse</div>
               <div className="h-px bg-teal-500/20" />
-              <div className="text-sm text-gray-300">
-                Engaged: <span className="text-white font-medium">{weeklyPulse.completed}/{weeklyPulse.total}</span> accounts <span className="text-gray-400">({weeklyPulse.rate}%)</span>
+              <div className="text-sm text-[#8b6f79]">
+                Engaged: <span className="text-[#6f5460] font-medium">{weeklyPulse.completed}/{weeklyPulse.total}</span> accounts <span className="text-[#a68592]">({weeklyPulse.rate}%)</span>
               </div>
-              <div className="text-sm text-gray-300">
-                Strongest: <span className="text-white font-medium">{weeklyPulse.strongestPool}</span> pool <span className="text-gray-400">({weeklyPulse.strongestRate}% completion)</span>
+              <div className="text-sm text-[#8b6f79]">
+                Strongest: <span className="text-[#6f5460] font-medium">{weeklyPulse.strongestPool}</span> pool <span className="text-[#a68592]">({weeklyPulse.strongestRate}% completion)</span>
               </div>
               {weeklyPulse.repeatConnections.length > 0 && (
-                <div className="text-sm text-gray-300">
+                <div className="text-sm text-[#8b6f79]">
                   Repeat connections: <span className="text-teal-400">{weeklyPulse.repeatConnections.join(', ')}</span>
                 </div>
               )}
-              <div className="text-sm text-gray-400 italic mt-1">
+              <div className="text-sm text-[#a68592] italic mt-1">
                 💡 {weeklyTips[Math.floor(new Date().getTime() / (1000 * 60 * 60 * 24 * 7)) % weeklyTips.length]}
               </div>
             </div>
@@ -3608,13 +3658,13 @@ export default function Home() {
             <h2 className="text-lg font-semibold text-gray-200">
               👍 Thumb Equity — {dateLabel}
             </h2>
-            <div className="text-sm text-gray-400 mt-0.5">
+            <div className="text-sm text-[#a68592] mt-0.5">
               {completedCount}/{totalCount} complete
             </div>
           </div>
           <button
             onClick={fetchThumbEquity}
-            className="text-gray-400 hover:text-gray-200 text-sm px-2 py-1 rounded hover:bg-[#0d1117] transition-colors"
+            className="text-[#a68592] hover:text-gray-200 text-sm px-2 py-1 rounded hover:bg-[#0d1117] transition-colors"
           >
             ↻ Refresh
           </button>
@@ -3632,11 +3682,11 @@ export default function Home() {
         <div className="flex items-center justify-center gap-3">
           <button
             onClick={() => navigateDate('prev')}
-            className="text-gray-400 hover:text-teal-400 transition-colors text-lg px-1"
+            className="text-[#a68592] hover:text-teal-400 transition-colors text-lg px-1"
           >
             ‹
           </button>
-          <span className="text-gray-300 text-sm font-medium">
+          <span className="text-[#8b6f79] text-sm font-medium">
             {dateLabel}
           </span>
           {isToday ? (
@@ -3646,7 +3696,7 @@ export default function Home() {
           ) : (
             <button
               onClick={() => setSelectedDate(todayStr)}
-              className="text-xs text-gray-400 hover:text-teal-400 transition-colors px-2 py-0.5"
+              className="text-xs text-[#a68592] hover:text-teal-400 transition-colors px-2 py-0.5"
             >
               Today
             </button>
@@ -3654,7 +3704,7 @@ export default function Home() {
           <button
             onClick={() => navigateDate('next')}
             disabled={isToday}
-            className={`text-lg px-1 transition-colors ${isToday ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:text-teal-400'}`}
+            className={`text-lg px-1 transition-colors ${isToday ? 'text-gray-600 cursor-not-allowed' : 'text-[#a68592] hover:text-teal-400'}`}
           >
             ›
           </button>
@@ -3662,7 +3712,7 @@ export default function Home() {
 
         {/* No data message for past days */}
         {totalCount === 0 && !thumbEquityLoading && (
-          <div className="text-center text-gray-500 text-sm py-4">
+          <div className="text-center text-[#b497a1] text-sm py-4">
             No engagement data for {dateLabel}
           </div>
         )}
@@ -3676,20 +3726,20 @@ export default function Home() {
   }
 
   const renderWeeklyBoard = (board: 'jaclyn' | 'river') => (
-    <div className="bg-[#16213e] rounded-xl p-3 md:p-4">
+    <div className="bg-[#fffaf6] rounded-xl p-3 md:p-4">
       <div className="flex items-center justify-between mb-3 md:mb-4">
-        <h2 className="text-base md:text-lg font-bold text-white capitalize">{board}</h2>
+        <h2 className="text-base md:text-lg font-bold text-[#6f5460] capitalize">{board}</h2>
         <div className="flex items-center gap-2 md:gap-3">
           <div className="flex items-center gap-1 md:gap-2">
             <button
               onClick={() => navigateWeek('prev')}
-              className="text-gray-400 hover:text-white transition-colors p-1"
+              className="text-[#a68592] hover:text-[#6f5460] transition-colors p-1"
               title="Previous week"
             >
               ◀
             </button>
             <span 
-              className="text-xs md:text-sm text-gray-400 cursor-pointer hover:text-white transition-colors" 
+              className="text-xs md:text-sm text-[#a68592] cursor-pointer hover:text-[#6f5460] transition-colors" 
               onClick={goToCurrentWeek}
               title="Go to current week"
             >
@@ -3697,14 +3747,14 @@ export default function Home() {
             </span>
             <button
               onClick={() => navigateWeek('next')}
-              className="text-gray-400 hover:text-white transition-colors p-1"
+              className="text-[#a68592] hover:text-[#6f5460] transition-colors p-1"
               title="Next week"
             >
               ▶
             </button>
             <button
               onClick={goToCurrentWeek}
-              className="text-xs text-gray-400 hover:text-white transition-colors px-2 py-1 rounded"
+              className="text-xs text-[#a68592] hover:text-[#6f5460] transition-colors px-2 py-1 rounded"
               title="Go to current week"
             >
               Today
@@ -3712,7 +3762,7 @@ export default function Home() {
           </div>
           <button
             onClick={() => toggleHideCompleted(board)}
-            className="text-xs text-gray-400 hover:text-white transition-colors"
+            className="text-xs text-[#a68592] hover:text-[#6f5460] transition-colors"
           >
             {hideCompleted[board] ? 'Show' : 'Hide'} completed
           </button>
@@ -3732,21 +3782,21 @@ export default function Home() {
           const isCollapsed = collapsed[`${board}-${day}`]
 
           return (
-            <div key={day} className="bg-[#1a1a2e] rounded-lg overflow-hidden">
+            <div key={day} className="bg-[#f3e5ea] rounded-lg overflow-hidden">
               <button
                 onClick={() => toggleCollapse(`${board}-${day}`)}
-                className="w-full flex items-center justify-between p-2 md:p-3 hover:bg-[#202040] transition-colors"
+                className="w-full flex items-center justify-between p-2 md:p-3 hover:bg-[#ecd8e1] transition-colors"
               >
                 <div className="text-left">
-                  <div className="font-medium text-white text-xs md:text-sm">{DAY_LABELS[day]}</div>
+                  <div className="font-medium text-[#6f5460] text-xs md:text-sm">{DAY_LABELS[day]}</div>
                   {dateForDay && (
-                    <div className="text-xs text-gray-400">
+                    <div className="text-xs text-[#a68592]">
                       {dateForDay.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })}
                     </div>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">{tasksForDay.length}</span>
+                  <span className="text-xs text-[#b497a1]">{tasksForDay.length}</span>
                   <span className={`transition-transform ${isCollapsed ? 'rotate-180' : ''}`}>▼</span>
                 </div>
               </button>
@@ -3768,10 +3818,10 @@ export default function Home() {
                         onChange={() => toggleComplete(task)}
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => e.stopPropagation()}
-                        className="w-4 h-4 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                        className="w-4 h-4 rounded border-gray-600 bg-[#f3e5ea] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
                       />
                       <div 
-                        className="text-gray-500 hover:text-gray-300 cursor-grab active:cursor-grabbing px-1 text-xs select-none"
+                        className="text-[#b497a1] hover:text-[#8b6f79] cursor-grab active:cursor-grabbing px-1 text-xs select-none"
                         onPointerDown={(e) => handleTaskPointerDown(e, task)}
                         onPointerMove={handleTaskPointerMove}
                         onPointerUp={handleTaskPointerUp}
@@ -3805,13 +3855,13 @@ export default function Home() {
                               }
                             }}
                             className={`text-xs md:text-sm cursor-pointer block ${
-                              task.completed ? 'line-through text-gray-500' : 'text-gray-200'
+                              task.completed ? 'line-through text-[#b497a1]' : 'text-gray-200'
                             }`}
                           >
                             {task.title.startsWith('Instagram Engagement') ? `👍 ${task.title}` : task.title}
                           </span>
                           {task.notes && (
-                            <div className="text-xs text-gray-400 mt-1 break-all">
+                            <div className="text-xs text-[#a68592] mt-1 break-all">
                               {task.notes.split(' ').map((word, index) => {
                                 const isUrl = word.startsWith('http://') || word.startsWith('https://')
                                 if (isUrl) {
@@ -3842,7 +3892,7 @@ export default function Home() {
                       </div>
                       <button
                         onClick={() => deleteTask(task.id)}
-                        className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all p-1 shrink-0"
+                        className="opacity-0 group-hover:opacity-100 text-[#b497a1] hover:text-red-400 transition-all p-1 shrink-0"
                         title="Delete task"
                       >
                         🗑️
@@ -3851,7 +3901,7 @@ export default function Home() {
                   ))}
                   <button
                     onClick={() => addTask(board, day)}
-                    className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1 transition-colors"
+                    className="text-xs text-[#b497a1] hover:text-[#8b6f79] px-2 py-1 transition-colors"
                   >
                     + Add item...
                   </button>
@@ -3875,10 +3925,10 @@ export default function Home() {
       <div>
         {/* Header with toggle */}
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-white">Grocery List</h2>
+          <h2 className="text-lg font-bold text-[#6f5460]">Grocery List</h2>
           <button
             onClick={toggleHideCheckedGrocery}
-            className="text-xs text-gray-400 hover:text-white transition-colors"
+            className="text-xs text-[#a68592] hover:text-[#6f5460] transition-colors"
           >
             {hideCheckedGrocery ? 'Show' : 'Hide'} checked
           </button>
@@ -3886,14 +3936,14 @@ export default function Home() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
         {stores.map(store => (
-          <div key={store.key} className="bg-[#16213e] rounded-xl p-4 h-fit">
+          <div key={store.key} className="bg-[#fffaf6] rounded-xl p-4 h-fit">
             <div className="flex items-center gap-2 mb-4">
               <div 
                 className="w-3 h-3 rounded-full" 
                 style={{ backgroundColor: store.color }}
               />
-              <h3 className="text-lg font-bold text-white">{store.label}</h3>
-              <span className="text-sm text-gray-400">
+              <h3 className="text-lg font-bold text-[#6f5460]">{store.label}</h3>
+              <span className="text-sm text-[#a68592]">
                 ({getGroceryItemsByStore(store.key).length})
               </span>
             </div>
@@ -3903,7 +3953,7 @@ export default function Home() {
                 <div 
                   key={item.id}
                   data-grocery-item-id={item.id}
-                  className="group flex items-center gap-3 p-2 hover:bg-[#1a1a2e] rounded-lg transition-colors"
+                  className="group flex items-center gap-3 p-2 hover:bg-[#f3e5ea] rounded-lg transition-colors"
                 >
                   <input
                     type="checkbox"
@@ -3911,10 +3961,10 @@ export default function Home() {
                     onChange={(e) => toggleGroceryItemChecked(item.id, e.target.checked)}
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={(e) => e.stopPropagation()}
-                    className="w-4 h-4 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                    className="w-4 h-4 rounded border-gray-600 bg-[#f3e5ea] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
                   />
                   <div 
-                    className="text-gray-500 hover:text-gray-300 cursor-grab active:cursor-grabbing px-1 text-xs select-none"
+                    className="text-[#b497a1] hover:text-[#8b6f79] cursor-grab active:cursor-grabbing px-1 text-xs select-none"
                     onPointerDown={(e) => handleGroceryPointerDown(e, item)}
                     onPointerMove={handleGroceryPointerMove}
                     onPointerUp={handleGroceryPointerUp}
@@ -3925,14 +3975,14 @@ export default function Home() {
                   </div>
                   <span
                     className={`flex-1 text-sm ${
-                      item.checked ? 'line-through text-gray-500' : 'text-gray-200'
+                      item.checked ? 'line-through text-[#b497a1]' : 'text-gray-200'
                     }`}
                   >
                     {item.text}
                   </span>
                   <button
                     onClick={() => deleteGroceryItem(item.id)}
-                    className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all p-1"
+                    className="opacity-0 group-hover:opacity-100 text-[#b497a1] hover:text-red-400 transition-all p-1"
                     title="Delete item"
                   >
                     🗑️
@@ -3945,7 +3995,7 @@ export default function Home() {
               <input
                 type="text"
                 placeholder="Add item..."
-                className="flex-1 px-3 py-2 bg-[#1a1a2e] border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                className="flex-1 px-3 py-2 bg-[#f3e5ea] border border-gray-600 rounded-lg text-[#6f5460] text-sm focus:outline-none focus:border-blue-500"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     const target = e.target as HTMLInputElement
@@ -3960,7 +4010,7 @@ export default function Home() {
                   addGroceryItem(store.key, input.value)
                   input.value = ''
                 }}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-[#6f5460] rounded-lg text-sm font-medium transition-colors"
               >
                 Add
               </button>
@@ -4140,10 +4190,10 @@ export default function Home() {
 
     // Render individual list
     const renderIdeaList = (title: string, listKey: IdeaItem['list_key'], items: IdeaItem[]) => (
-      <div className="bg-[#16213e] rounded-xl p-4 h-fit">
+      <div className="bg-[#fffaf6] rounded-xl p-4 h-fit">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-white">{title}</h3>
-          <span className="text-sm text-gray-400">({items.length})</span>
+          <h3 className="text-lg font-bold text-[#6f5460]">{title}</h3>
+          <span className="text-sm text-[#a68592]">({items.length})</span>
         </div>
 
         <div className="space-y-2 mb-4 min-h-[60px] pointer-events-auto" data-ideas-drop-list={listKey}>
@@ -4152,10 +4202,10 @@ export default function Home() {
               key={item.id}
               data-ideas-item-id={item.id}
               data-ideas-item-list={item.list_key}
-              className="group flex items-center gap-3 p-2 hover:bg-[#1a1a2e] rounded-lg transition-colors"
+              className="group flex items-center gap-3 p-2 hover:bg-[#f3e5ea] rounded-lg transition-colors"
             >
               <div 
-                className="text-gray-500 hover:text-gray-300 cursor-grab active:cursor-grabbing px-1 text-xs select-none"
+                className="text-[#b497a1] hover:text-[#8b6f79] cursor-grab active:cursor-grabbing px-1 text-xs select-none"
                 onPointerDown={(e) => handleIdeaPointerDown(e, item)}
                 onPointerMove={handleIdeaPointerMove}
                 onPointerUp={handleIdeaPointerUp}
@@ -4170,10 +4220,10 @@ export default function Home() {
                 onChange={() => toggleCompleteIdea(item)}
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
-                className="w-4 h-4 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                className="w-4 h-4 rounded border-gray-600 bg-[#f3e5ea] text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
               />
-              <div className="flex-1 text-white text-sm">
-                <span className={item.completed ? 'line-through text-gray-400' : ''}>
+              <div className="flex-1 text-[#6f5460] text-sm">
+                <span className={item.completed ? 'line-through text-[#a68592]' : ''}>
                   {item.text}
                 </span>
               </div>
@@ -4194,7 +4244,7 @@ export default function Home() {
           <input
             type="text"
             placeholder={`Add ${title.toLowerCase()}...`}
-            className="flex-1 px-3 py-2 bg-[#1a1a2e] border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+            className="flex-1 px-3 py-2 bg-[#f3e5ea] border border-gray-600 rounded-lg text-[#6f5460] text-sm focus:outline-none focus:border-blue-500"
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 const target = e.target as HTMLInputElement
@@ -4209,7 +4259,7 @@ export default function Home() {
               addIdea(listKey, input.value)
               input.value = ''
             }}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-[#6f5460] rounded-lg text-sm font-medium transition-colors"
           >
             Add
           </button>
@@ -4221,10 +4271,10 @@ export default function Home() {
       <div>
         {/* Header with hide completed toggle */}
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-white">Ideas</h2>
+          <h2 className="text-lg font-bold text-[#6f5460]">Ideas</h2>
           <button
             onClick={toggleHideCompletedIdeas}
-            className="text-xs text-gray-400 hover:text-white transition-colors"
+            className="text-xs text-[#a68592] hover:text-[#6f5460] transition-colors"
           >
             {hideCompletedIdeas ? 'Show' : 'Hide'} completed
           </button>
@@ -4240,7 +4290,7 @@ export default function Home() {
 
           {/* Goals section */}
           <div>
-            <h3 className="text-lg font-bold text-white mb-4">Goals</h3>
+            <h3 className="text-lg font-bold text-[#6f5460] mb-4">Goals</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
               {renderIdeaList('1 Month', 'goal_1m', getItemsByList('goal_1m'))}
               {renderIdeaList('3 Months', 'goal_3m', getItemsByList('goal_3m'))}
@@ -4257,22 +4307,22 @@ export default function Home() {
   return (
     <main className="min-h-screen p-3 md:p-6 max-w-[1400px] mx-auto">
       <div className="text-center mb-4 md:mb-6 relative">
-        <div ref={headerWordsRef} className="text-gray-500 text-xs font-light uppercase tracking-widest cursor-pointer select-none" onClick={handleHeaderWordsClick}>
+        <div ref={headerWordsRef} className="text-[#b497a1] text-xs font-light uppercase tracking-widest cursor-pointer select-none" onClick={handleHeaderWordsClick}>
           {dashboardSettings?.header_words || 'STEELE LIFE'}
         </div>
-        {adminMode && (<div className="absolute top-0 right-0 flex items-center gap-2"><span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full">ADMIN</span><button onClick={() => setEditingHeader(true)} className="text-gray-400 hover:text-white transition-colors p-1" title="Edit header words">⚙️</button></div>)}
+        {adminMode && (<div className="absolute top-0 right-0 flex items-center gap-2"><span className="text-xs bg-blue-600 text-[#6f5460] px-2 py-1 rounded-full">ADMIN</span><button onClick={() => setEditingHeader(true)} className="text-[#a68592] hover:text-[#6f5460] transition-colors p-1" title="Edit header words">⚙️</button></div>)}
       </div>
       <div className="flex items-center justify-between mb-4">
-        <div className="text-sm text-gray-400">Quiet focus, calm structure, protected systems.</div>
+        <div className="text-sm text-[#a68592]">Quiet focus, calm structure, protected systems.</div>
         <div className="flex items-center gap-3">
-          {syncing && (<div className="flex items-center gap-2 text-sm text-gray-400"><div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div><span>Syncing...</span></div>)}
-          <button onClick={() => fetchData(true)} disabled={syncing} className="p-2 text-gray-400 hover:text-white transition-colors disabled:opacity-50" title="Refresh data"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
+          {syncing && (<div className="flex items-center gap-2 text-sm text-[#a68592]"><div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div><span>Syncing...</span></div>)}
+          <button onClick={() => fetchData(true)} disabled={syncing} className="p-2 text-[#a68592] hover:text-[#6f5460] transition-colors disabled:opacity-50" title="Refresh data"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
         </div>
       </div>
-      <div className="bg-[#16213e] rounded-3xl p-4 md:p-5 mb-4">
+      <div className="bg-[#fffaf6] rounded-3xl p-4 md:p-5 mb-4">
         <div className="flex flex-wrap gap-2">
           {[{ id: 'today', label: 'Today' }, { id: 'week', label: 'This Week' }, { id: 'roadmap', label: 'SteeleBroz Road Map' }, { id: 'life-admin', label: 'Life Admin' }, { id: 'parking-lot', label: 'Parking Lot' }, { id: 'calendar', label: 'Calendar' }, { id: 'thumb-equity', label: 'Thumb Equity' }].map(section => (
-            <button key={section.id} onClick={() => setActiveTab(section.id as any)} className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${activeTab === section.id ? 'bg-[#1a1a2e] text-white' : 'text-gray-400 hover:text-white hover:bg-[#1a1a2e]/50'}`}>
+            <button key={section.id} onClick={() => setActiveTab(section.id as any)} className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${activeTab === section.id ? 'bg-[#f3e5ea] text-[#6f5460]' : 'text-[#a68592] hover:text-[#6f5460] hover:bg-[#f3e5ea]/50'}`}>
               {section.label}
             </button>
           ))}
@@ -4294,13 +4344,13 @@ export default function Home() {
       {/* Edit Modal */}
       {editingTask && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setEditingTask(null)}>
-          <div className="bg-[#16213e] rounded-xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white">
+          <div className="bg-[#fffaf6] rounded-xl p-6 w-full max-w-md space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-[#6f5460]">
               {editingTask.folder === 'daily-digest' || editingTask.folder === 'send-outs' ? 'Edit Item' : 'Edit Task'}
             </h3>
 
             <input
-              className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 focus:border-blue-500 outline-none"
+              className="w-full bg-[#f3e5ea] text-[#6f5460] rounded-lg px-3 py-2 text-sm border border-[#e4cfd7] focus:border-blue-500 outline-none"
               value={editingTask.title}
               onChange={e => setEditingTask({ ...editingTask, title: e.target.value })}
               placeholder="Title"
@@ -4311,9 +4361,9 @@ export default function Home() {
               <>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-gray-400 mb-1 block">Priority</label>
+                    <label className="text-xs text-[#a68592] mb-1 block">Priority</label>
                     <select
-                      className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                      className="w-full bg-[#f3e5ea] text-[#6f5460] rounded-lg px-3 py-2 text-sm border border-[#e4cfd7] outline-none"
                       value={editingTask.priority}
                       onChange={e => setEditingTask({ ...editingTask, priority: e.target.value })}
                     >
@@ -4324,9 +4374,9 @@ export default function Home() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs text-gray-400 mb-1 block">Owner</label>
+                    <label className="text-xs text-[#a68592] mb-1 block">Owner</label>
                     <select
-                      className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                      className="w-full bg-[#f3e5ea] text-[#6f5460] rounded-lg px-3 py-2 text-sm border border-[#e4cfd7] outline-none"
                       value={editingTask.owner}
                       onChange={e => setEditingTask({ ...editingTask, owner: e.target.value })}
                     >
@@ -4337,19 +4387,19 @@ export default function Home() {
                 </div>
 
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Due Date</label>
+                  <label className="text-xs text-[#a68592] mb-1 block">Due Date</label>
                   <input
                     type="date"
-                    className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                    className="w-full bg-[#f3e5ea] text-[#6f5460] rounded-lg px-3 py-2 text-sm border border-[#e4cfd7] outline-none"
                     value={editingTask.due_date || ''}
                     onChange={e => setEditingTask({ ...editingTask, due_date: e.target.value || null })}
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Folder</label>
+                  <label className="text-xs text-[#a68592] mb-1 block">Folder</label>
                   <select
-                    className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                    className="w-full bg-[#f3e5ea] text-[#6f5460] rounded-lg px-3 py-2 text-sm border border-[#e4cfd7] outline-none"
                     value={editingTask.folder || ''}
                     onChange={e => setEditingTask({ ...editingTask, folder: e.target.value || '' })}
                   >
@@ -4363,9 +4413,9 @@ export default function Home() {
             )}
 
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Notes</label>
+              <label className="text-xs text-[#a68592] mb-1 block">Notes</label>
               <textarea
-                className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none resize-none"
+                className="w-full bg-[#f3e5ea] text-[#6f5460] rounded-lg px-3 py-2 text-sm border border-[#e4cfd7] outline-none resize-none"
                 rows={3}
                 value={editingTask.notes || ''}
                 onChange={e => setEditingTask({ ...editingTask, notes: e.target.value || '' })}
@@ -4376,7 +4426,7 @@ export default function Home() {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => saveTask(editingTask)}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium transition-colors"
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-[#6f5460] rounded-lg py-2 text-sm font-medium transition-colors"
               >
                 Save
               </button>
@@ -4394,19 +4444,19 @@ export default function Home() {
       {/* Event Details Modal */}
       {editingEvent && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setEditingEvent(null)}>
-          <div className="bg-[#16213e] w-full max-w-md max-h-[90vh] flex flex-col rounded-xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-[#fffaf6] w-full max-w-md max-h-[90vh] flex flex-col rounded-xl" onClick={e => e.stopPropagation()}>
             {/* Header */}
-            <div className="p-6 border-b border-gray-700">
-              <h3 className="text-lg font-bold text-white">Event Details</h3>
+            <div className="p-6 border-b border-[#e4cfd7]">
+              <h3 className="text-lg font-bold text-[#6f5460]">Event Details</h3>
             </div>
 
             {/* Scrollable Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
 
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Title</label>
+              <label className="text-xs text-[#a68592] mb-1 block">Title</label>
               <input
-                className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 focus:border-blue-500 outline-none"
+                className="w-full bg-[#f3e5ea] text-[#6f5460] rounded-lg px-3 py-2 text-sm border border-[#e4cfd7] focus:border-blue-500 outline-none"
                 value={editingEvent.title}
                 onChange={e => setEditingEvent({ ...editingEvent, title: e.target.value })}
                 placeholder="Event title"
@@ -4415,9 +4465,9 @@ export default function Home() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Folder</label>
+                <label className="text-xs text-[#a68592] mb-1 block">Folder</label>
                 <select
-                  className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                  className="w-full bg-[#f3e5ea] text-[#6f5460] rounded-lg px-3 py-2 text-sm border border-[#e4cfd7] outline-none"
                   value={editingEvent.folder || 'PERSONAL'}
                   onChange={e => setEditingEvent({ ...editingEvent, folder: e.target.value })}
                 >
@@ -4427,10 +4477,10 @@ export default function Home() {
                 </select>
               </div>
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Date</label>
+                <label className="text-xs text-[#a68592] mb-1 block">Date</label>
                 <input
                   type="date"
-                  className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                  className="w-full bg-[#f3e5ea] text-[#6f5460] rounded-lg px-3 py-2 text-sm border border-[#e4cfd7] outline-none"
                   value={editingEvent.date}
                   onChange={e => setEditingEvent({ ...editingEvent, date: e.target.value })}
                 />
@@ -4439,31 +4489,31 @@ export default function Home() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Start Time</label>
+                <label className="text-xs text-[#a68592] mb-1 block">Start Time</label>
                 <input
                   type="time"
-                  className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                  className="w-full bg-[#f3e5ea] text-[#6f5460] rounded-lg px-3 py-2 text-sm border border-[#e4cfd7] outline-none"
                   value={editingEvent.time || ''}
                   onChange={e => setEditingEvent({ ...editingEvent, time: e.target.value })}
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">End Time</label>
+                <label className="text-xs text-[#a68592] mb-1 block">End Time</label>
                 <input
                   type="time"
-                  className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                  className="w-full bg-[#f3e5ea] text-[#6f5460] rounded-lg px-3 py-2 text-sm border border-[#e4cfd7] outline-none"
                   value={editingEvent.endTime || ''}
                   onChange={e => setEditingEvent({ ...editingEvent, endTime: e.target.value })}
                   placeholder="Optional"
                 />
-                <div className="text-xs text-gray-500 mt-1">Optional</div>
+                <div className="text-xs text-[#b497a1] mt-1">Optional</div>
               </div>
             </div>
 
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Description</label>
+              <label className="text-xs text-[#a68592] mb-1 block">Description</label>
               <textarea
-                className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none resize-none"
+                className="w-full bg-[#f3e5ea] text-[#6f5460] rounded-lg px-3 py-2 text-sm border border-[#e4cfd7] outline-none resize-none"
                 rows={3}
                 value={editingEvent.description || ''}
                 onChange={e => setEditingEvent({ ...editingEvent, description: e.target.value })}
@@ -4472,10 +4522,10 @@ export default function Home() {
             </div>
 
             {/* Repeat Section */}
-            <div className="border-t border-gray-700 pt-4">
-              <label className="text-xs text-gray-400 mb-2 block">Repeat</label>
+            <div className="border-t border-[#e4cfd7] pt-4">
+              <label className="text-xs text-[#a68592] mb-2 block">Repeat</label>
               <select
-                className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none mb-3"
+                className="w-full bg-[#f3e5ea] text-[#6f5460] rounded-lg px-3 py-2 text-sm border border-[#e4cfd7] outline-none mb-3"
                 value={recurrenceType}
                 onChange={e => setRecurrenceType(e.target.value as 'none' | 'weekly' | 'every4weeks')}
               >
@@ -4486,7 +4536,7 @@ export default function Home() {
 
               {recurrenceType === 'weekly' && (
                 <div className="mb-3">
-                  <label className="text-xs text-gray-400 mb-2 block">Days</label>
+                  <label className="text-xs text-[#a68592] mb-2 block">Days</label>
                   <div className="grid grid-cols-7 gap-1">
                     {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, index) => {
                       const dayValue = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'][index]
@@ -4503,8 +4553,8 @@ export default function Home() {
                           }}
                           className={`py-1 px-2 rounded text-xs font-medium transition-colors ${
                             weeklyDays.includes(dayValue)
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-[#1a1a2e] text-gray-400 hover:text-white border border-gray-600'
+                              ? 'bg-blue-600 text-[#6f5460]'
+                              : 'bg-[#f3e5ea] text-[#a68592] hover:text-[#6f5460] border border-gray-600'
                           }`}
                         >
                           {day}
@@ -4517,15 +4567,15 @@ export default function Home() {
 
               {recurrenceType !== 'none' && (
                 <div>
-                  <label className="text-xs text-gray-400 mb-2 block">End Condition</label>
+                  <label className="text-xs text-[#a68592] mb-2 block">End Condition</label>
                   <div className="flex gap-2 mb-2">
                     <button
                       type="button"
                       onClick={() => setRecurrenceEndType('date')}
                       className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
                         recurrenceEndType === 'date'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-[#1a1a2e] text-gray-400 hover:text-white border border-gray-600'
+                          ? 'bg-blue-600 text-[#6f5460]'
+                          : 'bg-[#f3e5ea] text-[#a68592] hover:text-[#6f5460] border border-gray-600'
                       }`}
                     >
                       Until Date
@@ -4535,8 +4585,8 @@ export default function Home() {
                       onClick={() => setRecurrenceEndType('count')}
                       className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
                         recurrenceEndType === 'count'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-[#1a1a2e] text-gray-400 hover:text-white border border-gray-600'
+                          ? 'bg-blue-600 text-[#6f5460]'
+                          : 'bg-[#f3e5ea] text-[#a68592] hover:text-[#6f5460] border border-gray-600'
                       }`}
                     >
                       # of Times
@@ -4545,14 +4595,14 @@ export default function Home() {
                   {recurrenceEndType === 'date' ? (
                     <input
                       type="date"
-                      className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                      className="w-full bg-[#f3e5ea] text-[#6f5460] rounded-lg px-3 py-2 text-sm border border-[#e4cfd7] outline-none"
                       value={recurrenceEndDate}
                       onChange={e => setRecurrenceEndDate(e.target.value)}
                     />
                   ) : (
                     <input
                       type="number"
-                      className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-2 text-sm border border-gray-700 outline-none"
+                      className="w-full bg-[#f3e5ea] text-[#6f5460] rounded-lg px-3 py-2 text-sm border border-[#e4cfd7] outline-none"
                       value={recurrenceCount}
                       onChange={e => setRecurrenceCount(parseInt(e.target.value) || 1)}
                       min="1"
@@ -4565,8 +4615,8 @@ export default function Home() {
             </div>
 
             {/* Mobile-only Move Section */}
-            <div className="md:hidden border-t border-gray-700 pt-4 pointer-events-auto">
-              <label className="text-xs text-gray-400 mb-2 block">Move Event</label>
+            <div className="md:hidden border-t border-[#e4cfd7] pt-4 pointer-events-auto">
+              <label className="text-xs text-[#a68592] mb-2 block">Move Event</label>
               <div className="flex gap-2">
                 <button
                   onClick={(e) => {
@@ -4574,7 +4624,7 @@ export default function Home() {
                     e.stopPropagation()
                     moveEventToTomorrow(editingEvent)
                   }}
-                  className="flex-1 bg-[#1a1a2e] hover:bg-[#252545] text-white rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600 touch-manipulation"
+                  className="flex-1 bg-[#f3e5ea] hover:bg-[#252545] text-[#6f5460] rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600 touch-manipulation"
                   style={{ touchAction: 'manipulation' }}
                 >
                   Tomorrow
@@ -4585,7 +4635,7 @@ export default function Home() {
                     e.stopPropagation()
                     moveEventToNextWeek(editingEvent)
                   }}
-                  className="flex-1 bg-[#1a1a2e] hover:bg-[#252545] text-white rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600 touch-manipulation"
+                  className="flex-1 bg-[#f3e5ea] hover:bg-[#252545] text-[#6f5460] rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600 touch-manipulation"
                   style={{ touchAction: 'manipulation' }}
                 >
                   Next Week
@@ -4596,7 +4646,7 @@ export default function Home() {
                     e.stopPropagation()
                     openDatePicker(editingEvent)
                   }}
-                  className="flex-1 bg-[#1a1a2e] hover:bg-[#252545] text-white rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600 touch-manipulation"
+                  className="flex-1 bg-[#f3e5ea] hover:bg-[#252545] text-[#6f5460] rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600 touch-manipulation"
                   style={{ touchAction: 'manipulation' }}
                 >
                   Pick Date
@@ -4605,7 +4655,7 @@ export default function Home() {
               
               {/* TEMP: On-screen debug info */}
               {debugInfo && (
-                <div className="mt-3 p-2 bg-gray-800 rounded text-xs text-gray-300 font-mono whitespace-pre-line">
+                <div className="mt-3 p-2 bg-gray-800 rounded text-xs text-[#8b6f79] font-mono whitespace-pre-line">
                   {debugInfo}
                 </div>
               )}
@@ -4613,24 +4663,24 @@ export default function Home() {
 
             {/* Debug info - Always visible */}
             {debugInfo && (
-              <div className="p-3 bg-gray-800 rounded text-xs text-gray-300 font-mono whitespace-pre-line max-h-40 overflow-y-auto">
+              <div className="p-3 bg-gray-800 rounded text-xs text-[#8b6f79] font-mono whitespace-pre-line max-h-40 overflow-y-auto">
                 {debugInfo}
               </div>
             )}
 
             {/* Duplicate Section */}
-            <div className="border-t border-gray-700 pt-4">
-              <label className="text-xs text-gray-400 mb-2 block">Duplicate</label>
+            <div className="border-t border-[#e4cfd7] pt-4">
+              <label className="text-xs text-[#a68592] mb-2 block">Duplicate</label>
               <div className="flex gap-2">
                 <button
                   onClick={() => duplicateEvent(editingEvent, 'next-week')}
-                  className="flex-1 bg-[#1a1a2e] hover:bg-[#252545] text-white rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600"
+                  className="flex-1 bg-[#f3e5ea] hover:bg-[#252545] text-[#6f5460] rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600"
                 >
                   Next Week
                 </button>
                 <button
                   onClick={() => duplicateEvent(editingEvent, 'pick-date')}
-                  className="flex-1 bg-[#1a1a2e] hover:bg-[#252545] text-white rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600"
+                  className="flex-1 bg-[#f3e5ea] hover:bg-[#252545] text-[#6f5460] rounded-lg py-2 text-xs font-medium transition-colors border border-gray-600"
                 >
                   Pick Date
                 </button>
@@ -4639,11 +4689,11 @@ export default function Home() {
             </div>
 
             {/* Sticky Footer */}
-            <div className="p-6 border-t border-gray-700 bg-[#16213e]">
+            <div className="p-6 border-t border-[#e4cfd7] bg-[#fffaf6]">
               <div className="flex gap-3">
                 <button
                   onClick={() => saveEvent(editingEvent)}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium transition-colors"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-[#6f5460] rounded-lg py-2 text-sm font-medium transition-colors"
                 >
                   Save Changes
                 </button>
@@ -4662,13 +4712,13 @@ export default function Home() {
       {/* Edit Vision Statement Modal */}
       {editingVision && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setEditingVision(false)}>
-          <div className="bg-[#16213e] rounded-xl p-6 w-full max-w-lg space-y-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white">Edit Vision Statement</h3>
+          <div className="bg-[#fffaf6] rounded-xl p-6 w-full max-w-lg space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-[#6f5460]">Edit Vision Statement</h3>
 
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Vision Statement</label>
+              <label className="text-xs text-[#a68592] mb-1 block">Vision Statement</label>
               <textarea
-                className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-3 text-sm border border-gray-700 focus:border-blue-500 outline-none resize-none"
+                className="w-full bg-[#f3e5ea] text-[#6f5460] rounded-lg px-3 py-3 text-sm border border-[#e4cfd7] focus:border-blue-500 outline-none resize-none"
                 rows={6}
                 value={visionText}
                 onChange={e => setVisionText(e.target.value)}
@@ -4679,7 +4729,7 @@ export default function Home() {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={saveVisionStatement}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium transition-colors"
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-[#6f5460] rounded-lg py-2 text-sm font-medium transition-colors"
               >
                 Save
               </button>
@@ -4688,7 +4738,7 @@ export default function Home() {
                   setVisionText(dashboardSettings?.vision_statement || '')
                   setEditingVision(false)
                 }}
-                className="bg-gray-600/20 hover:bg-gray-600/40 text-gray-400 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                className="bg-gray-600/20 hover:bg-gray-600/40 text-[#a68592] rounded-lg px-4 py-2 text-sm font-medium transition-colors"
               >
                 Cancel
               </button>
@@ -4700,18 +4750,18 @@ export default function Home() {
       {/* Edit Header Words Modal */}
       {editingHeader && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setEditingHeader(false)}>
-          <div className="bg-[#16213e] rounded-xl p-6 w-full max-w-lg space-y-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white">Edit Header Words</h3>
+          <div className="bg-[#fffaf6] rounded-xl p-6 w-full max-w-lg space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-[#6f5460]">Edit Header Words</h3>
 
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Header Words (separated by ·)</label>
+              <label className="text-xs text-[#a68592] mb-1 block">Header Words (separated by ·)</label>
               <input
-                className="w-full bg-[#1a1a2e] text-white rounded-lg px-3 py-3 text-sm border border-gray-700 focus:border-blue-500 outline-none"
+                className="w-full bg-[#f3e5ea] text-[#6f5460] rounded-lg px-3 py-3 text-sm border border-[#e4cfd7] focus:border-blue-500 outline-none"
                 value={headerWords}
                 onChange={e => setHeaderWords(e.target.value)}
                 placeholder="FAMILY · WEALTH · LOVE · CONNECTION · HEALTH · PEACE · HAPPINESS"
               />
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xs text-[#b497a1] mt-1">
                 Tip: Use the · character to separate words (Alt+0183 or Option+Shift+9)
               </div>
             </div>
@@ -4719,7 +4769,7 @@ export default function Home() {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={saveHeaderWords}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium transition-colors"
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-[#6f5460] rounded-lg py-2 text-sm font-medium transition-colors"
               >
                 Save
               </button>
@@ -4728,7 +4778,7 @@ export default function Home() {
                   setHeaderWords(dashboardSettings?.header_words || '')
                   setEditingHeader(false)
                 }}
-                className="bg-gray-600/20 hover:bg-gray-600/40 text-gray-400 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                className="bg-gray-600/20 hover:bg-gray-600/40 text-[#a68592] rounded-lg px-4 py-2 text-sm font-medium transition-colors"
               >
                 Cancel
               </button>
