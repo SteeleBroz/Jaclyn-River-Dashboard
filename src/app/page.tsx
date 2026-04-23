@@ -13,6 +13,24 @@ const PRIORITY_COLORS: Record<string, string> = {
   high: 'bg-red-500', medium: 'bg-yellow-500', low: 'bg-blue-500'
 }
 
+const ROADMAP_PHASES = [
+  {
+    name: 'Phase 1 – Cleanout Cash + Brand Transition',
+    goal: 'Clear youth-performance inventory, generate cash, and bridge from apparel/products toward tools and digital support.',
+    milestones: ['Emails Finalized & Scheduled', 'Site Sale-Ready', 'Cleanout Ads Running', '“What’s Next” Bridge Live']
+  },
+  {
+    name: 'Phase 2 – App Launch + Offer Validation',
+    goal: 'Launch and validate the Family Sports Scheduler app.',
+    milestones: ['Landing Page Clear & Parent-Focused', 'App Email Campaign Built', 'Initial Users & Feedback', 'One repeatable doorway from the existing audience']
+  },
+  {
+    name: 'Phase 3 – Distribution Engine + Digital Storefront',
+    goal: 'Build repeatable digital-product visibility and sales flow.',
+    milestones: ['Etsy / marketplace listings', 'Referral / ambassador path', 'One consistent traffic source', 'Unified storefront feel']
+  }
+] as const
+
 // Get week dates for a specific date in NY timezone
 const getWeekDates = (referenceDate: Date) => {
   // Create a new Date to avoid mutating the original
@@ -50,7 +68,7 @@ export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [weeklyNotes, setWeeklyNotes] = useState<WeeklyNote[]>([])
-  const [activeTab, setActiveTab] = useState<'jaclyn' | 'river' | 'grocery' | 'ideas' | 'digest' | 'sendouts' | 'thumb-equity'>('jaclyn')
+  const [activeTab, setActiveTab] = useState<'today' | 'week' | 'roadmap' | 'life-admin' | 'parking-lot' | 'calendar' | 'thumb-equity'>('today')
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day' | 'year'>('month')
   const [calendarDate, setCalendarDate] = useState(new Date())
@@ -2774,6 +2792,108 @@ export default function Home() {
     return items
   }
 
+  const getTodayDate = () => new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/New_York' })
+  const getTodayKey = () => new Date(getTodayNY() + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/New_York' }).toLowerCase()
+  const getTodayTasks = (board: 'jaclyn' | 'river' = 'jaclyn') => tasks.filter(task => task.board === board && task.day_of_week === getTodayKey())
+  const getTodayEvents = () => events.filter(event => event.date === getTodayNY())
+  const getCurrentPhase = () => weeklyNotes.find(note => note.author === 'jaclyn')?.content?.slice(0, 80) || 'Phase 1 – Cleanout Cash + Brand Transition'
+  const getDayType = () => {
+    const day = getTodayKey()
+    if (day === 'monday' || day === 'tuesday') return 'mission'
+    if (day === 'wednesday' || day === 'thursday') return 'support'
+    if (day === 'friday') return 'reset'
+    return 'weekend'
+  }
+  const renderSectionCard = (title: string, content: React.ReactNode) => (
+    <details className="bg-[#16213e] rounded-2xl overflow-hidden group">
+      <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between text-sm text-gray-200 font-medium">
+        <span>{title}</span><span className="text-gray-500 group-open:rotate-180 transition-transform">⌄</span>
+      </summary>
+      <div className="px-4 pb-4 text-sm text-gray-300">{content}</div>
+    </details>
+  )
+  const renderTodayView = () => {
+    const dayType = getDayType()
+    const todayTasks = getTodayTasks('jaclyn').filter(task => task.folder !== 'daily-digest' && task.folder !== 'send-outs')
+    const todayEvents = getTodayEvents()
+    return (
+      <div className="space-y-4">
+        <div className="bg-[#16213e] rounded-3xl p-5 md:p-6">
+          <div className="flex flex-col gap-2 mb-5">
+            <div className="text-xs uppercase tracking-[0.28em] text-gray-500">STEELE LIFE</div>
+            <div className="text-2xl md:text-3xl font-semibold text-white">Aligned. Abundant. Present.</div>
+            <div className="text-sm text-gray-400">{getTodayDate()}</div>
+          </div>
+          <div className="bg-[#1a1a2e] rounded-2xl p-4 mb-4">
+            <div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-2">Today</div>
+            <div className="text-base md:text-lg text-white font-medium">{dayType === 'mission' ? 'Mission Day' : dayType === 'support' ? 'Optional Support Day' : dayType === 'reset' ? 'Reset Day' : 'Weekend Rhythm'}</div>
+            <div className="text-sm text-gray-400 mt-1">Today supports the life we’re building.</div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="bg-[#1a1a2e] rounded-2xl p-4"><div className="text-xs text-gray-500 uppercase tracking-[0.2em] mb-2">Phase</div><div className="text-white font-medium">{getCurrentPhase()}</div></div>
+            <div className="bg-[#1a1a2e] rounded-2xl p-4"><div className="text-xs text-gray-500 uppercase tracking-[0.2em] mb-2">Notifications</div><div className="text-white font-medium">15 min</div><div className="text-sm text-gray-400 mt-1">Emails + sports chats + school apps/messages</div></div>
+            <div className="bg-[#1a1a2e] rounded-2xl p-4"><div className="text-xs text-gray-500 uppercase tracking-[0.2em] mb-2">Focus</div><div className="text-white font-medium">{todayTasks[0]?.title || (dayType === 'support' ? 'If I have extra time' : dayType === 'reset' ? 'Friday Reset' : '2-hour Mission Block')}</div><div className="text-sm text-gray-400 mt-1">{dayType === 'support' ? 'Clear 1 Life Admin item · Finish a paused mission · Review calendar · Tidy Capture' : dayType === 'reset' ? 'Close week, choose next 2 missions, prep Monday' : 'Do the next thing, not everything'}</div></div>
+          </div>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="space-y-3">
+            {renderSectionCard('More for Today', <div className="space-y-3"><div><div className="text-white font-medium">Presence</div><div className="text-gray-400">Phone at door by 3:30 · When today is done, be here now</div></div><div><div className="text-white font-medium">Workout</div><div className="text-gray-400">Strength / Stretching · Walk or Pickleball</div></div><div><div className="text-white font-medium">Ground</div><div className="text-gray-400">3 slow breaths · Relax shoulders · Do the next thing, not everything</div></div><div><button onClick={() => setActiveTab('thumb-equity')} className="text-teal-400 hover:text-teal-300 transition-colors">Open today’s Thumb Equity tab →</button></div></div>)}
+            {renderSectionCard('This Week Snapshot', <div className="space-y-2"><div className="text-white">2 business missions max · 1 optional bonus mission · 1 weekly admin focus</div><div className="text-gray-400">Planning support without making This Week the landing page.</div></div>)}
+          </div>
+          <div className="bg-[#16213e] rounded-3xl p-5">
+            <div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">Today’s Events</div>
+            <div className="space-y-3">
+              {todayEvents.length ? todayEvents.map(event => <div key={event.id} className="bg-[#1a1a2e] rounded-2xl p-3 border-l-4" style={{ borderLeftColor: getFolderColor(event.folder || 'PERSONAL') }}><div className="text-white font-medium">{event.title}</div><div className="text-sm text-gray-400">{formatEventDate(event.date)}{event.time ? ` • ${toNYTimeDisplay(event.date + 'T' + event.time + ':00')}` : ''}</div></div>) : <div className="text-sm text-gray-500 italic">No time-specific events today.</div>}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  const renderWeekView = () => {
+    const jaclynTasks = tasks.filter(task => task.board === 'jaclyn' && !task.completed)
+    const missionCandidates = jaclynTasks.filter(task => task.folder !== 'daily-digest' && task.folder !== 'send-outs' && task.day_of_week !== 'overflow')
+    const weeklyAdminFocus = jaclynTasks.find(task => task.day_of_week === 'overflow')
+    return (
+      <div className="space-y-4">
+        <div className="bg-[#16213e] rounded-3xl p-5 md:p-6"><div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4"><div><div className="text-xs uppercase tracking-[0.28em] text-gray-500 mb-2">This Week</div><h2 className="text-2xl font-semibold text-white">Current execution context</h2><p className="text-sm text-gray-400 mt-1">Road Map strip, weekly missions, and weekly admin focus.</p></div><div className="text-sm text-gray-400">{weekRange}</div></div></div>
+        <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]"><div className="bg-[#16213e] rounded-3xl p-5"><div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">Road Map strip</div><div className="text-white font-medium mb-1">{getCurrentPhase()}</div><div className="text-sm text-gray-400 mb-4">Active milestone and phase context for the current week.</div><div className="w-full h-2 rounded-full bg-[#1a1a2e] overflow-hidden"><div className="h-full bg-teal-500 w-1/3"></div></div></div><div className="bg-[#16213e] rounded-3xl p-5"><div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-3">Weekly limits</div><div className="space-y-2 text-sm text-gray-300"><div>2 business missions max</div><div>1 optional bonus mission</div><div>1 weekly admin focus</div></div></div></div>
+        <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]"><div className="bg-[#16213e] rounded-3xl p-5"><div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-white">Weekly Missions</h3><span className="text-xs text-gray-500">Top 2 + bonus</span></div><div className="space-y-3">{missionCandidates.slice(0, 3).map((task, idx) => <button key={task.id} onClick={() => setEditingTask(task)} className="w-full text-left bg-[#1a1a2e] rounded-2xl p-4 hover:bg-[#202040] transition-colors"><div className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-2">{idx === 2 ? 'Bonus Mission' : `Mission ${idx + 1}`}</div><div className="text-white font-medium">{task.title}</div><div className="text-sm text-gray-400 mt-1">{task.day_of_week ? DAY_LABELS[task.day_of_week] : 'This week'} · {task.priority || 'normal priority'}</div></button>)}{!missionCandidates.length && <div className="text-sm text-gray-500 italic">No weekly missions selected yet.</div>}</div></div><div className="bg-[#16213e] rounded-3xl p-5"><div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-white">Weekly Admin Focus</h3><span className="text-xs text-gray-500">1 focus</span></div>{weeklyAdminFocus ? <button onClick={() => setEditingTask(weeklyAdminFocus)} className="w-full text-left bg-[#1a1a2e] rounded-2xl p-4 hover:bg-[#202040] transition-colors"><div className="text-white font-medium">{weeklyAdminFocus.title}</div><div className="text-sm text-gray-400 mt-1">Overflow / weekly admin area</div></button> : <div className="text-sm text-gray-500 italic">No weekly admin focus selected yet.</div>}</div></div>
+      </div>
+    )
+  }
+  const renderRoadMapView = () => (
+    <div className="space-y-4">
+      <div className="bg-[#16213e] rounded-3xl p-5 md:p-6"><div className="text-xs uppercase tracking-[0.28em] text-gray-500 mb-2">SteeleBroz Road Map</div><h2 className="text-2xl font-semibold text-white">Strategic view</h2><p className="text-sm text-gray-400 mt-1">Editable strategic direction; current week should only change deliberately.</p></div>
+      <div className="grid gap-4">{ROADMAP_PHASES.map((phase, index) => <div key={phase.name} className="bg-[#16213e] rounded-3xl p-5"><div className="flex items-center gap-3 mb-3"><div className="w-8 h-8 rounded-full bg-teal-500/20 text-teal-300 flex items-center justify-center text-sm font-semibold">{index + 1}</div><h3 className="text-lg font-semibold text-white">{phase.name}</h3></div><p className="text-sm text-gray-300 mb-4">{phase.goal}</p><div className="grid gap-2 md:grid-cols-2">{phase.milestones.map(item => <div key={item} className="bg-[#1a1a2e] rounded-2xl px-4 py-3 text-sm text-gray-300">{item}</div>)}</div></div>)}</div>
+    </div>
+  )
+  const renderLifeAdminView = () => {
+    const buckets = [{ title: 'Capture', store: 'random' as const, hint: 'Quick offload before deciding.' }, { title: 'This Week', store: 'publix' as const, hint: 'Current life-admin focus.' }, { title: 'Waiting / Scheduled', store: 'costco' as const, hint: 'Handled later or already planned.' }]
+    return (
+      <div className="space-y-4">
+        <div className="bg-[#16213e] rounded-3xl p-5 md:p-6"><div className="text-xs uppercase tracking-[0.28em] text-gray-500 mb-2">Life Admin</div><h2 className="text-2xl font-semibold text-white">Concrete life logistics</h2><p className="text-sm text-gray-400 mt-1">Capture, this week, waiting/scheduled, and done — separate from daily notifications.</p></div>
+        <div className="grid gap-4 lg:grid-cols-3">{buckets.map(bucket => <div key={bucket.title} className="bg-[#16213e] rounded-3xl p-5"><div className="flex items-center justify-between mb-3"><h3 className="text-lg font-semibold text-white">{bucket.title}</h3><span className="text-xs text-gray-500">{getGroceryItemsByStore(bucket.store).length}</span></div><div className="text-sm text-gray-400 mb-4">{bucket.hint}</div><div className="space-y-2">{getGroceryItemsByStore(bucket.store).slice(0, 8).map(item => <div key={item.id} className="bg-[#1a1a2e] rounded-2xl px-4 py-3 flex items-center gap-3"><input type="checkbox" checked={item.checked} onChange={() => toggleGroceryItemChecked(item.id, !item.checked)} className="w-4 h-4 rounded border-gray-600 bg-[#1a1a2e] text-blue-500 focus:ring-blue-500 focus:ring-offset-0" /><span className={`text-sm ${item.checked ? 'line-through text-gray-500' : 'text-gray-200'}`}>{item.text}</span></div>)}{!getGroceryItemsByStore(bucket.store).length && <div className="text-sm text-gray-500 italic">No items here yet.</div>}</div></div>)}</div>
+      </div>
+    )
+  }
+  const renderParkingLotView = () => {
+    const buckets = [{ title: 'Home', key: 'ideas' as const }, { title: 'Personal', key: 'backlog' as const }, { title: 'Kids', key: 'goal_1m' as const }, { title: 'SteeleBroz', key: 'goal_3m' as const }]
+    const ideasByKey = (listKey: IdeaItem['list_key']) => ideaItems.filter(item => item.list_key === listKey && !item.completed).sort((a, b) => a.sort_order - b.sort_order)
+    return (
+      <div className="space-y-4">
+        <div className="bg-[#16213e] rounded-3xl p-5 md:p-6"><div className="text-xs uppercase tracking-[0.28em] text-gray-500 mb-2">Parking Lot</div><h2 className="text-2xl font-semibold text-white">Hold ideas without hijacking execution</h2><p className="text-sm text-gray-400 mt-1">Area-based buckets for Home, Personal, Kids, and SteeleBroz.</p></div>
+        <div className="grid gap-4 lg:grid-cols-2">{buckets.map(bucket => <div key={bucket.title} className="bg-[#16213e] rounded-3xl p-5"><div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-white">{bucket.title}</h3><span className="text-xs text-gray-500">{ideasByKey(bucket.key).length}</span></div><div className="space-y-2">{ideasByKey(bucket.key).slice(0, 8).map(item => <div key={item.id} className="bg-[#1a1a2e] rounded-2xl px-4 py-3"><div className="text-sm text-white">{item.text}</div><div className="text-xs text-gray-500 mt-1">Capture now, sort later.</div></div>)}{!ideasByKey(bucket.key).length && <div className="text-sm text-gray-500 italic">No parked items yet.</div>}</div></div>)}</div>
+      </div>
+    )
+  }
+  const renderCalendarView = () => (
+    <div className="space-y-4">
+      <div className="bg-[#16213e] rounded-3xl p-5 md:p-6"><div className="text-xs uppercase tracking-[0.28em] text-gray-500 mb-2">Calendar</div><h2 className="text-2xl font-semibold text-white">Date-and-events truth source</h2><p className="text-sm text-gray-400 mt-1">Appointments, field trips, practices, launches, send dates, and scheduled commitments.</p></div>
+      {renderFullCalendar()}
+    </div>
+  )
+
   const renderChecklist = (type: 'daily-digest' | 'send-outs', title: string) => {
     const items = getChecklistItems(type)
     const tabKey = type === 'daily-digest' ? 'digest' : 'sendouts'
@@ -4136,173 +4256,36 @@ export default function Home() {
 
   return (
     <main className="min-h-screen p-3 md:p-6 max-w-[1400px] mx-auto">
-      {/* Header */}
-      <div className="text-center mb-3 md:mb-4 relative">
-        <div 
-          ref={headerWordsRef}
-          className="text-gray-500 text-xs font-light uppercase tracking-widest cursor-pointer select-none"
-          onClick={handleHeaderWordsClick}
-        >
-          {dashboardSettings?.header_words || 'FAMILY · WEALTH · LOVE · CONNECTION · HEALTH · PEACE · HAPPINESS'}
+      <div className="text-center mb-4 md:mb-6 relative">
+        <div ref={headerWordsRef} className="text-gray-500 text-xs font-light uppercase tracking-widest cursor-pointer select-none" onClick={handleHeaderWordsClick}>
+          {dashboardSettings?.header_words || 'STEELE LIFE'}
         </div>
-        
-        {/* Admin Mode Indicators */}
-        {adminMode && (
-          <div className="absolute top-0 right-0 flex items-center gap-2">
-            <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full">ADMIN</span>
-            <button
-              onClick={() => setEditingHeader(true)}
-              className="text-gray-400 hover:text-white transition-colors p-1"
-              title="Edit header words"
-            >
-              ⚙️
-            </button>
-          </div>
-        )}
+        {adminMode && (<div className="absolute top-0 right-0 flex items-center gap-2"><span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full">ADMIN</span><button onClick={() => setEditingHeader(true)} className="text-gray-400 hover:text-white transition-colors p-1" title="Edit header words">⚙️</button></div>)}
       </div>
-      
       <div className="flex items-center justify-between mb-4">
-        <div></div>
+        <div className="text-sm text-gray-400">Quiet focus, calm structure, protected systems.</div>
         <div className="flex items-center gap-3">
-          {syncing && (
-            <div className="flex items-center gap-2 text-sm text-gray-400">
-              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-              <span>Syncing...</span>
-            </div>
-          )}
-          <button
-            onClick={() => fetchData(true)}
-            disabled={syncing}
-            className="p-2 text-gray-400 hover:text-white transition-colors disabled:opacity-50"
-            title="Refresh data"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
+          {syncing && (<div className="flex items-center gap-2 text-sm text-gray-400"><div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div><span>Syncing...</span></div>)}
+          <button onClick={() => fetchData(true)} disabled={syncing} className="p-2 text-gray-400 hover:text-white transition-colors disabled:opacity-50" title="Refresh data"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
         </div>
       </div>
-
-      {/* Vision Statement */}
-      <div className="bg-[#16213e] rounded-xl p-2 md:p-3 mb-3 md:mb-4 relative">
-        <div className="text-center">
-          <div className="text-gray-400 text-xs italic mb-1 md:mb-3">Vision Statement</div>
-          <div className="flex items-center gap-2 md:gap-4">
-            {/* Left - Family Photo */}
-            <div className="flex justify-center flex-shrink-0 relative">
-              {dashboardSettings?.profile_image_url ? (
-                <img 
-                  src={dashboardSettings.profile_image_url} 
-                  alt="Family" 
-                  className="rounded-full object-cover" 
-                  style={{ width: '68px', height: '68px' }}
-                />
-              ) : (
-                <div className="rounded-full bg-gray-600 flex items-center justify-center" style={{ width: '68px', height: '68px' }}>
-                  <span className="text-gray-400 text-xs">👨‍👩‍👦‍👦</span>
-                </div>
-              )}
-              
-              {/* Admin Mode - Image Upload */}
-              {adminMode && (
-                <div className="absolute -bottom-1 -right-1">
-                  <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs transition-colors">
-                    {uploadingImage ? '⏳' : '📷'}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="hidden"
-                      disabled={uploadingImage}
-                    />
-                  </label>
-                </div>
-              )}
-            </div>
-            
-            {/* Right - Vision Text */}
-            <div className="flex-1 text-white text-xs md:text-sm leading-tight md:leading-relaxed min-w-0">
-              {dashboardSettings?.vision_statement || 'Living with purpose, intention, love, and calm. Building wealth, deep connections, and time freedom while raising boys into confident, disciplined men.'}
-            </div>
-          </div>
-        </div>
-        
-        {/* Admin Mode - Edit Vision Button */}
-        {adminMode && (
-          <button
-            onClick={() => setEditingVision(true)}
-            className="absolute top-2 right-2 text-gray-400 hover:text-white transition-colors p-1"
-            title="Edit vision statement"
-          >
-            ✏️
-          </button>
-        )}
-      </div>
-
-      {/* Folder Tiles */}
-      <div className="flex flex-nowrap gap-2 overflow-x-auto pb-3 mb-3 md:mb-6 snap-x snap-mandatory scrollbar-thin">
-        {folders.map(f => (
-          <button
-            key={f.id}
-            onClick={() => {
-              // Route PERSONAL folder to File Hub, others to standard folder view
-              if (f.name === 'PERSONAL') {
-                router.push('/personal')
-              } else {
-                router.push(`/folder/${f.name.toLowerCase().replace(/\s+/g, '-')}`)
-              }
-            }}
-            className="snap-start shrink-0 px-3 md:px-4 py-2 rounded-full text-white text-xs md:text-sm font-medium transition-all opacity-80 hover:opacity-100 hover:scale-105 whitespace-nowrap"
-            style={{ backgroundColor: f.color }}
-          >
-            {f.name}
-          </button>
-        ))}
-      </div>
-
-      {/* Main Layout - Left Content + Right Calendar */}
-      <div className="flex flex-col md:flex-row gap-3 md:gap-6 md:items-stretch">
-        {/* Main Workspace */}
-        <div className="flex-1 space-y-3 md:space-y-6">
-        {/* Tab Navigation */}
-        <div className="flex gap-1 bg-[#16213e] rounded-xl p-1">
-          {[
-            { id: 'jaclyn', label: 'Jaclyn' },
-            { id: 'river', label: 'River' },
-            { id: 'grocery', label: 'Grocery List' },
-            { id: 'ideas', label: 'Ideas' },
-            { id: 'digest', label: 'Daily Digest' },
-            { id: 'sendouts', label: 'Send Outs' },
-            { id: 'thumb-equity', label: '👍 Thumb Equity' }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex-1 py-2 md:py-3 px-2 md:px-4 rounded-lg text-xs md:text-sm font-medium transition-all ${
-                activeTab === tab.id 
-                  ? 'bg-[#1a1a2e] text-white' 
-                  : 'text-gray-400 hover:text-white hover:bg-[#1a1a2e]/50'
-              }`}
-            >
-              {tab.label}
+      <div className="bg-[#16213e] rounded-3xl p-4 md:p-5 mb-4">
+        <div className="flex flex-wrap gap-2">
+          {[{ id: 'today', label: 'Today' }, { id: 'week', label: 'This Week' }, { id: 'roadmap', label: 'SteeleBroz Road Map' }, { id: 'life-admin', label: 'Life Admin' }, { id: 'parking-lot', label: 'Parking Lot' }, { id: 'calendar', label: 'Calendar' }, { id: 'thumb-equity', label: 'Thumb Equity' }].map(section => (
+            <button key={section.id} onClick={() => setActiveTab(section.id as any)} className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${activeTab === section.id ? 'bg-[#1a1a2e] text-white' : 'text-gray-400 hover:text-white hover:bg-[#1a1a2e]/50'}`}>
+              {section.label}
             </button>
           ))}
         </div>
-
-        {/* Tab Content */}
-        {activeTab === 'jaclyn' && renderWeeklyBoard('jaclyn')}
-        {activeTab === 'river' && renderWeeklyBoard('river')}
-        {activeTab === 'grocery' && renderGroceryList()}
-        {activeTab === 'ideas' && renderIdeas()}
-        {activeTab === 'digest' && renderDailyDigest()}
-        {activeTab === 'sendouts' && renderSendOuts()}
+      </div>
+      <div className="space-y-4 md:space-y-6">
+        {activeTab === 'today' && renderTodayView()}
+        {activeTab === 'week' && renderWeekView()}
+        {activeTab === 'roadmap' && renderRoadMapView()}
+        {activeTab === 'life-admin' && renderLifeAdminView()}
+        {activeTab === 'parking-lot' && renderParkingLotView()}
+        {activeTab === 'calendar' && renderCalendarView()}
         {activeTab === 'thumb-equity' && renderThumbEquity()}
-        </div>
-
-        {/* Calendar Panel */}
-        <div className="w-full md:w-80 md:flex-shrink-0 h-full flex flex-col">
-          {renderCalendarPanel()}
-        </div>
       </div>
 
       {/* Full Calendar View */}
