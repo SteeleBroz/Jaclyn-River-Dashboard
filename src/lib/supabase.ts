@@ -124,3 +124,39 @@ export type ThumbEquityItem = {
   created_at: string
   updated_at: string
 }
+
+export type LifeAdminCard = {
+  id: number
+  title: string
+  notes: string | null
+  column_key: 'top-priority' | 'can-wait' | 'waiting-scheduled' | 'done'
+  priority: string | null
+  category: string | null
+  sort_order: number
+  completed: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type ParkingLotCard = {
+  id: number
+  title: string
+  description: string | null
+  notes: string | null
+  bucket: 'Home' | 'Personal' | 'Kids' | 'SteeleBroz'
+  tag: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export type RoadmapTask = {
+  id: number
+  phase_index: number
+  milestone_index: number
+  title: string
+  sort_order: number
+  completed: boolean
+  created_at: string
+  updated_at: string
+}

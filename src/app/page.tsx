@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
+import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, LifeAdminCard, ParkingLotCard, RoadmapTask, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday','overflow'] as const
 const DAY_LABELS: Record<string, string> = {
@@ -252,6 +252,28 @@ export default function Home() {
   const [expandedParkingCard, setExpandedParkingCard] = useState<string | null>(null)
   const [moreForTodayExpanded, setMoreForTodayExpanded] = useState<Record<string, boolean>>({})
 
+  // v2.1 state
+  const [lifeAdminCards, setLifeAdminCards] = useState<LifeAdminCard[]>([])
+  const [parkingLotDBCards, setParkingLotDBCards] = useState<ParkingLotCard[]>([])
+  const [roadmapTasks, setRoadmapTasks] = useState<RoadmapTask[]>([])
+  const [lifeAdminLoading, setLifeAdminLoading] = useState(false)
+  const [showDoneColumn, setShowDoneColumn] = useState(false)
+  const [editingLifeCard, setEditingLifeCard] = useState<LifeAdminCard | null>(null)
+  const [editingParkingCard, setEditingParkingCard] = useState<ParkingLotCard | null>(null)
+  const [editingRoadmapTask, setEditingRoadmapTask] = useState<RoadmapTask | null>(null)
+  const [addingLifeCard, setAddingLifeCard] = useState<{column: string} | null>(null)
+  const [newLifeCardTitle, setNewLifeCardTitle] = useState('')
+  const [newLifeCardNotes, setNewLifeCardNotes] = useState('')
+  const [addingRoadmapTask, setAddingRoadmapTask] = useState<{phaseIndex: number; milestoneIndex: number} | null>(null)
+  const [newRoadmapTaskTitle, setNewRoadmapTaskTitle] = useState('')
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
+  const [dragOverBucket, setDragOverBucket] = useState<string | null>(null)
+  // Timer state
+  const [activeTimers, setActiveTimers] = useState<Record<string, {seconds: number; running: boolean; preset: number}>>({})
+  const timerIntervalRef = useRef<Record<string, NodeJS.Timeout>>({})
+  const [editingTimerKey, setEditingTimerKey] = useState<string | null>(null)
+  const [editingTimerInput, setEditingTimerInput] = useState('')
+
   // Week navigation state - persist across page refreshes
   const [selectedWeek, setSelectedWeek] = useState<Date>(() => {
     if (typeof window !== 'undefined') {
@@ -441,6 +463,21 @@ export default function Home() {
       }
     } catch (error) {
       console.warn('Failed to fetch dashboard settings:', error)
+    }
+  }, [])
+
+  const fetchV21Data = useCallback(async () => {
+    try {
+      const [lifeRes, parkRes, roadRes] = await Promise.all([
+        supabase.from('life_admin_cards').select('*').order('sort_order').order('created_at', { ascending: false }),
+        supabase.from('parking_lot_cards').select('*').order('sort_order').order('created_at', { ascending: false }),
+        supabase.from('roadmap_tasks').select('*').order('phase_index').order('milestone_index').order('sort_order')
+      ])
+      if (lifeRes.data) setLifeAdminCards(lifeRes.data)
+      if (parkRes.data) setParkingLotDBCards(parkRes.data)
+      if (roadRes.data) setRoadmapTasks(roadRes.data)
+    } catch (e) {
+      console.warn('v2.1 data fetch error:', e)
     }
   }, [])
 
@@ -1043,6 +1080,7 @@ export default function Home() {
     fetchDigestData()
     fetchSendOutsData()
     fetchDashboardSettings()
+    fetchV21Data()
     
     // Set up real-time subscriptions
     const taskSubscription = supabase
@@ -1089,7 +1127,7 @@ export default function Home() {
       eventSubscription.unsubscribe()
       clearInterval(intervalRefresh)
     }
-  }, [fetchData])
+  }, [fetchData, fetchV21Data])
 
   // Fetch thumb equity data when tab is activated
   useEffect(() => {
@@ -2877,6 +2915,79 @@ export default function Home() {
     if (day === 'friday') return 'reset'
     return 'weekend'
   }
+  // Computed values used across multiple render functions
+  const nextRoadmapTask = roadmapTasks.find(t => !t.completed)
+  const nextLifeAdminItem = lifeAdminCards.find(c => c.column_key === 'top-priority' && !c.completed)
+
+  // v2.1 Timer helpers
+  const startTimer = (key: string, preset: number) => {
+    setActiveTimers(prev => ({ ...prev, [key]: { seconds: preset * 60, running: true, preset } }))
+    if (timerIntervalRef.current[key]) clearInterval(timerIntervalRef.current[key])
+    timerIntervalRef.current[key] = setInterval(() => {
+      setActiveTimers(prev => {
+        const t = prev[key]
+        if (!t || !t.running) return prev
+        if (t.seconds <= 1) {
+          clearInterval(timerIntervalRef.current[key])
+          return { ...prev, [key]: { ...t, seconds: 0, running: false } }
+        }
+        return { ...prev, [key]: { ...t, seconds: t.seconds - 1 } }
+      })
+    }, 1000)
+  }
+  const stopTimer = (key: string) => {
+    if (timerIntervalRef.current[key]) clearInterval(timerIntervalRef.current[key])
+    setActiveTimers(prev => ({ ...prev, [key]: { ...prev[key], running: false } }))
+  }
+  const resetTimer = (key: string) => {
+    if (timerIntervalRef.current[key]) clearInterval(timerIntervalRef.current[key])
+    setActiveTimers(prev => {
+      const t = prev[key]
+      if (!t) return prev
+      return { ...prev, [key]: { ...t, seconds: t.preset * 60, running: false } }
+    })
+  }
+  const editTimerPreset = (key: string, newMinutes: number) => {
+    if (timerIntervalRef.current[key]) clearInterval(timerIntervalRef.current[key])
+    setActiveTimers(prev => ({ ...prev, [key]: { seconds: newMinutes * 60, running: false, preset: newMinutes } }))
+  }
+  const TimerBlock = ({ timerKey, defaultMinutes }: { timerKey: string; defaultMinutes: number; label: string }) => {
+    const timer = activeTimers[timerKey]
+    const displaySecs = timer?.seconds ?? (defaultMinutes * 60)
+    const mins = Math.floor(displaySecs / 60)
+    const secs = displaySecs % 60
+    const isRunning = timer?.running ?? false
+    const isDone = timer?.seconds === 0
+    const isEditing = editingTimerKey === timerKey
+    return (
+      <div className="flex items-center gap-2 mt-2 flex-wrap">
+        <button
+          onClick={() => isRunning ? stopTimer(timerKey) : startTimer(timerKey, timer?.preset ?? defaultMinutes)}
+          className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${isRunning ? 'bg-[#f6c94e] text-[#3d2c2c]' : isDone ? 'bg-[#4caf7d] text-white' : 'bg-[#e8917a] text-white'}`}
+        >
+          {isRunning ? '⏸ Pause' : isDone ? '✓ Done' : '▶ Start'}
+        </button>
+        {timer && (
+          <span className={`text-xs font-mono font-medium ${isRunning ? 'text-[#e8917a]' : isDone ? 'text-[#4caf7d]' : 'text-[#3d2c2c]'}`}>
+            {String(mins).padStart(2,'0')}:{String(secs).padStart(2,'0')}
+          </span>
+        )}
+        {isEditing ? (
+          <form onSubmit={e => { e.preventDefault(); const n = parseInt(editingTimerInput); if (n > 0 && n <= 300) editTimerPreset(timerKey, n); setEditingTimerKey(null) }} className="flex items-center gap-1">
+            <input autoFocus type="number" value={editingTimerInput} onChange={e => setEditingTimerInput(e.target.value)} className="w-14 text-xs rounded px-1.5 py-1 border border-[#e4cfd7] text-[#3d2c2c] bg-white outline-none" min="1" max="300" />
+            <button type="submit" className="text-xs text-[#4caf7d] font-medium">Set</button>
+            <button type="button" onClick={() => setEditingTimerKey(null)} className="text-xs text-[#b497a1]">✕</button>
+          </form>
+        ) : (
+          <button onClick={() => { setEditingTimerInput(String(timer?.preset ?? defaultMinutes)); setEditingTimerKey(timerKey) }} className="text-[10px] text-[#b497a1] hover:text-[#9f6b7c] transition-colors">{timer?.preset ?? defaultMinutes} min ✎</button>
+        )}
+        {timer && !isRunning && timer.seconds !== (timer.preset * 60) && timer.seconds > 0 && (
+          <button onClick={() => resetTimer(timerKey)} className="text-[10px] text-[#b497a1] hover:text-[#9f6b7c] transition-colors">↺ Reset</button>
+        )}
+      </div>
+    )
+  }
+
   const renderSectionCard = (title: string, content: React.ReactNode) => (
     <details className="bg-[#fffaf6] rounded-2xl overflow-hidden group">
       <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between text-sm text-gray-200 font-medium">
@@ -2886,359 +2997,469 @@ export default function Home() {
     </details>
   )
   const renderTodayView = () => {
-    const dayType = getDayType()
-    const todayNYKey = getTodayNY()
-    const todayTasks = getTodayTasks('jaclyn').filter(task => task.folder !== 'daily-digest' && task.folder !== 'send-outs')
-    const todayEvents = getTodayEvents()
-    const activeMission = todayTasks.find(t => !t.completed)
-    const toggleMoreItem = (key: string) => setMoreForTodayExpanded(prev => ({ ...prev, [key]: !prev[key] }))
+  const dayType = getDayType()
+  const todayNYKey = getTodayNY()
+  const todayTasks = getTodayTasks('jaclyn').filter(task => task.folder !== 'daily-digest' && task.folder !== 'send-outs')
+  const todayEvents = getTodayEvents()
+  const activeMission = todayTasks.find(t => !t.completed)
 
-    // Enough For Today: 3 smart items based on day type
-    const enoughItems: {key: string; label: string; sub?: string}[] = dayType === 'mission' ? [
-      { key: 'mission', label: '2-hour Mission Block', sub: activeMission?.title || 'Set your mission for today' },
-      { key: 'admin', label: '10–15 min Admin', sub: 'One concrete life or business admin item' },
-      { key: 'notifications', label: '15 min Notifications', sub: 'Emails + sports chats + school apps' }
-    ] : dayType === 'support' ? [
-      { key: 'notifications', label: '15 min Notifications', sub: 'Emails + sports chats + school apps' },
-      { key: 'optional', label: 'Optional Support', sub: 'If I have extra time — no obligation' },
-      { key: 'presence', label: 'Phone at door by 3:30', sub: 'When today is done, be here now' }
-    ] : dayType === 'reset' ? [
-      { key: 'friday-reset', label: 'Friday Reset (10–15 min)', sub: 'Close week, choose next 2 missions, prep Monday' },
-      { key: 'friday-admin', label: billsFriday ? '1-hour Bills Block' : '10–15 min Friday Admin', sub: billsFriday ? 'Bills block active' : 'One admin item' },
-      { key: 'notifications', label: '15 min Notifications', sub: 'Emails + sports chats + school apps' }
-    ] : [
-      { key: 'presence', label: 'Phone at door by 3:30', sub: 'Weekend rhythm — be here now' },
-      { key: 'ground', label: 'Ground', sub: '3 slow breaths · Relax shoulders' },
-      { key: 'notifications', label: '15 min Notifications', sub: 'Check in when ready' }
-    ]
+  const FRIDAY_REVIEW_STEPS = [
+    "Mark this week's missions: Done / Continue / Shrink / Move back",
+    'Shrink any oversized missions',
+    'Open Road Map — confirm phase + milestone',
+    "Choose next week's 2 missions",
+    'Choose 1 weekly admin focus',
+    'Tidy Life Admin',
+    'Tidy Parking Lot',
+    'Confirm Monday'
+  ]
 
-    const FRIDAY_REVIEW_STEPS = [
-      'Mark this week\'s missions: Done / Continue / Shrink / Move back',
-      'Shrink any oversized missions',
-      'Open Road Map — confirm phase + milestone',
-      'Choose next week\'s 2 missions',
-      'Choose 1 weekly admin focus',
-      'Clean Life Admin Capture',
-      'Clean Parking Lot — move items or tag as needed',
-      'Confirm Monday'
-    ]
+  const dayLabel = dayType === 'mission' ? 'Mission Day' : dayType === 'support' ? 'Optional Support Day' : dayType === 'reset' ? 'Reset Day' : 'Weekend Rhythm'
+  const dayBadgeColor = dayType === 'mission' ? 'bg-[#edf7f0] text-[#2d6a4f]' : dayType === 'support' ? 'bg-[#f0f0ff] text-[#4a4a9a]' : dayType === 'reset' ? 'bg-[#fff8ec] text-[#b07d0a]' : 'bg-[#f0f4ff] text-[#3d5a9a]'
 
-    const dayLabel = dayType === 'mission' ? 'Mission Day' : dayType === 'support' ? 'Optional Support Day' : dayType === 'reset' ? 'Reset Day' : 'Weekend Rhythm'
-    const dayColor = dayType === 'mission' ? 'bg-[#eef6ee]' : dayType === 'support' ? 'bg-[#f3eefb]' : dayType === 'reset' ? 'bg-[#fff7ef]' : 'bg-[#f0f4ff]'
-    return (
-      <div className="space-y-5">
-        {/* Header card */}
-        <div className="bg-[#fffaf6] rounded-[28px] p-5 md:p-7 border border-[#eedee4] shadow-sm">
-          <div className="flex flex-col gap-1 mb-4">
-            <div className="text-xs uppercase tracking-[0.28em] text-[#b497a1]">STEELE LIFE</div>
-            <div className="text-2xl md:text-3xl font-semibold text-[#6f5460]">Aligned. Abundant. Present.</div>
-            <div className="text-sm text-[#a68592]">{getTodayDate()}</div>
-            <div className={`inline-flex items-center gap-2 mt-1 px-3 py-1.5 rounded-full text-sm font-medium w-fit ${dayColor} text-[#6f5460]`}>
-              {dayLabel}
-            </div>
+  const enoughItems: {key: string; label: string; sub?: string; timer: number}[] = dayType === 'mission' ? [
+    { key: 'mission', label: '2-hour Mission Block', sub: nextRoadmapTask?.title || activeMission?.title || 'Set your mission for today', timer: 120 },
+    { key: 'admin', label: '10–15 min Admin', sub: nextLifeAdminItem?.title || 'One concrete life or business admin item', timer: 15 },
+    { key: 'notifications', label: '15 min Notifications', sub: 'Emails + sports chats + school apps', timer: 15 }
+  ] : dayType === 'support' ? [
+    { key: 'notifications', label: '15 min Notifications', sub: 'Emails + sports chats + school apps', timer: 15 },
+    { key: 'optional', label: 'If I have extra time', sub: nextLifeAdminItem?.title || nextRoadmapTask?.title || 'Review calendar or tidy admin', timer: 15 },
+    { key: 'presence', label: 'Phone at door by 3:30', sub: 'When today is done, be here now', timer: 0 }
+  ] : dayType === 'reset' ? [
+    { key: 'friday-reset', label: 'Friday Reset', sub: 'Close week, choose next 2 missions, prep Monday', timer: 15 },
+    { key: 'friday-admin', label: billsFriday ? '1-hour Bills Block' : '10–15 min Friday Admin', sub: billsFriday ? 'Bills block active' : 'One admin item', timer: billsFriday ? 60 : 15 },
+    { key: 'notifications', label: '15 min Notifications', sub: 'Emails + sports chats + school apps', timer: 15 }
+  ] : [
+    { key: 'presence', label: 'Phone at door by 3:30', sub: 'Weekend rhythm — be here now', timer: 0 },
+    { key: 'ground', label: 'Ground', sub: '3 slow breaths · Relax shoulders', timer: 0 },
+    { key: 'notifications', label: '15 min Notifications', sub: 'Check in when ready', timer: 15 }
+  ]
+
+  return (
+    <div className="space-y-4 pb-24 md:pb-6">
+      {/* Header */}
+      <div className="bg-[#fffdf9] rounded-[28px] p-5 md:p-7 border border-[#f0d9d0] shadow-sm">
+        <div className="flex flex-col gap-1 mb-4">
+          <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a]">STEELE LIFE</div>
+          <div className="text-2xl md:text-3xl font-semibold text-[#3d2c2c]">Aligned. Abundant. Present.</div>
+          <div className="text-sm text-[#7a5c5c]">{getTodayDate()}</div>
+          <div className={`inline-flex items-center gap-2 mt-1 px-3 py-1.5 rounded-full text-sm font-semibold w-fit ${dayBadgeColor}`}>
+            {dayLabel}
           </div>
+        </div>
 
-          {/* Phase strip */}
-          <div className="bg-[#f7f1e8] rounded-2xl px-4 py-3 mb-4 flex items-center justify-between gap-3 flex-wrap">
-            <div>
-              <div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-0.5">Phase</div>
-              <div className="text-sm text-[#6f5460] font-medium">{getCurrentPhase()}</div>
-            </div>
-            <button onClick={() => setActiveTab('roadmap')} className="text-xs text-[#9f6b7c] hover:text-[#7e5361] transition-colors shrink-0">View Road Map →</button>
+        {/* Phase strip */}
+        <div className="bg-[#fff8ec] rounded-2xl px-4 py-3 mb-4 flex items-center justify-between gap-3 flex-wrap border border-[#f0d9d0]">
+          <div>
+            <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-0.5">Active Phase</div>
+            <div className="text-sm text-[#3d2c2c] font-medium">{getCurrentPhase()}</div>
+            {nextRoadmapTask && (
+              <div className="text-xs text-[#e8917a] mt-0.5 font-medium">Next: {nextRoadmapTask.title}</div>
+            )}
           </div>
+          <button onClick={() => setActiveTab('roadmap')} className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors shrink-0 font-medium">Road Map →</button>
+        </div>
 
-          {/* Enough For Today — 3-item checklist */}
-          <div className="mb-4">
-            <div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-2">Enough For Today</div>
-            <div className="space-y-2">
-              {enoughItems.map((item) => {
-                const ckKey = `${todayNYKey}__${item.key}`
-                const checked = !!enoughForTodayChecked[ckKey]
-                return (
-                  <div key={item.key} className={`flex items-start gap-3 rounded-2xl px-4 py-3 border transition-all ${checked ? 'bg-[#f3faf3] border-[#c8e6c9] opacity-70' : 'bg-[#f8edf1] border-[#eedee4]'}`}>
+        {/* Enough For Today */}
+        <div className="mb-4">
+          <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-2">Enough For Today</div>
+          <div className="space-y-2">
+            {enoughItems.map((item) => {
+              const ckKey = `${todayNYKey}__${item.key}`
+              const checked = !!enoughForTodayChecked[ckKey]
+              return (
+                <div key={item.key} className={`rounded-2xl px-4 py-3 border transition-all ${checked ? 'bg-[#edf7f0] border-[#a8d5b5] opacity-70' : 'bg-[#fdf0ec] border-[#f0d9d0]'}`}>
+                  <div className="flex items-start gap-3">
                     <input type="checkbox" checked={checked}
                       onChange={() => setEnoughForTodayChecked(prev => ({ ...prev, [ckKey]: !checked }))}
-                      className="w-4 h-4 mt-0.5 rounded border-[#d8bcc7] bg-white text-[#c08497] focus:ring-[#c08497] focus:ring-offset-0 shrink-0" />
+                      className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white text-[#e8917a] focus:ring-[#e8917a] focus:ring-offset-0 shrink-0 accent-[#e8917a]" />
                     <div className="flex-1 min-w-0">
-                      <div className={`text-sm font-medium ${checked ? 'line-through text-[#b497a1]' : 'text-[#6f5460]'}`}>{item.label}</div>
-                      {item.sub && <div className="text-xs text-[#a68592] mt-0.5">{item.sub}</div>}
+                      <div className={`text-sm font-medium ${checked ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{item.label}</div>
+                      {item.sub && <div className="text-xs text-[#7a5c5c] mt-0.5">{item.sub}</div>}
                     </div>
                   </div>
-                )
-              })}
-            </div>
+                  {item.timer > 0 && !checked && renderTimer(`today-${item.key}`, item.timer)}
+                </div>
+              )
+            })}
           </div>
+        </div>
 
-          {/* Mission Block (Mission days only) */}
-          {dayType === 'mission' && (
-            <div className="mb-4">
-              <div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-2">Mission Block</div>
-              {activeMission ? (
-                <div className="bg-[#f3e5ea] rounded-2xl p-4 border border-[#e4cfd7]">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[#6f5460] font-medium">{activeMission.title}</div>
-                      {activeMission.notes && <div className="text-xs text-[#a68592] mt-1">{activeMission.notes}</div>}
-                      <div className="text-xs text-[#b497a1] mt-1">2-hour block · {activeMission.priority || 'normal'} priority</div>
-                    </div>
+        {/* Mission Block (Mission days) */}
+        {dayType === 'mission' && (
+          <div className="mb-4">
+            <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-2">Mission Block</div>
+            {(activeMission || nextRoadmapTask) ? (
+              <div className="bg-[#fdf0ec] rounded-2xl p-4 border border-[#f0d9d0]">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[#3d2c2c] font-semibold">{nextRoadmapTask?.title || activeMission?.title}</div>
+                    {activeMission?.notes && <div className="text-xs text-[#7a5c5c] mt-1">{activeMission.notes}</div>}
+                    <div className="text-xs text-[#b8958a] mt-1">2-hour block · do the next thing, not everything</div>
+                  </div>
+                  {activeMission && (
                     <input type="checkbox" checked={activeMission.completed}
                       onChange={() => toggleComplete(activeMission)}
-                      className="w-4 h-4 mt-1 rounded border-[#d8bcc7] bg-white text-[#c08497] focus:ring-[#c08497] focus:ring-offset-0 shrink-0" />
-                  </div>
-                  {/* Rollover prompt */}
-                  {missionRollover?.taskId === activeMission.id ? (
-                    <div className="mt-3 pt-3 border-t border-[#e4cfd7]">
-                      <div className="text-xs text-[#a68592] mb-2">Mission not finished — choose one:</div>
-                      <div className="grid grid-cols-2 gap-2">
-                        {([['continue', 'Continue next block'], ['shrink', 'Shrink it'], ['moveback', 'Move back to queue'], ['blocked', 'Mark blocked']] as const).map(([action, label]) => (
-                          <button key={action} onClick={() => {
-                            setMissionRollover({ taskId: activeMission.id, action })
+                      className="w-4 h-4 mt-1 rounded border-[#f0d9d0] bg-white text-[#e8917a] focus:ring-[#e8917a] focus:ring-offset-0 shrink-0 accent-[#e8917a]" />
+                  )}
+                </div>
+                {renderTimer('mission-block', 120)}
+                {missionRollover?.taskId === activeMission?.id ? (
+                  <div className="mt-3 pt-3 border-t border-[#f0d9d0]">
+                    <div className="text-xs text-[#7a5c5c] mb-2">Mission not finished — choose one:</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([['continue', 'Continue next block'], ['shrink', 'Shrink it'], ['moveback', 'Move back to queue'], ['blocked', 'Mark blocked']] as const).map(([action, label]) => (
+                        <button key={action} onClick={() => {
+                          if (activeMission) {
                             if (action === 'moveback') {
                               supabase.from(TASKS_TABLE).update({ day_of_week: 'overflow', status: 'pending' }).eq('id', activeMission.id)
                               setTasks(prev => prev.map(t => t.id === activeMission.id ? { ...t, day_of_week: 'overflow' } : t))
                             } else if (action === 'blocked') {
-                              supabase.from(TASKS_TABLE).update({ status: 'blocked', description: (activeMission.notes || '') + ' [BLOCKED]' }).eq('id', activeMission.id)
-                              setTasks(prev => prev.map(t => t.id === activeMission.id ? { ...t, notes: (t.notes || '') + ' [BLOCKED]' } : t))
+                              supabase.from(TASKS_TABLE).update({ status: 'blocked' }).eq('id', activeMission.id)
                             }
-                            setMissionRollover(null)
-                          }}
-                            className="text-xs bg-[#fffaf6] hover:bg-[#f3e5ea] text-[#6f5460] rounded-xl py-2 px-3 transition-colors border border-[#eedee4]">
-                            {label}
-                          </button>
-                        ))}
-                      </div>
+                          }
+                          setMissionRollover(null)
+                        }}
+                          className="text-xs bg-[#fffdf9] hover:bg-[#fdf0ec] text-[#3d2c2c] rounded-xl py-2 px-3 transition-colors border border-[#f0d9d0]">
+                          {label}
+                        </button>
+                      ))}
                     </div>
-                  ) : (
-                    <button onClick={() => setMissionRollover({ taskId: activeMission.id, action: null })}
-                      className="mt-3 text-xs text-[#a68592] hover:text-[#6f5460] transition-colors">
-                      Didn’t finish? Rollover →
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="bg-[#f8edf1] rounded-2xl p-4 border border-[#eedee4] text-sm text-[#b497a1] italic">
-                  No mission scheduled — add one from This Week
+                  </div>
+                ) : activeMission && !activeMission.completed && (
+                  <button onClick={() => setMissionRollover({ taskId: activeMission.id, action: null })}
+                    className="mt-3 text-xs text-[#b8958a] hover:text-[#7a5c5c] transition-colors">
+                    Didn’t finish? Rollover →
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="bg-[#fdf0ec] rounded-2xl p-4 border border-[#f0d9d0] text-sm text-[#b8958a] italic">
+                No mission scheduled — add one from This Week or Road Map
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Support Day — If I have extra time */}
+        {dayType === 'support' && (
+          <div className="mb-4">
+            <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-2">If I Have Extra Time</div>
+            <div className="bg-[#f0f0ff] rounded-2xl p-4 border border-[#d8d8f8] space-y-2">
+              <div className="text-xs text-[#7a5c5c] italic mb-1">Suggestions only — not obligations</div>
+              {nextLifeAdminItem && (
+                <div className="flex items-center gap-2 text-sm text-[#3d2c2c]">
+                  <span className="w-2 h-2 rounded-full bg-[#e8917a] shrink-0"></span>
+                  {nextLifeAdminItem.title} <span className="text-xs text-[#b8958a]">(Life Admin)</span>
                 </div>
               )}
+              {nextRoadmapTask && (
+                <div className="flex items-center gap-2 text-sm text-[#3d2c2c]">
+                  <span className="w-2 h-2 rounded-full bg-[#4caf7d] shrink-0"></span>
+                  {nextRoadmapTask.title} <span className="text-xs text-[#b8958a]">(Road Map)</span>
+                </div>
+              )}
+              {['Review calendar', 'Tidy Life Admin', 'Tidy Parking Lot'].map(s => (
+                <div key={s} className="flex items-center gap-2 text-sm text-[#7a5c5c]">
+                  <span className="w-2 h-2 rounded-full bg-[#b8958a] shrink-0"></span>{s}
+                </div>
+              ))}
             </div>
-          )}
-
-          {/* Optional Support section (Wed/Thu) */}
-          {dayType === 'support' && (
-            <div className="mb-4">
-              <details className="bg-[#f3eefb] rounded-2xl overflow-hidden">
-                <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between text-sm text-[#6f5460] font-medium">
-                  <span>If I have extra time</span><span className="text-[#b497a1]">▸</span>
-                </summary>
-                <div className="px-4 pb-4 space-y-2 text-sm text-[#8b6f79]">
-                  <div className="text-xs text-[#b497a1] mb-2 italic">Suggestions only — not obligations</div>
-                  {['Clear 1 Life Admin item', 'Finish a paused mission', 'Review calendar', 'Tidy Capture'].map(s => (
-                    <div key={s} className="py-1 text-[#6f5460]">· {s}</div>
-                  ))}
-                </div>
-              </details>
-            </div>
-          )}
-
-          {/* Friday Reset (Friday only) */}
-          {dayType === 'reset' && (
-            <div className="mb-4 space-y-3">
-              <div>
-                <div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-2">Friday Reset</div>
-                <div className="bg-[#fff7ef] rounded-2xl p-4 border border-[#eedee4] space-y-2">
-                  {FRIDAY_REVIEW_STEPS.map((step, i) => {
-                    const key = `friday-${i}`
-                    const checked = !!fridayReviewChecked[`${todayNYKey}__${key}` as unknown as number]
-                    return (
-                      <div key={key} className={`flex items-start gap-3 text-sm transition-all ${checked ? 'opacity-50' : ''}`}>
-                        <input type="checkbox" checked={checked}
-                          onChange={() => setFridayReviewChecked(prev => ({ ...prev, [`${todayNYKey}__${key}`]: !checked } as Record<number, boolean>))}
-                          className="w-4 h-4 mt-0.5 rounded border-[#d8bcc7] bg-white text-[#c08497] focus:ring-[#c08497] focus:ring-offset-0 shrink-0" />
-                        <span className={`${checked ? 'line-through text-[#b497a1]' : 'text-[#6f5460]'}`}>{i + 1}. {step}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-2">Bills Friday</div>
-                <div className="flex items-center gap-3 bg-[#fff7ef] rounded-2xl px-4 py-3 border border-[#eedee4]">
-                  <span className="text-sm text-[#6f5460] flex-1">{billsFriday ? '1-hour Bills Block (active)' : 'Normal admin (10–15 min)'}</span>
-                  <button onClick={() => setBillsFriday(prev => !prev)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${billsFriday ? 'bg-[#c08497]' : 'bg-[#e4cfd7]'}`}>
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${billsFriday ? 'translate-x-6' : 'translate-x-1'}`} />
-                  </button>
-                </div>
-              </div>
-              {/* Optional Bonus */}
-              <details className="bg-[#fffaf6] rounded-2xl overflow-hidden border border-[#eedee4]">
-                <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between text-sm text-[#6f5460]">
-                  <span>Optional Bonus</span><span className="text-[#b497a1]">▸</span>
-                </summary>
-                <div className="px-4 pb-4 space-y-1 text-sm text-[#8b6f79]">
-                  <div>· Optional 2-hour Mission Block</div>
-                  <div>· Light catch-up if helpful</div>
-                </div>
-              </details>
-            </div>
-          )}
-
-          {/* Notifications block (always) */}
-          <div className="bg-[#eef6ee] rounded-2xl px-4 py-3 mb-4">
-            <div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-0.5">Notifications · 15 min</div>
-            <div className="text-sm text-[#6f5460]">Emails + sports chats + school apps/messages</div>
           </div>
+        )}
 
-          {/* Today's Events */}
-          <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-2">Today’s Events</div>
-            <div className="space-y-2">
-              {todayEvents.length ? todayEvents.map(event => (
-                <div key={event.id} className="bg-[#fff7ef] rounded-2xl p-4 border-l-4" style={{ borderLeftColor: getFolderColor(event.folder || 'PERSONAL') }}>
-                  <div className="text-[#6f5460] font-medium">{event.title}</div>
-                  <div className="text-sm text-[#a68592]">{formatEventDate(event.date)}{event.time ? ` · ${toNYTimeDisplay(event.date + 'T' + event.time + ':00')}` : ''}</div>
-                </div>
-              )) : <div className="text-sm text-[#b497a1] italic">No time-specific events today.</div>}
+        {/* Friday Reset */}
+        {dayType === 'reset' && (
+          <div className="mb-4 space-y-3">
+            <div>
+              <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-2">Friday Reset</div>
+              <div className="bg-[#fff8ec] rounded-2xl p-4 border border-[#f0d9d0] space-y-2">
+                {FRIDAY_REVIEW_STEPS.map((step, i) => {
+                  const key = `${todayNYKey}__friday-${i}`
+                  const checked = !!fridayReviewChecked[key as unknown as number]
+                  return (
+                    <div key={key} className={`flex items-start gap-3 text-sm ${checked ? 'opacity-50' : ''}`}>
+                      <input type="checkbox" checked={checked}
+                        onChange={() => setFridayReviewChecked(prev => ({ ...prev, [key]: !checked } as Record<number, boolean>))}
+                        className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white accent-[#e8917a] shrink-0" />
+                      <span className={checked ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}>{i + 1}. {step}</span>
+                    </div>
+                  )
+                })}
+              </div>
+              {renderTimer('friday-reset', 15)}
             </div>
+            <div className="flex items-center gap-3 bg-[#fff8ec] rounded-2xl px-4 py-3 border border-[#f0d9d0]">
+              <span className="text-sm text-[#3d2c2c] flex-1">{billsFriday ? '1-hour Bills Block' : 'Normal admin (10–15 min)'}</span>
+              <button onClick={() => setBillsFriday(prev => !prev)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${billsFriday ? 'bg-[#e8917a]' : 'bg-[#f0d9d0]'}`}>
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${billsFriday ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Notifications */}
+        <div className="mb-4">
+          <div className="bg-[#edf7f2] rounded-2xl px-4 py-3 border border-[#a8d5b5]">
+            <div className="flex items-start gap-3">
+              <input type="checkbox"
+                checked={!!enoughForTodayChecked[`${todayNYKey}__notifications-block`]}
+                onChange={() => setEnoughForTodayChecked(prev => {
+                  const k = `${todayNYKey}__notifications-block`
+                  return { ...prev, [k]: !prev[k] }
+                })}
+                className="w-4 h-4 mt-0.5 rounded border-[#a8d5b5] bg-white accent-[#4caf7d] shrink-0" />
+              <div className="flex-1">
+                <div className="text-sm font-medium text-[#3d2c2c]">Notifications · 15 min</div>
+                <div className="text-xs text-[#7a5c5c]">Emails + sports chats + school apps/messages</div>
+              </div>
+            </div>
+            {renderTimer('notifications', 15)}
           </div>
         </div>
 
-        {/* Collapsible sections below Today card */}
-        <div className="space-y-2">
-          {/* More for Today */}
-          <details className="bg-[#fffaf6] rounded-2xl overflow-hidden border border-[#eedee4] group">
-            <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between text-sm text-[#6f5460] font-medium">
-              <span>More for Today</span><span className="text-[#b497a1] group-open:rotate-180 transition-transform duration-200">⌄</span>
+        {/* More for Today */}
+        <div className="mb-4">
+          <details className="bg-[#fffdf9] rounded-2xl overflow-hidden border border-[#f0d9d0] group">
+            <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between text-sm text-[#3d2c2c] font-medium">
+              <span>More for Today</span><span className="text-[#b8958a] group-open:rotate-180 transition-transform duration-200">⌄</span>
             </summary>
-            <div className="px-4 pb-4 space-y-3 text-sm text-[#8b6f79]">
-              <div>
-                <div className="text-[#6f5460] font-medium">Presence</div>
-                <div className="text-[#a68592]">Phone at door by 3:30 · When today is done, be here now</div>
+            <div className="px-4 pb-4 space-y-3 text-sm">
+              {[
+                { label: 'Presence', sub: 'Phone at door by 3:30 · When today is done, be here now', key: 'presence' },
+                { label: 'Workout', sub: 'Strength / Stretching · Walk or Pickleball', key: 'workout' },
+                { label: 'Ground', sub: '3 slow breaths · Relax shoulders · Do the next thing, not everything', key: 'ground' }
+              ].map(item => {
+                const ck = `${todayNYKey}__more-${item.key}`
+                const checked = !!enoughForTodayChecked[ck]
+                return (
+                  <div key={item.key} className={`flex items-start gap-3 rounded-xl px-3 py-2 ${checked ? 'opacity-50' : ''}`}>
+                    <input type="checkbox" checked={checked}
+                      onChange={() => setEnoughForTodayChecked(prev => ({ ...prev, [ck]: !checked }))}
+                      className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white accent-[#e8917a] shrink-0" />
+                    <div>
+                      <div className={`font-medium ${checked ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{item.label}</div>
+                      <div className="text-xs text-[#7a5c5c]">{item.sub}</div>
+                    </div>
+                  </div>
+                )
+              })}
+              <div className="pt-1 border-t border-[#f0d9d0]">
+                <div className="text-xs text-[#b8958a] mb-2 font-medium uppercase tracking-wide">If I Have Extra Time</div>
+                {nextLifeAdminItem && (
+                  <div className="flex items-center gap-2 py-1 text-sm text-[#3d2c2c]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#e8917a] shrink-0"></span>
+                    {nextLifeAdminItem.title} <span className="text-xs text-[#b8958a] ml-1">(Life Admin)</span>
+                  </div>
+                )}
+                {nextRoadmapTask && (
+                  <div className="flex items-center gap-2 py-1 text-sm text-[#3d2c2c]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#4caf7d] shrink-0"></span>
+                    {nextRoadmapTask.title} <span className="text-xs text-[#b8958a] ml-1">(Road Map)</span>
+                  </div>
+                )}
+                {['Tidy Life Admin', 'Tidy Parking Lot', 'Review calendar'].map(s => (
+                  <div key={s} className="flex items-center gap-2 py-1 text-sm text-[#7a5c5c]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#b8958a] shrink-0"></span>{s}
+                  </div>
+                ))}
               </div>
-              <div>
-                <div className="text-[#6f5460] font-medium">Workout</div>
-                <div className="text-[#a68592]">Strength / Stretching · Walk or Pickleball</div>
+              <button onClick={() => setActiveTab('thumb-equity')} className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors mt-1">
+                Open Thumb Equity tab →
+              </button>
+            </div>
+          </details>
+        </div>
+
+        {/* Today’s Events */}
+        <div>
+          <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-2">Today’s Events</div>
+          <div className="space-y-2">
+            {todayEvents.length ? todayEvents.map(event => (
+              <div key={event.id} className="bg-[#fff8ec] rounded-2xl p-3 border-l-4" style={{ borderLeftColor: getFolderColor(event.folder || 'PERSONAL') }}>
+                <div className="text-[#3d2c2c] font-medium text-sm">{event.title}</div>
+                <div className="text-xs text-[#7a5c5c]">{formatEventDate(event.date)}{event.time ? ` · ${toNYTimeDisplay(event.date + 'T' + event.time + ':00')}` : ''}</div>
               </div>
-              <div>
-                <div className="text-[#6f5460] font-medium">Ground</div>
-                <div className="text-[#a68592]">3 slow breaths · Relax shoulders · Do the next thing, not everything</div>
-              </div>
-              <div>
-                <button onClick={() => setActiveTab('thumb-equity')} className="text-[#9f6b7c] hover:text-[#7e5361] transition-colors">
-                  Open today’s Thumb Equity tab →
-                </button>
-              </div>
-            </div>
-          </details>
-
-          {/* This Week */}
-          <details className="bg-[#fffaf6] rounded-2xl overflow-hidden border border-[#eedee4] group">
-            <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between text-sm text-[#6f5460] font-medium">
-              <span>This Week</span><span className="text-[#b497a1] group-open:rotate-180 transition-transform duration-200">⌄</span>
-            </summary>
-            <div className="px-4 pb-4 space-y-2 text-sm text-[#8b6f79]">
-              <div>2 business missions max · 1 optional bonus mission · 1 weekly admin focus</div>
-              <button onClick={() => setActiveTab('week')} className="text-[#9f6b7c] hover:text-[#7e5361] transition-colors text-xs mt-1">Open This Week →</button>
-            </div>
-          </details>
-
-          {/* SteeleBroz Road Map */}
-          <details className="bg-[#fffaf6] rounded-2xl overflow-hidden border border-[#eedee4] group">
-            <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between text-sm text-[#6f5460] font-medium">
-              <span>SteeleBroz Road Map</span><span className="text-[#b497a1] group-open:rotate-180 transition-transform duration-200">⌄</span>
-            </summary>
-            <div className="px-4 pb-4 space-y-2 text-sm text-[#8b6f79]">
-              <div>Current phase and milestone planning live here.</div>
-              <button onClick={() => setActiveTab('roadmap')} className="text-[#9f6b7c] hover:text-[#7e5361] transition-colors text-xs">Open Road Map →</button>
-            </div>
-          </details>
-
-          {/* Life Admin */}
-          <details className="bg-[#fffaf6] rounded-2xl overflow-hidden border border-[#eedee4] group">
-            <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between text-sm text-[#6f5460] font-medium">
-              <span>Life Admin</span><span className="text-[#b497a1] group-open:rotate-180 transition-transform duration-200">⌄</span>
-            </summary>
-            <div className="px-4 pb-4 space-y-2 text-sm text-[#8b6f79]">
-              <div>Capture, this week, waiting/scheduled, done.</div>
-              <button onClick={() => setActiveTab('life-admin')} className="text-[#9f6b7c] hover:text-[#7e5361] transition-colors text-xs">Open Life Admin →</button>
-            </div>
-          </details>
-
-          {/* Parking Lot */}
-          <details className="bg-[#fffaf6] rounded-2xl overflow-hidden border border-[#eedee4] group">
-            <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between text-sm text-[#6f5460] font-medium">
-              <span>Parking Lot</span><span className="text-[#b497a1] group-open:rotate-180 transition-transform duration-200">⌄</span>
-            </summary>
-            <div className="px-4 pb-4 space-y-2 text-sm text-[#8b6f79]">
-              <div>Home, Personal, Kids, SteeleBroz buckets.</div>
-              <button onClick={() => setActiveTab('parking-lot')} className="text-[#9f6b7c] hover:text-[#7e5361] transition-colors text-xs">Open Parking Lot →</button>
-            </div>
-          </details>
+            )) : <div className="text-sm text-[#b8958a] italic">No time-specific events today.</div>}
+          </div>
         </div>
       </div>
-    )
-  }
+    </div>
+  )
+}
   const renderWeekView = () => {
-    const jaclynTasks = tasks.filter(task => task.board === 'jaclyn' && !task.completed)
-    const missionCandidates = jaclynTasks.filter(task => task.folder !== 'daily-digest' && task.folder !== 'send-outs' && task.day_of_week !== 'overflow')
-    const weeklyAdminFocus = jaclynTasks.find(task => task.day_of_week === 'overflow')
-    return (
-      <div className="space-y-4">
-        <div className="bg-[#fffaf6] rounded-3xl p-5 md:p-6"><div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4"><div><div className="text-xs uppercase tracking-[0.28em] text-[#b497a1] mb-2">This Week</div><h2 className="text-2xl font-semibold text-[#6f5460]">Current execution context</h2><p className="text-sm text-[#a68592] mt-1">Road Map strip, weekly missions, and weekly admin focus.</p></div><div className="text-sm text-[#a68592]">{weekRange}</div></div></div>
-        <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]"><div className="bg-[#fffaf6] rounded-3xl p-5"><div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-3">Road Map strip</div><div className="text-[#6f5460] font-medium mb-1">{getCurrentPhase()}</div><div className="text-sm text-[#a68592] mb-4">Active milestone and phase context for the current week.</div><div className="w-full h-2 rounded-full bg-[#f3e5ea] overflow-hidden"><div className="h-full bg-teal-500 w-1/3"></div></div></div><div className="bg-[#fffaf6] rounded-3xl p-5"><div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-3">Weekly limits</div><div className="space-y-2 text-sm text-[#8b6f79]"><div>2 business missions max</div><div>1 optional bonus mission</div><div>1 weekly admin focus</div></div></div></div>
-        <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]"><div className="bg-[#fffaf6] rounded-3xl p-5"><div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-[#6f5460]">Weekly Missions</h3><span className="text-xs text-[#b497a1]">Top 2 + bonus</span></div><div className="space-y-3">{missionCandidates.slice(0, 3).map((task, idx) => <button key={task.id} onClick={() => setEditingTask(task)} className="w-full text-left bg-[#f3e5ea] rounded-2xl p-4 hover:bg-[#ecd8e1] transition-colors"><div className="text-xs uppercase tracking-[0.2em] text-[#b497a1] mb-2">{idx === 2 ? 'Bonus Mission' : `Mission ${idx + 1}`}</div><div className="text-[#6f5460] font-medium">{task.title}</div><div className="text-sm text-[#a68592] mt-1">{task.day_of_week ? DAY_LABELS[task.day_of_week] : 'This week'} · {task.priority || 'normal priority'}</div></button>)}{!missionCandidates.length && <div className="text-sm text-[#b497a1] italic">No weekly missions selected yet.</div>}</div></div><div className="bg-[#fffaf6] rounded-3xl p-5"><div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold text-[#6f5460]">Weekly Admin Focus</h3><span className="text-xs text-[#b497a1]">1 focus</span></div>{weeklyAdminFocus ? <button onClick={() => setEditingTask(weeklyAdminFocus)} className="w-full text-left bg-[#f3e5ea] rounded-2xl p-4 hover:bg-[#ecd8e1] transition-colors"><div className="text-[#6f5460] font-medium">{weeklyAdminFocus.title}</div><div className="text-sm text-[#a68592] mt-1">Overflow / weekly admin area</div></button> : <div className="text-sm text-[#b497a1] italic">No weekly admin focus selected yet.</div>}</div></div>
+  const jaclynTasks = tasks.filter(task => task.board === 'jaclyn' && !task.completed)
+  const missionCandidates = jaclynTasks.filter(task => task.folder !== 'daily-digest' && task.folder !== 'send-outs' && task.day_of_week !== 'overflow').slice(0, 3)
+  const weeklyAdminFocus = jaclynTasks.find(task => task.day_of_week === 'overflow')
+  const totalMissions = missionCandidates.length + (weeklyAdminFocus ? 1 : 0)
+  const completedMissions = missionCandidates.filter(t => t.completed).length + (weeklyAdminFocus?.completed ? 1 : 0)
+  const winItems = [
+    ...missionCandidates.map((t, i) => ({ id: String(t.id), label: t.title, sub: i === 2 ? 'Bonus mission' : `Mission ${i + 1}`, done: t.completed, task: t })),
+    ...(weeklyAdminFocus ? [{ id: String(weeklyAdminFocus.id), label: weeklyAdminFocus.title, sub: 'Weekly admin focus', done: weeklyAdminFocus.completed, task: weeklyAdminFocus }] : [])
+  ]
+  return (
+    <div className="space-y-4 pb-24 md:pb-6">
+      <div className="bg-[#fffdf9] rounded-3xl p-5 md:p-6 border border-[#f0d9d0]">
+        <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-1">This Week</div>
+        <h2 className="text-2xl font-semibold text-[#3d2c2c]">If I get these done, I did enough.</h2>
+        <p className="text-sm text-[#7a5c5c] mt-1">{weekRange}</p>
+        <div className="mt-3">
+          <div className="flex items-center justify-between text-xs text-[#b8958a] mb-1">
+            <span>Weekly progress</span><span>{completedMissions}/{totalMissions || 3}</span>
+          </div>
+          <div className="w-full h-2 rounded-full bg-[#f0d9d0] overflow-hidden">
+            <div className="h-full bg-[#4caf7d] transition-all duration-500 rounded-full" style={{ width: totalMissions > 0 ? `${(completedMissions / totalMissions) * 100}%` : '0%' }} />
+          </div>
+        </div>
       </div>
-    )
-  }
+
+      {/* Win items */}
+      <div className="space-y-2">
+        {winItems.length === 0 && (
+          <div className="bg-[#fffdf9] rounded-2xl p-5 border border-[#f0d9d0] text-sm text-[#b8958a] italic">No missions set for this week yet. Add them from the weekly board.</div>
+        )}
+        {winItems.map(item => (
+          <div key={item.id} className={`bg-[#fffdf9] rounded-2xl px-4 py-4 border transition-all ${item.done ? 'border-[#a8d5b5] bg-[#edf7f0]' : 'border-[#f0d9d0]'}`}>
+            <div className="flex items-start gap-3">
+              <input type="checkbox" checked={item.done}
+                onChange={() => toggleComplete(item.task)}
+                className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white accent-[#e8917a] shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className={`text-sm font-medium ${item.done ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{item.label}</div>
+                <div className="text-xs text-[#b8958a] mt-0.5">{item.sub}</div>
+              </div>
+              <button onClick={() => setEditingTask(item.task)} className="text-xs text-[#b8958a] hover:text-[#7a5c5c] transition-colors shrink-0">Edit</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Road Map strip */}
+      <div className="bg-[#fff8ec] rounded-2xl px-4 py-3 border border-[#f0d9d0] flex items-center justify-between gap-3">
+        <div>
+          <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-0.5">Active Phase</div>
+          <div className="text-sm text-[#3d2c2c] font-medium">{getCurrentPhase()}</div>
+          {nextRoadmapTask && <div className="text-xs text-[#e8917a] mt-0.5">Next: {nextRoadmapTask?.title}</div>}
+        </div>
+        <button onClick={() => setActiveTab('roadmap')} className="text-xs text-[#e8917a] hover:text-[#d4745d] shrink-0 font-medium">Road Map →</button>
+      </div>
+    </div>
+  )
+}
   const renderRoadMapView = () => {
   const totalMilestones = ROADMAP_PHASES.reduce((acc, p) => acc + p.milestones.length, 0)
   const completedMilestones = Object.values(phaseProgress).filter(Boolean).length
   const overallPct = totalMilestones > 0 ? Math.round((completedMilestones / totalMilestones) * 100) : 0
+
+  const getTasksForMilestone = (phaseIndex: number, milestoneIndex: number) =>
+    roadmapTasks.filter(t => t.phase_index === phaseIndex && t.milestone_index === milestoneIndex).sort((a, b) => a.sort_order - b.sort_order)
+
+  const toggleRoadmapTask = async (task: RoadmapTask) => {
+    const updated = !task.completed
+    setRoadmapTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: updated } : t))
+    await supabase.from('roadmap_tasks').update({ completed: updated, updated_at: new Date().toISOString() }).eq('id', task.id)
+  }
+
+  const addRoadmapTask = async (phaseIndex: number, milestoneIndex: number) => {
+    if (!newRoadmapTaskTitle.trim()) return
+    const existing = getTasksForMilestone(phaseIndex, milestoneIndex)
+    const sortOrder = existing.length
+    const { data } = await supabase.from('roadmap_tasks').insert({
+      phase_index: phaseIndex, milestone_index: milestoneIndex,
+      title: newRoadmapTaskTitle.trim(), sort_order: sortOrder, completed: false
+    }).select().single()
+    if (data) setRoadmapTasks(prev => [...prev, data])
+    setNewRoadmapTaskTitle('')
+    setAddingRoadmapTask(null)
+  }
+
+  const deleteRoadmapTask = async (id: number) => {
+    setRoadmapTasks(prev => prev.filter(t => t.id !== id))
+    await supabase.from('roadmap_tasks').delete().eq('id', id)
+  }
+
   return (
-    <div className="space-y-4">
-      <div className="bg-[#fffaf6] rounded-3xl p-5 md:p-6">
-        <div className="text-xs uppercase tracking-[0.28em] text-[#b497a1] mb-2">SteeleBroz Phase Map</div>
-        <h2 className="text-2xl font-semibold text-[#6f5460]">Strategic view</h2>
-        <p className="text-sm text-[#a68592] mt-1">Editable strategic direction; current week only changes deliberately.</p>
-        {/* Overall progress bar */}
+    <div className="space-y-4 pb-24 md:pb-6">
+      <div className="bg-[#fffdf9] rounded-3xl p-5 md:p-6 border border-[#f0d9d0]">
+        <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-2">SteeleBroz Phase Map</div>
+        <h2 className="text-2xl font-semibold text-[#3d2c2c]">Strategic view</h2>
+        <p className="text-sm text-[#7a5c5c] mt-1">Tap a milestone to mark complete. Expand to add action steps.</p>
         <div className="mt-4">
-          <div className="flex items-center justify-between text-xs text-[#b497a1] mb-1">
+          <div className="flex items-center justify-between text-xs text-[#b8958a] mb-1">
             <span>Overall progress</span><span>{completedMilestones} / {totalMilestones} milestones</span>
           </div>
-          <div className="w-full h-2 rounded-full bg-[#f3e5ea] overflow-hidden">
-            <div className="h-full bg-teal-500 transition-all duration-500 rounded-full" style={{ width: `${overallPct}%` }} />
+          <div className="w-full h-2 rounded-full bg-[#f0d9d0] overflow-hidden">
+            <div className="h-full bg-[#4caf7d] transition-all duration-500 rounded-full" style={{ width: `${overallPct}%` }} />
           </div>
         </div>
       </div>
       <div className="grid gap-4">
-        {ROADMAP_PHASES.map((phase, index) => {
-          const phaseCompleted = phase.milestones.filter((_, mi) => !!phaseProgress[`${index}-${mi}`]).length
+        {ROADMAP_PHASES.map((phase, phaseIndex) => {
+          const phaseCompleted = phase.milestones.filter((_, mi) => !!phaseProgress[`${phaseIndex}-${mi}`]).length
           const phasePct = phase.milestones.length > 0 ? Math.round((phaseCompleted / phase.milestones.length) * 100) : 0
           return (
-            <div key={phase.name} className="bg-[#fffaf6] rounded-3xl p-5">
+            <div key={phase.name} className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0]">
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-8 h-8 rounded-full bg-teal-500/20 text-teal-600 flex items-center justify-center text-sm font-semibold shrink-0">{index + 1}</div>
-                <h3 className="text-lg font-semibold text-[#6f5460]">{phase.name}</h3>
+                <div className="w-8 h-8 rounded-full bg-[#fdf0ec] text-[#e8917a] border border-[#f0d9d0] flex items-center justify-center text-sm font-bold shrink-0">{phaseIndex + 1}</div>
+                <h3 className="text-base font-semibold text-[#3d2c2c]">{phase.name}</h3>
               </div>
-              <p className="text-sm text-[#8b6f79] mb-3">{phase.goal}</p>
-              {/* Phase progress bar */}
+              <p className="text-sm text-[#7a5c5c] mb-3">{phase.goal}</p>
               <div className="mb-3">
-                <div className="flex items-center justify-between text-xs text-[#b497a1] mb-1">
+                <div className="flex items-center justify-between text-xs text-[#b8958a] mb-1">
                   <span>Phase progress</span><span>{phaseCompleted}/{phase.milestones.length}</span>
                 </div>
-                <div className="w-full h-1.5 rounded-full bg-[#f3e5ea] overflow-hidden">
-                  <div className="h-full bg-teal-400 transition-all duration-500 rounded-full" style={{ width: `${phasePct}%` }} />
+                <div className="w-full h-1.5 rounded-full bg-[#f0d9d0] overflow-hidden">
+                  <div className="h-full bg-[#f6c94e] transition-all duration-500 rounded-full" style={{ width: `${phasePct}%` }} />
                 </div>
               </div>
-              <div className="grid gap-2 md:grid-cols-2">
-                {phase.milestones.map((item, mi) => {
-                  const mKey = `${index}-${mi}`
-                  const done = !!phaseProgress[mKey]
+              <div className="space-y-2">
+                {phase.milestones.map((milestone, milestoneIndex) => {
+                  const mKey = `${phaseIndex}-${milestoneIndex}`
+                  const milestoneDone = !!phaseProgress[mKey]
+                  const milestoneTasks = getTasksForMilestone(phaseIndex, milestoneIndex)
+                  const completedTasks = milestoneTasks.filter(t => t.completed).length
+                  const isAddingHere = addingRoadmapTask?.phaseIndex === phaseIndex && addingRoadmapTask?.milestoneIndex === milestoneIndex
                   return (
-                    <button key={item} onClick={() => setPhaseProgress(prev => ({ ...prev, [mKey]: !done }))}
-                      className={`text-left rounded-2xl px-4 py-3 text-sm transition-all border ${done ? 'bg-[#eaf5ea] border-[#c8e6c9] text-[#5a8a65] line-through opacity-70' : 'bg-[#f3e5ea] border-transparent text-[#8b6f79] hover:bg-[#ecd8e1]'}`}>
-                      <span className="mr-2">{done ? '✓' : '○'}</span>{item}
-                    </button>
+                    <details key={milestone} className={`rounded-2xl overflow-hidden border transition-all ${milestoneDone ? 'border-[#a8d5b5] bg-[#edf7f0]' : 'border-[#f0d9d0] bg-[#fdf0ec]'}`}>
+                      <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <button onClick={(e) => { e.preventDefault(); setPhaseProgress(prev => ({ ...prev, [mKey]: !milestoneDone })) }}
+                            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${milestoneDone ? 'bg-[#4caf7d] border-[#4caf7d]' : 'bg-white border-[#f0d9d0]'}`}>
+                            {milestoneDone && <span className="text-white text-xs">✓</span>}
+                          </button>
+                          <span className={`text-sm font-medium ${milestoneDone ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{milestone}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {milestoneTasks.length > 0 && <span className="text-xs text-[#b8958a]">{completedTasks}/{milestoneTasks.length}</span>}
+                          <span className="text-[#b8958a] text-xs">▸</span>
+                        </div>
+                      </summary>
+                      <div className="px-4 pb-4 border-t border-[#f0d9d0] pt-3 space-y-2">
+                        {milestoneTasks.map((task, ti) => (
+                          <div key={task.id} className={`flex items-center gap-2 text-sm rounded-xl px-3 py-2 ${task.completed ? 'bg-[#edf7f0] opacity-60' : 'bg-white border border-[#f0d9d0]'}`}>
+                            <span className="text-xs text-[#b8958a] w-5 shrink-0">{ti + 1}.</span>
+                            <input type="checkbox" checked={task.completed} onChange={() => toggleRoadmapTask(task)}
+                              className="w-4 h-4 rounded border-[#f0d9d0] bg-white accent-[#4caf7d] shrink-0" />
+                            <span className={`flex-1 ${task.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{task.title}</span>
+                            <button onClick={() => deleteRoadmapTask(task.id)} className="text-[#b8958a] hover:text-red-400 transition-colors text-sm shrink-0">×</button>
+                          </div>
+                        ))}
+                        {isAddingHere ? (
+                          <div className="flex gap-2">
+                            <input value={newRoadmapTaskTitle} onChange={e => setNewRoadmapTaskTitle(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') addRoadmapTask(phaseIndex, milestoneIndex); if (e.key === 'Escape') setAddingRoadmapTask(null) }}
+                              placeholder="Add action step..." autoFocus
+                              className="flex-1 bg-white rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
+                            <button onClick={() => addRoadmapTask(phaseIndex, milestoneIndex)} className="bg-[#e8917a] text-white text-sm rounded-xl px-3 py-2 hover:bg-[#d4745d] transition-colors">Add</button>
+                            <button onClick={() => setAddingRoadmapTask(null)} className="text-[#b8958a] text-sm px-2">✕</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => { setAddingRoadmapTask({ phaseIndex, milestoneIndex }); setNewRoadmapTaskTitle('') }}
+                            className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors">+ Add action step</button>
+                        )}
+                      </div>
+                    </details>
                   )
                 })}
               </div>
@@ -3250,106 +3471,285 @@ export default function Home() {
   )
 }
   const renderLifeAdminView = () => {
-    const buckets = [{ title: 'Capture', store: 'random' as const, hint: 'Quick offload before deciding.' }, { title: 'This Week', store: 'publix' as const, hint: 'Current life-admin focus.' }, { title: 'Waiting / Scheduled', store: 'costco' as const, hint: 'Handled later or already planned.' }]
-    return (
-      <div className="space-y-4">
-        <div className="bg-[#fffaf6] rounded-3xl p-5 md:p-6"><div className="text-xs uppercase tracking-[0.28em] text-[#b497a1] mb-2">Life Admin</div><h2 className="text-2xl font-semibold text-[#6f5460]">Concrete life logistics</h2><p className="text-sm text-[#a68592] mt-1">Capture, this week, waiting/scheduled, and done — separate from daily notifications.</p></div>
-        <div className="grid gap-4 lg:grid-cols-3">{buckets.map(bucket => <div key={bucket.title} className="bg-[#fffaf6] rounded-3xl p-5"><div className="flex items-center justify-between mb-3"><h3 className="text-lg font-semibold text-[#6f5460]">{bucket.title}</h3><span className="text-xs text-[#b497a1]">{getGroceryItemsByStore(bucket.store).length}</span></div><div className="text-sm text-[#a68592] mb-4">{bucket.hint}</div><div className="space-y-2">{getGroceryItemsByStore(bucket.store).slice(0, 8).map(item => <div key={item.id} className="bg-[#f3e5ea] rounded-2xl px-4 py-3 flex items-center gap-3"><input type="checkbox" checked={item.checked} onChange={() => toggleGroceryItemChecked(item.id, !item.checked)} className="w-4 h-4 rounded border-gray-600 bg-[#f3e5ea] text-blue-500 focus:ring-blue-500 focus:ring-offset-0" /><span className={`text-sm ${item.checked ? 'line-through text-[#b497a1]' : 'text-gray-200'}`}>{item.text}</span></div>)}{!getGroceryItemsByStore(bucket.store).length && <div className="text-sm text-[#b497a1] italic">No items here yet.</div>}</div></div>)}</div>
-      </div>
-    )
+  const COLUMNS = [
+    { key: 'top-priority' as const, label: 'Top Priority', color: '#fdf0ec', border: '#f0d9d0', badge: 'bg-[#e8917a] text-white' },
+    { key: 'can-wait' as const, label: 'Can Wait', color: '#fffdf9', border: '#f0d9d0', badge: 'bg-[#f0d9d0] text-[#7a5c5c]' },
+    { key: 'waiting-scheduled' as const, label: 'Waiting / Scheduled', color: '#f0f0ff', border: '#d8d8f8', badge: 'bg-[#d8d8f8] text-[#4a4a9a]' },
+    { key: 'done' as const, label: 'Done', color: '#edf7f0', border: '#a8d5b5', badge: 'bg-[#a8d5b5] text-[#2d6a4f]' }
+  ]
+
+  const addLifeCard = async (columnKey: string) => {
+    if (!newLifeCardTitle.trim()) return
+    const existing = lifeAdminCards.filter(c => c.column_key === columnKey)
+    const { data } = await supabase.from('life_admin_cards').insert({
+      title: newLifeCardTitle.trim(),
+      notes: newLifeCardNotes.trim() || null,
+      column_key: columnKey,
+      sort_order: existing.length,
+      completed: columnKey === 'done'
+    }).select().single()
+    if (data) setLifeAdminCards(prev => [data, ...prev])
+    setNewLifeCardTitle(''); setNewLifeCardNotes('')
+    setAddingLifeCard(null)
   }
+
+  const deleteLifeCard = async (id: number) => {
+    setLifeAdminCards(prev => prev.filter(c => c.id !== id))
+    await supabase.from('life_admin_cards').delete().eq('id', id)
+  }
+
+  const moveLifeCard = async (card: LifeAdminCard, targetColumn: LifeAdminCard['column_key']) => {
+    const updated = { ...card, column_key: targetColumn, completed: targetColumn === 'done', updated_at: new Date().toISOString() }
+    setLifeAdminCards(prev => prev.map(c => c.id === card.id ? updated : c))
+    await supabase.from('life_admin_cards').update({ column_key: targetColumn, completed: targetColumn === 'done', updated_at: new Date().toISOString() }).eq('id', card.id)
+  }
+
+  const copyLifeCard = async (card: LifeAdminCard) => {
+    const { data } = await supabase.from('life_admin_cards').insert({
+      title: card.title + ' (copy)', notes: card.notes, column_key: card.column_key, sort_order: card.sort_order + 1, completed: false
+    }).select().single()
+    if (data) setLifeAdminCards(prev => [...prev, data])
+  }
+
+  const saveLifeCard = async (card: LifeAdminCard) => {
+    setLifeAdminCards(prev => prev.map(c => c.id === card.id ? card : c))
+    await supabase.from('life_admin_cards').update({ title: card.title, notes: card.notes, updated_at: new Date().toISOString() }).eq('id', card.id)
+    setEditingLifeCard(null)
+  }
+
+  const visibleColumns = showDoneColumn ? COLUMNS : COLUMNS.filter(c => c.key !== 'done')
+  const doneCount = lifeAdminCards.filter(c => c.column_key === 'done').length
+
+  return (
+    <div className="space-y-4 pb-24 md:pb-6">
+      <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0]">
+        <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-2">Life Admin</div>
+        <h2 className="text-2xl font-semibold text-[#3d2c2c]">Concrete life logistics</h2>
+        <p className="text-sm text-[#7a5c5c] mt-1">Top Priority items surface in today’s focus automatically.</p>
+        <div className="flex items-center gap-3 mt-3">
+          <button onClick={() => setShowDoneColumn(prev => !prev)}
+            className="text-xs text-[#b8958a] hover:text-[#7a5c5c] transition-colors border border-[#f0d9d0] rounded-full px-3 py-1">
+            {showDoneColumn ? 'Hide Done' : `Show Done (${doneCount})`}
+          </button>
+        </div>
+      </div>
+
+      {/* Edit modal */}
+      {editingLifeCard && (
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-4" onClick={() => setEditingLifeCard(null)}>
+          <div className="bg-[#fffdf9] rounded-2xl p-5 w-full max-w-md space-y-3 shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-[#3d2c2c]">Edit Card</h3>
+            <input value={editingLifeCard.title} onChange={e => setEditingLifeCard({ ...editingLifeCard, title: e.target.value })}
+              className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]" placeholder="Title" />
+            <textarea value={editingLifeCard.notes || ''} onChange={e => setEditingLifeCard({ ...editingLifeCard, notes: e.target.value })}
+              className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a] resize-none" rows={3} placeholder="Notes (optional)" />
+            <div>
+              <div className="text-xs text-[#b8958a] mb-1">Move to column</div>
+              <div className="grid grid-cols-2 gap-2">
+                {COLUMNS.map(col => (
+                  <button key={col.key} onClick={() => { moveLifeCard(editingLifeCard, col.key); setEditingLifeCard(null) }}
+                    className={`text-xs py-2 rounded-xl border transition-all ${editingLifeCard.column_key === col.key ? 'bg-[#e8917a] text-white border-[#e8917a]' : 'bg-white border-[#f0d9d0] text-[#3d2c2c] hover:bg-[#fdf0ec]'}`}>
+                    {col.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => saveLifeCard(editingLifeCard)} className="flex-1 bg-[#e8917a] text-white text-sm rounded-xl py-2 hover:bg-[#d4745d] transition-colors">Save</button>
+              <button onClick={() => { copyLifeCard(editingLifeCard); setEditingLifeCard(null) }} className="text-xs bg-[#fdf0ec] text-[#e8917a] border border-[#f0d9d0] rounded-xl px-3 py-2">Copy</button>
+              <button onClick={() => { deleteLifeCard(editingLifeCard.id); setEditingLifeCard(null) }} className="text-xs bg-white text-red-400 border border-red-200 rounded-xl px-3 py-2">Delete</button>
+              <button onClick={() => setEditingLifeCard(null)} className="text-xs text-[#b8958a] px-2">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {visibleColumns.map(col => {
+          const cards = lifeAdminCards.filter(c => c.column_key === col.key).sort((a, b) => a.sort_order - b.sort_order)
+          const isAdding = addingLifeCard?.column === col.key
+          return (
+            <div key={col.key} className="rounded-3xl p-4 border" style={{ backgroundColor: col.color, borderColor: col.border }}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-[#3d2c2c]">{col.label}</h3>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${col.badge}`}>{cards.length}</span>
+                </div>
+                <button onClick={() => { setAddingLifeCard(isAdding ? null : { column: col.key }); setNewLifeCardTitle(''); setNewLifeCardNotes('') }}
+                  className="w-7 h-7 rounded-full bg-white/70 hover:bg-white text-[#e8917a] flex items-center justify-center text-base font-medium transition-colors border border-[#f0d9d0]">+</button>
+              </div>
+              {isAdding && (
+                <div className="mb-3 bg-white rounded-2xl p-3 border border-[#f0d9d0] space-y-2">
+                  <input value={newLifeCardTitle} onChange={e => setNewLifeCardTitle(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') addLifeCard(col.key); if (e.key === 'Escape') setAddingLifeCard(null) }}
+                    placeholder="What needs to happen?" autoFocus
+                    className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
+                  <input value={newLifeCardNotes} onChange={e => setNewLifeCardNotes(e.target.value)}
+                    placeholder="Notes (optional)"
+                    className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
+                  <div className="flex gap-2">
+                    <button onClick={() => addLifeCard(col.key)} className="flex-1 bg-[#e8917a] text-white text-sm rounded-xl py-2 transition-colors hover:bg-[#d4745d]">Add</button>
+                    <button onClick={() => setAddingLifeCard(null)} className="flex-1 bg-white text-[#7a5c5c] text-sm rounded-xl py-2 border border-[#f0d9d0] transition-colors">Cancel</button>
+                  </div>
+                </div>
+              )}
+              <div className="space-y-2">
+                {cards.length === 0 && !isAdding && <div className="text-xs text-[#b8958a] italic py-2">Nothing here yet</div>}
+                {cards.map(card => (
+                  <div key={card.id} onClick={() => setEditingLifeCard(card)}
+                    className="bg-white rounded-2xl px-3 py-3 border border-[#f0d9d0] cursor-pointer hover:border-[#e8917a] transition-all group">
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className={`text-sm font-medium ${card.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{card.title}</div>
+                        {card.notes && <div className="text-xs text-[#7a5c5c] mt-0.5 truncate">{card.notes}</div>}
+                      </div>
+                      <span className="text-[#f0d9d0] group-hover:text-[#e8917a] text-sm transition-colors shrink-0">✎</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
   const renderParkingLotView = () => {
-  const BUCKETS: {title: 'Home'|'Personal'|'Kids'|'SteeleBroz'; color: string}[] = [
-    { title: 'Home', color: '#f3eefb' },
-    { title: 'Personal', color: '#eef6ee' },
-    { title: 'Kids', color: '#fff7ef' },
-    { title: 'SteeleBroz', color: '#f8edf1' }
+  const BUCKETS: {title: 'Home'|'Personal'|'Kids'|'SteeleBroz'; color: string; border: string}[] = [
+    { title: 'Home', color: '#f0f0ff', border: '#d8d8f8' },
+    { title: 'Personal', color: '#edf7f0', border: '#a8d5b5' },
+    { title: 'Kids', color: '#fff8ec', border: '#f0d9d0' },
+    { title: 'SteeleBroz', color: '#fdf0ec', border: '#f0d9d0' }
   ]
   const TAGS = ['New Idea', 'Need to Add to Calendar', 'Future Lab', 'Maybe Later', 'Needs Review']
   const TAG_COLORS: Record<string, string> = {
     'New Idea': 'bg-blue-100 text-blue-700',
-    'Need to Add to Calendar': 'bg-yellow-100 text-yellow-700',
+    'Need to Add to Calendar': 'bg-[#fff8ec] text-[#b07d0a] border border-[#f6c94e]',
     'Future Lab': 'bg-purple-100 text-purple-700',
-    'Maybe Later': 'bg-gray-100 text-gray-600',
+    'Maybe Later': 'bg-[#f0d9d0] text-[#7a5c5c]',
     'Needs Review': 'bg-orange-100 text-orange-700'
   }
-  const addCard = (bucket: 'Home'|'Personal'|'Kids'|'SteeleBroz') => {
+
+  const addParkingCard = async (bucket: 'Home'|'Personal'|'Kids'|'SteeleBroz') => {
     if (!newCardTitle.trim()) return
-    const card = {
-      id: `${Date.now()}-${Math.random()}`,
-      bucket,
-      title: newCardTitle.trim(),
-      description: newCardDesc.trim(),
-      notes: '',
-      tag: newCardTag,
-      created_at: new Date().toISOString()
-    }
-    setParkingLotCards(prev => [card, ...prev])
+    const existing = parkingLotDBCards.filter(c => c.bucket === bucket)
+    const { data } = await supabase.from('parking_lot_cards').insert({
+      title: newCardTitle.trim(), description: newCardDesc.trim() || null,
+      bucket, tag: newCardTag, sort_order: existing.length
+    }).select().single()
+    if (data) setParkingLotDBCards(prev => [data, ...prev])
     setNewCardTitle(''); setNewCardDesc(''); setNewCardTag('New Idea')
     setAddingParkingCard(null)
   }
-  const removeCard = (id: string) => setParkingLotCards(prev => prev.filter(c => c.id !== id))
+
+  const deleteParkingCard = async (id: number) => {
+    setParkingLotDBCards(prev => prev.filter(c => c.id !== id))
+    await supabase.from('parking_lot_cards').delete().eq('id', id)
+  }
+
+  const copyParkingCard = async (card: ParkingLotCard) => {
+    const { data } = await supabase.from('parking_lot_cards').insert({
+      title: card.title + ' (copy)', description: card.description, bucket: card.bucket, tag: card.tag, sort_order: card.sort_order + 1
+    }).select().single()
+    if (data) setParkingLotDBCards(prev => [...prev, data])
+  }
+
+  const saveParkingCard = async (card: ParkingLotCard) => {
+    setParkingLotDBCards(prev => prev.map(c => c.id === card.id ? card : c))
+    await supabase.from('parking_lot_cards').update({ title: card.title, description: card.description, bucket: card.bucket, tag: card.tag, updated_at: new Date().toISOString() }).eq('id', card.id)
+    setEditingParkingCard(null)
+  }
+
   return (
-    <div className="space-y-4">
-      <div className="bg-[#fffaf6] rounded-3xl p-5 md:p-6">
-        <div className="text-xs uppercase tracking-[0.28em] text-[#b497a1] mb-2">Parking Lot</div>
-        <h2 className="text-2xl font-semibold text-[#6f5460]">Hold ideas without hijacking execution</h2>
-        <p className="text-sm text-[#a68592] mt-1">Area-based buckets — capture now, sort later.</p>
+    <div className="space-y-4 pb-24 md:pb-6">
+      <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0]">
+        <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-2">Parking Lot</div>
+        <h2 className="text-2xl font-semibold text-[#3d2c2c]">Hold ideas without hijacking execution</h2>
+        <p className="text-sm text-[#7a5c5c] mt-1">Capture now, sort later. Nothing here is urgent.</p>
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
+
+      {/* Edit modal */}
+      {editingParkingCard && (
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-4" onClick={() => setEditingParkingCard(null)}>
+          <div className="bg-[#fffdf9] rounded-2xl p-5 w-full max-w-md space-y-3 shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-[#3d2c2c]">Edit Card</h3>
+            <input value={editingParkingCard.title} onChange={e => setEditingParkingCard({ ...editingParkingCard, title: e.target.value })}
+              className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]" placeholder="Title" />
+            <input value={editingParkingCard.description || ''} onChange={e => setEditingParkingCard({ ...editingParkingCard, description: e.target.value })}
+              className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]" placeholder="Description (optional)" />
+            <select value={editingParkingCard.tag} onChange={e => setEditingParkingCard({ ...editingParkingCard, tag: e.target.value })}
+              className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]">
+              {TAGS.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <div>
+              <div className="text-xs text-[#b8958a] mb-1">Move to bucket</div>
+              <div className="grid grid-cols-2 gap-2">
+                {BUCKETS.map(b => (
+                  <button key={b.title} onClick={() => setEditingParkingCard({ ...editingParkingCard, bucket: b.title })}
+                    className={`text-xs py-2 rounded-xl border transition-all ${editingParkingCard.bucket === b.title ? 'bg-[#e8917a] text-white border-[#e8917a]' : 'bg-white border-[#f0d9d0] text-[#3d2c2c] hover:bg-[#fdf0ec]'}`}>
+                    {b.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => saveParkingCard(editingParkingCard)} className="flex-1 bg-[#e8917a] text-white text-sm rounded-xl py-2 hover:bg-[#d4745d] transition-colors">Save</button>
+              <button onClick={() => { copyParkingCard(editingParkingCard); setEditingParkingCard(null) }} className="text-xs bg-[#fdf0ec] text-[#e8917a] border border-[#f0d9d0] rounded-xl px-3 py-2">Copy</button>
+              <button onClick={() => { deleteParkingCard(editingParkingCard.id); setEditingParkingCard(null) }} className="text-xs bg-white text-red-400 border border-red-200 rounded-xl px-3 py-2">Delete</button>
+              <button onClick={() => setEditingParkingCard(null)} className="text-xs text-[#b8958a] px-2">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2">
         {BUCKETS.map(bucket => {
-          const cards = parkingLotCards.filter(c => c.bucket === bucket.title)
+          const cards = parkingLotDBCards.filter(c => c.bucket === bucket.title).sort((a, b) => a.sort_order - b.sort_order)
           const isAdding = addingParkingCard?.bucket === bucket.title
           return (
-            <div key={bucket.title} className="bg-[#fffaf6] rounded-3xl p-5 border border-[#eedee4]">
+            <div key={bucket.title} className="rounded-3xl p-4 border" style={{ backgroundColor: bucket.color, borderColor: bucket.border }}>
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-semibold text-[#6f5460]">{bucket.title}</h3>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-[#b497a1]">{cards.length}</span>
-                  <button onClick={() => { setAddingParkingCard(isAdding ? null : { bucket: bucket.title }); setNewCardTitle(''); setNewCardDesc(''); setNewCardTag('New Idea') }}
-                    className="w-7 h-7 rounded-full bg-[#f3e5ea] hover:bg-[#ecd8e1] text-[#9f6b7c] flex items-center justify-center text-lg leading-none transition-colors">+</button>
+                  <h3 className="text-sm font-semibold text-[#3d2c2c]">{bucket.title}</h3>
+                  <span className="text-xs text-[#b8958a]">{cards.length}</span>
                 </div>
+                <button onClick={() => { setAddingParkingCard(isAdding ? null : { bucket: bucket.title }); setNewCardTitle(''); setNewCardDesc(''); setNewCardTag('New Idea') }}
+                  className="w-7 h-7 rounded-full bg-white/70 hover:bg-white text-[#e8917a] flex items-center justify-center text-base font-medium transition-colors border border-[#f0d9d0]">+</button>
               </div>
-              {/* Add card form */}
               {isAdding && (
-                <div className="mb-3 bg-[#f8edf1] rounded-2xl p-4 border border-[#e4cfd7] space-y-2">
+                <div className="mb-3 bg-white rounded-2xl p-3 border border-[#f0d9d0] space-y-2">
                   <input value={newCardTitle} onChange={e => setNewCardTitle(e.target.value)}
-                    placeholder="Title" autoFocus
-                    className="w-full bg-white rounded-lg px-3 py-2 text-sm border border-[#e4cfd7] text-[#6f5460] placeholder-[#b497a1] outline-none focus:border-[#c08497]" />
-                  <input value={newCardDesc} onChange={e => setNewCardDesc(e.target.value)}
-                    placeholder="One-line description (optional)"
-                    className="w-full bg-white rounded-lg px-3 py-2 text-sm border border-[#e4cfd7] text-[#6f5460] placeholder-[#b497a1] outline-none focus:border-[#c08497]" />
+                    onKeyDown={e => { if (e.key === 'Enter') addParkingCard(bucket.title); if (e.key === 'Escape') setAddingParkingCard(null) }}
+                    placeholder="Quick capture..." autoFocus
+                    className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
+                  <input value={newCardDesc} onChange={e => setNewCardDesc(e.target.value)} placeholder="One-line description (optional)"
+                    className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
                   <select value={newCardTag} onChange={e => setNewCardTag(e.target.value)}
-                    className="w-full bg-white rounded-lg px-3 py-2 text-sm border border-[#e4cfd7] text-[#6f5460] outline-none focus:border-[#c08497]">
+                    className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]">
                     {TAGS.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                   <div className="flex gap-2">
-                    <button onClick={() => addCard(bucket.title)} className="flex-1 bg-[#c08497] hover:bg-[#a6728399] text-white text-sm rounded-xl py-2 transition-colors">Add</button>
-                    <button onClick={() => setAddingParkingCard(null)} className="flex-1 bg-[#f3e5ea] text-[#6f5460] text-sm rounded-xl py-2 transition-colors">Cancel</button>
+                    <button onClick={() => addParkingCard(bucket.title)} className="flex-1 bg-[#e8917a] text-white text-sm rounded-xl py-2 hover:bg-[#d4745d] transition-colors">Add</button>
+                    <button onClick={() => setAddingParkingCard(null)} className="flex-1 bg-white text-[#7a5c5c] text-sm rounded-xl py-2 border border-[#f0d9d0]">Cancel</button>
                   </div>
                 </div>
               )}
-              {/* Cards */}
               <div className="space-y-2">
-                {cards.length === 0 && !isAdding && <div className="text-sm text-[#b497a1] italic">No parked items yet.</div>}
+                {cards.length === 0 && !isAdding && <div className="text-xs text-[#b8958a] italic py-2">Nothing parked here yet</div>}
                 {cards.map(card => (
-                  <div key={card.id} className="rounded-2xl p-4 border border-transparent hover:border-[#e4cfd7] transition-all cursor-pointer"
-                    style={{ backgroundColor: bucket.color }}
-                    onClick={() => setExpandedParkingCard(expandedParkingCard === card.id ? null : card.id)}>
+                  <div key={card.id} onClick={() => setEditingParkingCard(card)}
+                    className="bg-white rounded-2xl px-3 py-3 border border-white hover:border-[#e8917a] transition-all cursor-pointer group">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-[#6f5460]">{card.title}</div>
-                        {card.description && <div className="text-xs text-[#a68592] mt-0.5">{card.description}</div>}
+                        <div className="text-sm font-medium text-[#3d2c2c]">{card.title}</div>
+                        {card.description && <div className="text-xs text-[#7a5c5c] mt-0.5">{card.description}</div>}
                       </div>
-                      <button onClick={e => { e.stopPropagation(); removeCard(card.id) }}
-                        className="text-[#b497a1] hover:text-[#9f6b7c] text-lg leading-none transition-colors shrink-0">×</button>
+                      <span className="text-[#f0d9d0] group-hover:text-[#e8917a] text-sm transition-colors shrink-0">✎</span>
                     </div>
                     <div className="mt-2">
-                      <span className={`inline-flex text-xs px-2 py-0.5 rounded-full font-medium ${TAG_COLORS[card.tag] || 'bg-gray-100 text-gray-600'}`}>{card.tag}</span>
+                      <span className={`inline-flex text-xs px-2 py-0.5 rounded-full font-medium ${TAG_COLORS[card.tag] || 'bg-[#f0d9d0] text-[#7a5c5c]'}`}>{card.tag}</span>
                     </div>
-                    {expandedParkingCard === card.id && card.notes && (
-                      <div className="mt-2 pt-2 border-t border-[#e4cfd7] text-xs text-[#a68592]">{card.notes}</div>
-                    )}
                   </div>
                 ))}
               </div>
@@ -4729,28 +5129,27 @@ export default function Home() {
 
   return (
     <main className="min-h-screen p-3 md:p-6 max-w-[1400px] mx-auto">
+      {/* Header */}
       <div className="text-center mb-4 md:mb-6 relative">
-        <div ref={headerWordsRef} className="text-[#b497a1] text-xs font-light uppercase tracking-widest cursor-pointer select-none" onClick={handleHeaderWordsClick}>
+        <div ref={headerWordsRef} className="text-[#b8958a] text-xs font-light uppercase tracking-widest cursor-pointer select-none" onClick={handleHeaderWordsClick}>
           {dashboardSettings?.header_words || 'STEELE LIFE'}
         </div>
-        {adminMode && (<div className="absolute top-0 right-0 flex items-center gap-2"><span className="text-xs bg-blue-600 text-[#6f5460] px-2 py-1 rounded-full">ADMIN</span><button onClick={() => setEditingHeader(true)} className="text-[#a68592] hover:text-[#6f5460] transition-colors p-1" title="Edit header words">⚙️</button></div>)}
+        {adminMode && (<div className="absolute top-0 right-0 flex items-center gap-2"><span className="text-xs bg-[#e8917a] text-white px-2 py-1 rounded-full">ADMIN</span><button onClick={() => setEditingHeader(true)} className="text-[#7a5c5c] hover:text-[#3d2c2c] transition-colors p-1" title="Edit header words">⚙️</button></div>)}
       </div>
-      <div className="flex items-center justify-between mb-4">
-        <div className="text-sm text-[#a68592]">Quiet focus, calm structure, protected systems.</div>
-        <div className="flex items-center gap-3">
-          {syncing && (<div className="flex items-center gap-2 text-sm text-[#a68592]"><div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div><span>Syncing...</span></div>)}
-          <button onClick={() => fetchData(true)} disabled={syncing} className="p-2 text-[#a68592] hover:text-[#6f5460] transition-colors disabled:opacity-50" title="Refresh data"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
-        </div>
-      </div>
-      <div className="bg-[#fffaf6] rounded-3xl p-4 md:p-5 mb-4">
+
+      {/* Desktop top nav — hidden on mobile */}
+      <div className="hidden md:block bg-[#fffdf9] rounded-3xl p-4 mb-4 border border-[#f0d9d0]">
         <div className="flex flex-wrap gap-2">
-          {[{ id: 'today', label: 'Today' }, { id: 'week', label: 'This Week' }, { id: 'roadmap', label: 'SteeleBroz Road Map' }, { id: 'life-admin', label: 'Life Admin' }, { id: 'parking-lot', label: 'Parking Lot' }, { id: 'calendar', label: 'Calendar' }, { id: 'thumb-equity', label: 'Thumb Equity' }].map(section => (
-            <button key={section.id} onClick={() => setActiveTab(section.id as any)} className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${activeTab === section.id ? 'bg-[#f3e5ea] text-[#6f5460]' : 'text-[#a68592] hover:text-[#6f5460] hover:bg-[#f3e5ea]/50'}`}>
+          {[{ id: 'today', label: 'Today' }, { id: 'week', label: 'This Week' }, { id: 'roadmap', label: 'Road Map' }, { id: 'life-admin', label: 'Life Admin' }, { id: 'parking-lot', label: 'Parking Lot' }, { id: 'calendar', label: 'Calendar' }, { id: 'thumb-equity', label: 'Thumb Equity' }].map(section => (
+            <button key={section.id} onClick={() => setActiveTab(section.id as any)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${activeTab === section.id ? 'bg-[#e8917a] text-white' : 'text-[#7a5c5c] hover:text-[#3d2c2c] hover:bg-[#fdf0ec]'}`}>
               {section.label}
             </button>
           ))}
         </div>
       </div>
+
+      {/* Content */}
       <div className="space-y-4 md:space-y-6">
         {activeTab === 'today' && renderTodayView()}
         {activeTab === 'week' && renderWeekView()}
@@ -4759,6 +5158,27 @@ export default function Home() {
         {activeTab === 'parking-lot' && renderParkingLotView()}
         {activeTab === 'calendar' && renderCalendarView()}
         {activeTab === 'thumb-equity' && renderThumbEquity()}
+      </div>
+
+      {/* Mobile bottom tab bar */}
+      <div className="fixed bottom-0 left-0 right-0 md:hidden bg-[#fffdf9] border-t border-[#f0d9d0] z-40 safe-area-pb">
+        <div className="flex items-center justify-around px-1 py-2">
+          {[
+            { id: 'today', label: 'Today', icon: '⌂' },
+            { id: 'week', label: 'Week', icon: '◎' },
+            { id: 'roadmap', label: 'Road Map', icon: '▲' },
+            { id: 'life-admin', label: 'Admin', icon: '☑' },
+            { id: 'parking-lot', label: 'Ideas', icon: '◆' },
+            { id: 'calendar', label: 'Calendar', icon: '◻' },
+            { id: 'thumb-equity', label: 'Thumb', icon: '♡' }
+          ].map(tab => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
+              className={`flex flex-col items-center gap-0.5 px-1 py-1 rounded-xl transition-all min-w-0 ${activeTab === tab.id ? 'text-[#e8917a]' : 'text-[#b8958a]'}`}>
+              <span className="text-lg leading-none">{tab.icon}</span>
+              <span className={`text-[10px] leading-tight font-medium truncate max-w-[44px] ${activeTab === tab.id ? 'text-[#e8917a]' : 'text-[#b8958a]'}`}>{tab.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Full Calendar View */}
