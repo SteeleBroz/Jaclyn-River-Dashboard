@@ -2988,6 +2988,10 @@ export default function Home() {
     )
   }
 
+  const renderTimer = (timerKey: string, defaultMinutes: number) => (
+    <TimerBlock timerKey={timerKey} defaultMinutes={defaultMinutes} label={timerKey} />
+  )
+
   const renderSectionCard = (title: string, content: React.ReactNode) => (
     <details className="bg-[#fffaf6] rounded-2xl overflow-hidden group">
       <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between text-sm text-gray-200 font-medium">
