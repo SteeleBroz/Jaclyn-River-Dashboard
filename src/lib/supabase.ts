@@ -160,3 +160,26 @@ export type RoadmapTask = {
   created_at: string
   updated_at: string
 }
+
+export type WeeklyMission = {
+  id: number
+  week_start: string
+  slot: number
+  title: string
+  source_type: string
+  roadmap_task_id: number | null
+  completed: boolean
+  rolled_over: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export type BillNote = {
+  id: number
+  content: string
+  sort_order: number
+  completed: boolean
+  created_at: string
+  updated_at: string
+}

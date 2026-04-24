@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, LifeAdminCard, ParkingLotCard, RoadmapTask, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
+import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, LifeAdminCard, ParkingLotCard, RoadmapTask, WeeklyMission, BillNote, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday','overflow'] as const
 const DAY_LABELS: Record<string, string> = {
@@ -274,6 +274,18 @@ export default function Home() {
   const [editingTimerKey, setEditingTimerKey] = useState<string | null>(null)
   const [editingTimerInput, setEditingTimerInput] = useState('')
 
+  // v2.2 state
+  const [weeklyMissions, setWeeklyMissions] = useState<WeeklyMission[]>([])
+  const [billNotes, setBillNotes] = useState<BillNote[]>([])
+  const [addingMission, setAddingMission] = useState(false)
+  const [newMissionTitle, setNewMissionTitle] = useState('')
+  const [newMissionFromRoadmap, setNewMissionFromRoadmap] = useState(false)
+  const [editingBillNote, setEditingBillNote] = useState<BillNote | null>(null)
+  const [newBillNoteContent, setNewBillNoteContent] = useState('')
+  const [addingBillNote, setAddingBillNote] = useState(false)
+  const [fridayMissionReview, setFridayMissionReview] = useState<Record<number, 'done' | 'roll' | 'remove' | null>>({})
+  const [pickingNextMissions, setPickingNextMissions] = useState(false)
+
   // Week navigation state - persist across page refreshes
   const [selectedWeek, setSelectedWeek] = useState<Date>(() => {
     if (typeof window !== 'undefined') {
@@ -478,6 +490,31 @@ export default function Home() {
       if (roadRes.data) setRoadmapTasks(roadRes.data)
     } catch (e) {
       console.warn('v2.1 data fetch error:', e)
+    }
+  }, [])
+
+  const fetchV22Data = useCallback(async () => {
+    try {
+      // Get current week's Monday in NY timezone
+      const nyNow = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) + 'T12:00:00')
+      const day = nyNow.getDay()
+      const monday = new Date(nyNow)
+      monday.setDate(nyNow.getDate() - (day === 0 ? 6 : day - 1))
+      const weekStart = monday.toISOString().split('T')[0]
+
+      // Also get previous week in case of rollover
+      const prevMonday = new Date(monday)
+      prevMonday.setDate(monday.getDate() - 7)
+      const prevWeekStart = prevMonday.toISOString().split('T')[0]
+
+      const [missRes, billRes] = await Promise.all([
+        supabase.from('weekly_missions').select('*').gte('week_start', prevWeekStart).order('week_start').order('slot').order('sort_order'),
+        supabase.from('bills_notes').select('*').order('sort_order')
+      ])
+      if (missRes.data) setWeeklyMissions(missRes.data)
+      if (billRes.data) setBillNotes(billRes.data)
+    } catch (e) {
+      console.warn('v2.2 data fetch error:', e)
     }
   }, [])
 
@@ -1081,6 +1118,7 @@ export default function Home() {
     fetchSendOutsData()
     fetchDashboardSettings()
     fetchV21Data()
+    fetchV22Data()
     
     // Set up real-time subscriptions
     const taskSubscription = supabase
@@ -1127,7 +1165,7 @@ export default function Home() {
       eventSubscription.unsubscribe()
       clearInterval(intervalRefresh)
     }
-  }, [fetchData, fetchV21Data])
+  }, [fetchData, fetchV21Data, fetchV22Data])
 
   // Fetch thumb equity data when tab is activated
   useEffect(() => {
@@ -2907,7 +2945,77 @@ export default function Home() {
   const getTodayKey = () => new Date(getTodayNY() + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/New_York' }).toLowerCase()
   const getTodayTasks = (board: 'jaclyn' | 'river' = 'jaclyn') => tasks.filter(task => task.board === board && task.day_of_week === getTodayKey())
   const getTodayEvents = () => events.filter(event => event.date === getTodayNY())
-  const getCurrentPhase = () => weeklyNotes.find(note => note.author === 'jaclyn')?.content?.slice(0, 80) || 'Phase 1 – Cleanout Cash + Brand Transition'
+  const getCurrentWeekStart = (): string => {
+    const nyNow = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) + 'T12:00:00')
+    const day = nyNow.getDay()
+    const monday = new Date(nyNow)
+    monday.setDate(nyNow.getDate() - (day === 0 ? 6 : day - 1))
+    return monday.toISOString().split('T')[0]
+  }
+
+  const getNextWeekStart = (): string => {
+    const nyNow = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) + 'T12:00:00')
+    const day = nyNow.getDay()
+    const monday = new Date(nyNow)
+    monday.setDate(nyNow.getDate() - (day === 0 ? 6 : day - 1) + 7)
+    return monday.toISOString().split('T')[0]
+  }
+
+  const getCurrentWeekMissions = (): WeeklyMission[] => {
+    const ws = getCurrentWeekStart()
+    return weeklyMissions.filter(m => m.week_start === ws).sort((a, b) => a.slot - b.slot || a.sort_order - b.sort_order)
+  }
+
+  const getActiveMission = (): WeeklyMission | null => {
+    const missions = getCurrentWeekMissions()
+    // First incomplete mission is the active one
+    return missions.find(m => !m.completed) || null
+  }
+
+  const toggleMissionComplete = async (mission: WeeklyMission) => {
+    const updated = { ...mission, completed: !mission.completed, updated_at: new Date().toISOString() }
+    setWeeklyMissions(prev => prev.map(m => m.id === mission.id ? updated : m))
+    await supabase.from('weekly_missions').update({ completed: !mission.completed, updated_at: new Date().toISOString() }).eq('id', mission.id)
+  }
+
+  const addWeeklyMission = async (title: string, weekStart: string, slot?: number, roadmapTaskId?: number) => {
+    if (!title.trim()) return
+    const existing = weeklyMissions.filter(m => m.week_start === weekStart)
+    const nextSlot = slot ?? (existing.length + 1)
+    const { data } = await supabase.from('weekly_missions').insert({
+      week_start: weekStart, slot: nextSlot, title: title.trim(),
+      source_type: roadmapTaskId ? 'roadmap' : 'manual',
+      roadmap_task_id: roadmapTaskId || null,
+      completed: false, rolled_over: false, sort_order: existing.length
+    }).select().single()
+    if (data) setWeeklyMissions(prev => [...prev, data])
+    return data
+  }
+
+  const deleteWeeklyMission = async (id: number) => {
+    setWeeklyMissions(prev => prev.filter(m => m.id !== id))
+    await supabase.from('weekly_missions').delete().eq('id', id)
+  }
+
+  const rolloverMission = async (mission: WeeklyMission, nextWeekStart: string) => {
+    // Mark current as rolled over
+    await supabase.from('weekly_missions').update({ rolled_over: true, updated_at: new Date().toISOString() }).eq('id', mission.id)
+    setWeeklyMissions(prev => prev.map(m => m.id === mission.id ? { ...m, rolled_over: true } : m))
+    // Create new mission for next week
+    await addWeeklyMission(mission.title, nextWeekStart, undefined, mission.roadmap_task_id || undefined)
+  }
+
+  const getCurrentPhase = (): string => {
+    // Auto-compute from phaseProgress: find first phase that is NOT fully complete
+    for (let i = 0; i < ROADMAP_PHASES.length; i++) {
+      const phase = ROADMAP_PHASES[i]
+      const allDone = phase.milestones.every((_, mi) => !!phaseProgress[`${i}-${mi}`])
+      if (!allDone) return phase.name
+    }
+    // All phases complete
+    return ROADMAP_PHASES[ROADMAP_PHASES.length - 1].name + ' ✓ Complete'
+  }
+
   const getDayType = () => {
     const day = getTodayKey()
     if (day === 'monday' || day === 'tuesday') return 'mission'
@@ -3001,356 +3109,562 @@ export default function Home() {
     </details>
   )
   const renderTodayView = () => {
-  const dayType = getDayType()
-  const todayNYKey = getTodayNY()
-  const todayTasks = getTodayTasks('jaclyn').filter(task => task.folder !== 'daily-digest' && task.folder !== 'send-outs')
-  const todayEvents = getTodayEvents()
-  const activeMission = todayTasks.find(t => !t.completed)
+    const dayType = getDayType()
+    const todayNYKey = getTodayNY()
+    const todayEvents = getTodayEvents()
+    const activeMission = getActiveMission()
+    const currentMissions = getCurrentWeekMissions()
 
-  const FRIDAY_REVIEW_STEPS = [
-    "Mark this week's missions: Done / Continue / Shrink / Move back",
-    'Shrink any oversized missions',
-    'Open Road Map — confirm phase + milestone',
-    "Choose next week's 2 missions",
-    'Choose 1 weekly admin focus',
-    'Tidy Life Admin',
-    'Tidy Parking Lot',
-    'Confirm Monday'
-  ]
+    const dayLabel = dayType === 'mission' ? 'Mission Day' : dayType === 'support' ? 'Optional Support Day' : dayType === 'reset' ? 'Reset Day' : 'Weekend Rhythm'
+    const dayBadgeColor = dayType === 'mission' ? 'bg-[#edf7f0] text-[#2d6a4f]' : dayType === 'support' ? 'bg-[#f0f0ff] text-[#4a4a9a]' : dayType === 'reset' ? 'bg-[#fff8ec] text-[#b07d0a]' : 'bg-[#f0f4ff] text-[#3d5a9a]'
 
-  const dayLabel = dayType === 'mission' ? 'Mission Day' : dayType === 'support' ? 'Optional Support Day' : dayType === 'reset' ? 'Reset Day' : 'Weekend Rhythm'
-  const dayBadgeColor = dayType === 'mission' ? 'bg-[#edf7f0] text-[#2d6a4f]' : dayType === 'support' ? 'bg-[#f0f0ff] text-[#4a4a9a]' : dayType === 'reset' ? 'bg-[#fff8ec] text-[#b07d0a]' : 'bg-[#f0f4ff] text-[#3d5a9a]'
+    const ck = (key: string) => `${todayNYKey}__${key}`
+    const checked = (key: string) => !!enoughForTodayChecked[ck(key)]
+    const toggle = (key: string) => setEnoughForTodayChecked(prev => ({ ...prev, [ck(key)]: !prev[ck(key)] }))
 
-  const enoughItems: {key: string; label: string; sub?: string; timer: number}[] = dayType === 'mission' ? [
-    { key: 'mission', label: '2-hour Mission Block', sub: nextRoadmapTask?.title || activeMission?.title || 'Set your mission for today', timer: 120 },
-    { key: 'admin', label: '10–15 min Admin', sub: nextLifeAdminItem?.title || 'One concrete life or business admin item', timer: 15 },
-    { key: 'notifications', label: '15 min Notifications', sub: 'Emails + sports chats + school apps', timer: 15 }
-  ] : dayType === 'support' ? [
-    { key: 'notifications', label: '15 min Notifications', sub: 'Emails + sports chats + school apps', timer: 15 },
-    { key: 'optional', label: 'If I have extra time', sub: nextLifeAdminItem?.title || nextRoadmapTask?.title || 'Review calendar or tidy admin', timer: 15 },
-    { key: 'presence', label: 'Phone at door by 3:30', sub: 'When today is done, be here now', timer: 0 }
-  ] : dayType === 'reset' ? [
-    { key: 'friday-reset', label: 'Friday Reset', sub: 'Close week, choose next 2 missions, prep Monday', timer: 15 },
-    { key: 'friday-admin', label: billsFriday ? '1-hour Bills Block' : '10–15 min Friday Admin', sub: billsFriday ? 'Bills block active' : 'One admin item', timer: billsFriday ? 60 : 15 },
-    { key: 'notifications', label: '15 min Notifications', sub: 'Emails + sports chats + school apps', timer: 15 }
-  ] : [
-    { key: 'presence', label: 'Phone at door by 3:30', sub: 'Weekend rhythm — be here now', timer: 0 },
-    { key: 'ground', label: 'Ground', sub: '3 slow breaths · Relax shoulders', timer: 0 },
-    { key: 'notifications', label: '15 min Notifications', sub: 'Check in when ready', timer: 15 }
-  ]
+    const EnoughItem = ({ itemKey, label, sub, timerMins, color = 'pink' }: { itemKey: string; label: string; sub?: string; timerMins?: number; color?: 'pink' | 'green' | 'yellow' }) => {
+      const isChecked = checked(itemKey)
+      const colorMap = {
+        pink: { bg: isChecked ? 'bg-[#edf7f0] border-[#a8d5b5]' : 'bg-[#fdf0ec] border-[#f0d9d0]' },
+        green: { bg: isChecked ? 'bg-[#edf7f0] border-[#a8d5b5]' : 'bg-[#edf7f2] border-[#a8d5b5]' },
+        yellow: { bg: isChecked ? 'bg-[#edf7f0] border-[#a8d5b5]' : 'bg-[#fff8ec] border-[#f0d9d0]' }
+      }
+      return (
+        <div className={`rounded-2xl px-4 py-3 border transition-all ${colorMap[color].bg}`}>
+          <div className="flex items-start gap-3">
+            <input type="checkbox" checked={isChecked} onChange={() => toggle(itemKey)}
+              className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white shrink-0 accent-[#e8917a]" />
+            <div className="flex-1 min-w-0">
+              <div className={`text-sm font-medium ${isChecked ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{label}</div>
+              {sub && <div className="text-xs text-[#7a5c5c] mt-0.5">{sub}</div>}
+            </div>
+          </div>
+          {timerMins && timerMins > 0 && !isChecked && renderTimer(`today-${itemKey}-${todayNYKey}`, timerMins)}
+        </div>
+      )
+    }
 
-  return (
-    <div className="space-y-4 pb-24 md:pb-6">
-      {/* Header */}
-      <div className="bg-[#fffdf9] rounded-[28px] p-5 md:p-7 border border-[#f0d9d0] shadow-sm">
-        <div className="flex flex-col gap-1 mb-4">
-          <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a]">STEELE LIFE</div>
-          <div className="text-2xl md:text-3xl font-semibold text-[#3d2c2c]">Aligned. Abundant. Present.</div>
-          <div className="text-sm text-[#7a5c5c]">{getTodayDate()}</div>
-          <div className={`inline-flex items-center gap-2 mt-1 px-3 py-1.5 rounded-full text-sm font-semibold w-fit ${dayBadgeColor}`}>
-            {dayLabel}
+    const MoreForTodayDrawer = () => (
+      <details className="bg-[#fffdf9] rounded-2xl overflow-hidden border border-[#f0d9d0] group">
+        <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between text-sm text-[#3d2c2c] font-medium">
+          <span>More for Today</span><span className="text-[#b8958a] group-open:rotate-180 transition-transform duration-200">⌄</span>
+        </summary>
+        <div className="px-4 pb-4 pt-3 space-y-2 border-t border-[#f0d9d0]">
+          {[
+            { label: 'Presence', sub: 'Phone at door by 3:30 · When today is done, be here now', key: 'more-presence' },
+            { label: 'Workout', sub: 'Strength / Stretching · Walk or Pickleball', key: 'more-workout' },
+            { label: 'Ground', sub: '3 slow breaths · Relax shoulders · Do the next thing, not everything', key: 'more-ground' }
+          ].map(item => {
+            const isChecked = checked(item.key)
+            return (
+              <div key={item.key} className={`flex items-start gap-3 rounded-xl px-3 py-2 ${isChecked ? 'opacity-50' : ''}`}>
+                <input type="checkbox" checked={isChecked} onChange={() => toggle(item.key)}
+                  className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white accent-[#e8917a] shrink-0" />
+                <div>
+                  <div className={`text-sm font-medium ${isChecked ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{item.label}</div>
+                  <div className="text-xs text-[#7a5c5c]">{item.sub}</div>
+                </div>
+              </div>
+            )
+          })}
+          <div className="pt-2 border-t border-[#f0d9d0] space-y-1.5">
+            {[
+              { label: 'Mission', tab: 'week' },
+              { label: 'Tidy Life Admin', tab: 'life-admin' },
+              { label: 'Tidy Parking Lot', tab: 'parking-lot' },
+              { label: 'Calendar', tab: 'calendar' },
+              { label: 'Thumb Equity', tab: 'thumb-equity' }
+            ].map(link => (
+              <button key={link.tab} onClick={() => setActiveTab(link.tab as any)}
+                className="flex items-center gap-2 w-full text-left text-sm text-[#e8917a] hover:text-[#d4745d] transition-colors py-0.5">
+                <span className="text-xs">→</span>{link.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </details>
+    )
+
+    return (
+      <div className="space-y-4 pb-24 md:pb-6">
+        {/* Header */}
+        <div className="bg-[#fffdf9] rounded-[28px] p-5 md:p-7 border border-[#f0d9d0] shadow-sm">
+          <div className="flex flex-col gap-1 mb-4">
+            <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a]">STEELE LIFE</div>
+            <div className="text-2xl md:text-3xl font-semibold text-[#3d2c2c]">Aligned. Abundant. Present.</div>
+            <div className="text-sm text-[#7a5c5c]">{getTodayDate()}</div>
+            <div className={`inline-flex items-center gap-2 mt-1 px-3 py-1.5 rounded-full text-sm font-semibold w-fit ${dayBadgeColor}`}>{dayLabel}</div>
+          </div>
+
+          {/* Active Phase — auto-computed from Road Map */}
+          <div className="bg-[#fff8ec] rounded-2xl px-4 py-3 mb-4 flex items-center justify-between gap-3 flex-wrap border border-[#f0d9d0]">
+            <div>
+              <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-0.5">Active Phase</div>
+              <div className="text-sm text-[#3d2c2c] font-semibold">{getCurrentPhase()}</div>
+              {activeMission && <div className="text-xs text-[#e8917a] mt-0.5 font-medium">Now: {activeMission.title}</div>}
+            </div>
+            <button onClick={() => setActiveTab('roadmap')} className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors shrink-0 font-medium">Road Map →</button>
+          </div>
+
+          {/* ENOUGH FOR TODAY — day-specific */}
+          <div className="mb-4">
+            <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-2">Enough For Today</div>
+            <div className="space-y-2">
+
+              {/* MON / TUE — Mission Day */}
+              {dayType === 'mission' && (
+                <>
+                  {/* 2-hr Mission Block */}
+                  <div className={`rounded-2xl px-4 py-3 border transition-all ${checked('mission') ? 'bg-[#edf7f0] border-[#a8d5b5] opacity-70' : 'bg-[#fdf0ec] border-[#f0d9d0]'}`}>
+                    <div className="flex items-start gap-3">
+                      <input type="checkbox" checked={checked('mission')} onChange={() => toggle('mission')}
+                        className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white shrink-0 accent-[#e8917a]" />
+                      <div className="flex-1 min-w-0">
+                        <div className={`text-sm font-semibold ${checked('mission') ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>2-hour Mission Block</div>
+                        {activeMission ? (
+                          <div className="text-xs text-[#7a5c5c] mt-0.5">{activeMission.title}</div>
+                        ) : (
+                          <div className="text-xs text-[#b8958a] mt-0.5 italic">No mission set — assign one in This Week</div>
+                        )}
+                        {/* Show next mission if active is done */}
+                        {checked('mission') && (() => {
+                          const next = currentMissions.find(m => !m.completed && m.id !== activeMission?.id)
+                          return next ? <div className="text-xs text-[#4caf7d] mt-1 font-medium">Up next: {next.title}</div> : null
+                        })()}
+                      </div>
+                      {activeMission && (
+                        <input type="checkbox" checked={activeMission.completed} onChange={() => toggleMissionComplete(activeMission)}
+                          className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white shrink-0 accent-[#4caf7d]" />
+                      )}
+                    </div>
+                    {!checked('mission') && renderTimer(`today-mission-${todayNYKey}`, 120)}
+                  </div>
+
+                  {/* Admin */}
+                  <EnoughItem itemKey="admin" label="15 min Admin" sub={nextLifeAdminItem?.title || 'One concrete life or business admin item'} timerMins={15} />
+                </>
+              )}
+
+              {/* WED / THU — Support Day */}
+              {dayType === 'support' && (
+                <details className={`rounded-2xl border transition-all ${checked('support-block') ? 'bg-[#edf7f0] border-[#a8d5b5]' : 'bg-[#f0f0ff] border-[#d8d8f8]'} group`}>
+                  <summary className="list-none cursor-pointer px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <input type="checkbox" checked={checked('support-block')} onChange={e => { e.stopPropagation(); toggle('support-block') }}
+                        className="w-4 h-4 rounded border-[#d8d8f8] bg-white shrink-0 accent-[#e8917a]" onClick={e => e.stopPropagation()} />
+                      <div className="flex-1">
+                        <div className={`text-sm font-semibold ${checked('support-block') ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>Optional Support Day</div>
+                        <div className="text-xs text-[#7a5c5c] mt-0.5">Tap to expand options</div>
+                      </div>
+                      <span className="text-[#b8958a] text-xs group-open:rotate-90 transition-transform">▸</span>
+                    </div>
+                  </summary>
+                  <div className="px-4 pb-3 pt-2 border-t border-[#d8d8f8] space-y-2">
+                    {activeMission && (
+                      <div className="flex items-center gap-3 text-sm">
+                        <input type="checkbox" checked={activeMission.completed} onChange={() => toggleMissionComplete(activeMission)}
+                          className="w-4 h-4 rounded border-[#d8d8f8] bg-white shrink-0 accent-[#4caf7d]" />
+                        <div>
+                          <div className="text-[#3d2c2c] font-medium">Finish Mission</div>
+                          <div className="text-xs text-[#7a5c5c]">{activeMission.title}</div>
+                        </div>
+                      </div>
+                    )}
+                    <button onClick={() => setActiveTab('life-admin')} className="flex items-center gap-2 text-sm text-[#3d2c2c] hover:text-[#e8917a] transition-colors">
+                      <span className="text-[#e8917a]">→</span> Do Life Admin
+                    </button>
+                    <button onClick={() => setActiveTab('parking-lot')} className="flex items-center gap-2 text-sm text-[#3d2c2c] hover:text-[#e8917a] transition-colors">
+                      <span className="text-[#e8917a]">→</span> Do New Idea (Parking Lot)
+                    </button>
+                  </div>
+                </details>
+              )}
+
+              {/* FRIDAY — Reset Day */}
+              {dayType === 'reset' && (
+                <>
+                  {/* Friday Admin / Bills Card */}
+                  <div className={`rounded-2xl border transition-all ${checked('friday-admin') ? 'bg-[#edf7f0] border-[#a8d5b5] opacity-70' : 'bg-[#fff8ec] border-[#f0d9d0]'}`}>
+                    <div className="px-4 py-3">
+                      <div className="flex items-start gap-3">
+                        <input type="checkbox" checked={checked('friday-admin')} onChange={() => toggle('friday-admin')}
+                          className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white shrink-0 accent-[#e8917a]" />
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-sm font-semibold ${checked('friday-admin') ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>
+                            {billsFriday ? 'Bills' : 'Friday Admin'}
+                          </div>
+                          {!billsFriday && (
+                            <button onClick={() => setActiveTab('life-admin')} className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors mt-0.5">Open Life Admin →</button>
+                          )}
+                        </div>
+                        {/* Bill day toggle */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs text-[#b8958a]">Bills</span>
+                          <button onClick={() => setBillsFriday(prev => !prev)}
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${billsFriday ? 'bg-[#e8917a]' : 'bg-[#f0d9d0]'}`}>
+                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${billsFriday ? 'translate-x-[18px]' : 'translate-x-1'}`} />
+                          </button>
+                        </div>
+                      </div>
+                      {!checked('friday-admin') && renderTimer(`today-friday-admin-${todayNYKey}`, billsFriday ? 60 : 15)}
+                    </div>
+                    {/* Bills notes — only when billsFriday is on */}
+                    {billsFriday && (
+                      <div className="px-4 pb-3 border-t border-[#f0d9d0] pt-3 space-y-2">
+                        {billNotes.sort((a, b) => a.sort_order - b.sort_order).map(note => (
+                          <div key={note.id} className="flex items-center gap-2 group">
+                            <input type="checkbox" checked={note.completed}
+                              onChange={async () => {
+                                const updated = { ...note, completed: !note.completed }
+                                setBillNotes(prev => prev.map(n => n.id === note.id ? updated : n))
+                                await supabase.from('bills_notes').update({ completed: !note.completed, updated_at: new Date().toISOString() }).eq('id', note.id)
+                              }}
+                              className="w-4 h-4 rounded border-[#f0d9d0] bg-white shrink-0 accent-[#e8917a]" />
+                            {editingBillNote?.id === note.id ? (
+                              <form onSubmit={async e => { e.preventDefault(); const u = { ...note, content: editingBillNote.content }; setBillNotes(prev => prev.map(n => n.id === note.id ? u : n)); await supabase.from('bills_notes').update({ content: editingBillNote.content, updated_at: new Date().toISOString() }).eq('id', note.id); setEditingBillNote(null) }} className="flex-1 flex gap-1">
+                                <input autoFocus value={editingBillNote.content} onChange={e => setEditingBillNote({ ...editingBillNote, content: e.target.value })}
+                                  className="flex-1 text-sm rounded-lg px-2 py-1 border border-[#f0d9d0] text-[#3d2c2c] bg-white outline-none" />
+                                <button type="submit" className="text-xs text-[#4caf7d] font-medium px-1">Save</button>
+                                <button type="button" onClick={() => setEditingBillNote(null)} className="text-xs text-[#b8958a]">✕</button>
+                              </form>
+                            ) : (
+                              <>
+                                <span className={`flex-1 text-sm ${note.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{note.content}</span>
+                                <button onClick={() => setEditingBillNote(note)} className="opacity-0 group-hover:opacity-100 text-xs text-[#b8958a] hover:text-[#3d2c2c] transition-all">✎</button>
+                                <button onClick={async () => { setBillNotes(prev => prev.filter(n => n.id !== note.id)); await supabase.from('bills_notes').delete().eq('id', note.id) }}
+                                  className="opacity-0 group-hover:opacity-100 text-xs text-[#b8958a] hover:text-red-400 transition-all">×</button>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                        {addingBillNote ? (
+                          <form onSubmit={async e => { e.preventDefault(); if (!newBillNoteContent.trim()) return; const maxOrder = Math.max(0, ...billNotes.map(n => n.sort_order)); const { data } = await supabase.from('bills_notes').insert({ content: newBillNoteContent.trim(), sort_order: maxOrder + 1, completed: false }).select().single(); if (data) setBillNotes(prev => [...prev, data]); setNewBillNoteContent(''); setAddingBillNote(false) }} className="flex gap-1">
+                            <input autoFocus value={newBillNoteContent} onChange={e => setNewBillNoteContent(e.target.value)}
+                              placeholder="Add bill..." className="flex-1 text-sm rounded-lg px-2 py-1 border border-[#f0d9d0] text-[#3d2c2c] bg-white outline-none" />
+                            <button type="submit" className="text-xs text-[#4caf7d] font-medium px-1">Add</button>
+                            <button type="button" onClick={() => setAddingBillNote(false)} className="text-xs text-[#b8958a]">✕</button>
+                          </form>
+                        ) : (
+                          <button onClick={() => setAddingBillNote(true)} className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors">+ Add bill</button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Friday Reset — accordion */}
+                  <details className={`rounded-2xl border overflow-hidden transition-all group ${checked('friday-reset') ? 'bg-[#edf7f0] border-[#a8d5b5]' : 'bg-[#fff8ec] border-[#f0d9d0]'}`}>
+                    <summary className="list-none cursor-pointer px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <input type="checkbox" checked={checked('friday-reset')} onChange={e => { e.stopPropagation(); toggle('friday-reset') }}
+                          className="w-4 h-4 rounded border-[#f0d9d0] bg-white shrink-0 accent-[#e8917a]" onClick={e => e.stopPropagation()} />
+                        <div className="flex-1">
+                          <div className={`text-sm font-semibold ${checked('friday-reset') ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>Friday Reset</div>
+                          <div className="text-xs text-[#7a5c5c]">Close week, assign next missions, prep Monday</div>
+                        </div>
+                        <span className="text-[#b8958a] text-xs group-open:rotate-90 transition-transform shrink-0">▸</span>
+                      </div>
+                      {!checked('friday-reset') && renderTimer(`today-friday-reset-${todayNYKey}`, 15)}
+                    </summary>
+                    <div className="px-4 pb-4 border-t border-[#f0d9d0] pt-3 space-y-4">
+                      {/* Step 1: Review this week's missions */}
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.15em] text-[#b8958a] mb-2">This week&apos;s missions</div>
+                        {currentMissions.length === 0 && <div className="text-xs text-[#b8958a] italic">No missions were set this week.</div>}
+                        {currentMissions.map(m => (
+                          <div key={m.id} className="flex items-center gap-2 py-1.5 border-b border-[#f0d9d0] last:border-0">
+                            <span className={`flex-1 text-sm ${m.completed ? 'text-[#4caf7d] line-through' : 'text-[#3d2c2c]'}`}>{m.title}</span>
+                            <div className="flex gap-1 shrink-0">
+                              {!m.completed && (
+                                <>
+                                  <button onClick={() => toggleMissionComplete(m)} className="text-xs bg-[#edf7f0] text-[#4caf7d] border border-[#a8d5b5] rounded-lg px-2 py-1">✓ Done</button>
+                                  <button onClick={async () => { await rolloverMission(m, getNextWeekStart()) }} className="text-xs bg-[#fff8ec] text-[#b07d0a] border border-[#f0d9d0] rounded-lg px-2 py-1">→ Roll</button>
+                                  <button onClick={() => deleteWeeklyMission(m.id)} className="text-xs bg-white text-red-400 border border-red-200 rounded-lg px-2 py-1">✕</button>
+                                </>
+                              )}
+                              {m.completed && <span className="text-xs text-[#4caf7d] font-medium">Done ✓</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Step 2: Pick next week's missions from Road Map */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-xs uppercase tracking-[0.15em] text-[#b8958a]">Pick next week&apos;s missions</div>
+                          <button onClick={() => setPickingNextMissions(p => !p)} className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors">
+                            {pickingNextMissions ? 'Done picking' : 'Pick missions →'}
+                          </button>
+                        </div>
+                        {/* Show what's already assigned for next week */}
+                        {(() => {
+                          const nwMissions = weeklyMissions.filter(m => m.week_start === getNextWeekStart())
+                          return nwMissions.length > 0 ? (
+                            <div className="space-y-1 mb-2">
+                              {nwMissions.map(m => (
+                                <div key={m.id} className="flex items-center gap-2 text-sm bg-[#edf7f0] rounded-xl px-3 py-2">
+                                  <span className="flex-1 text-[#2d6a4f]">{m.title}</span>
+                                  <button onClick={() => deleteWeeklyMission(m.id)} className="text-xs text-[#b8958a] hover:text-red-400">×</button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : <div className="text-xs text-[#b8958a] italic mb-2">No missions assigned for next week yet.</div>
+                        })()}
+                        {pickingNextMissions && (
+                          <div className="space-y-2">
+                            {/* Road Map action steps not yet completed */}
+                            {roadmapTasks.filter(t => !t.completed).slice(0, 8).map(task => {
+                              const phase = ROADMAP_PHASES[task.phase_index]
+                              const milestone = phase?.milestones[task.milestone_index]
+                              const alreadyAssigned = weeklyMissions.some(m => m.week_start === getNextWeekStart() && m.roadmap_task_id === task.id)
+                              return (
+                                <div key={task.id} className={`flex items-center gap-2 rounded-xl px-3 py-2 border text-sm ${alreadyAssigned ? 'bg-[#edf7f0] border-[#a8d5b5]' : 'bg-white border-[#f0d9d0]'}`}>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-[#3d2c2c] truncate">{task.title}</div>
+                                    <div className="text-xs text-[#b8958a] truncate">{phase?.name} — {milestone}</div>
+                                  </div>
+                                  <button
+                                    onClick={async () => {
+                                      if (alreadyAssigned) {
+                                        const existing = weeklyMissions.find(m => m.week_start === getNextWeekStart() && m.roadmap_task_id === task.id)
+                                        if (existing) await deleteWeeklyMission(existing.id)
+                                      } else {
+                                        await addWeeklyMission(task.title, getNextWeekStart(), undefined, task.id)
+                                      }
+                                    }}
+                                    className={`text-xs px-2 py-1 rounded-lg transition-colors shrink-0 ${alreadyAssigned ? 'bg-[#a8d5b5] text-[#2d6a4f]' : 'bg-[#e8917a] text-white hover:bg-[#d4745d]'}`}>
+                                    {alreadyAssigned ? '✓ Added' : '+ Add'}
+                                  </button>
+                                </div>
+                              )
+                            })}
+                            {/* Manual add */}
+                            {addingMission ? (
+                              <form onSubmit={async e => { e.preventDefault(); await addWeeklyMission(newMissionTitle, getNextWeekStart()); setNewMissionTitle(''); setAddingMission(false) }} className="flex gap-1">
+                                <input autoFocus value={newMissionTitle} onChange={e => setNewMissionTitle(e.target.value)}
+                                  placeholder="Custom mission..." className="flex-1 text-sm rounded-xl px-3 py-2 border border-[#f0d9d0] text-[#3d2c2c] bg-white outline-none" />
+                                <button type="submit" className="text-xs bg-[#e8917a] text-white rounded-xl px-3">Add</button>
+                                <button type="button" onClick={() => setAddingMission(false)} className="text-xs text-[#b8958a]">✕</button>
+                              </form>
+                            ) : (
+                              <button onClick={() => setAddingMission(true)} className="text-xs text-[#b8958a] hover:text-[#e8917a] transition-colors">+ Add custom mission</button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Checklist items */}
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.15em] text-[#b8958a] mb-2">Wrap up</div>
+                        {[
+                          'Open Road Map — confirm phase + milestone',
+                          'Tidy Life Admin',
+                          'Tidy Parking Lot — move or tag items',
+                          'Confirm Monday is clear'
+                        ].map((step, i) => {
+                          const key = `friday-step-${i}`
+                          const isChecked = checked(key)
+                          return (
+                            <div key={key} className={`flex items-start gap-3 py-1.5 text-sm ${isChecked ? 'opacity-50' : ''}`}>
+                              <input type="checkbox" checked={isChecked} onChange={() => toggle(key)}
+                                className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white accent-[#e8917a] shrink-0" />
+                              <span className={isChecked ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}>{step}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </details>
+                </>
+              )}
+
+              {/* WEEKEND */}
+              {dayType === 'weekend' && (
+                <>
+                  <EnoughItem itemKey="presence" label="Phone at door by 3:30" sub="Weekend rhythm — be here now" />
+                  <EnoughItem itemKey="ground" label="Ground" sub="3 slow breaths · Relax shoulders" />
+                </>
+              )}
+
+              {/* Notifications — GREEN — all day types */}
+              <div className={`rounded-2xl px-4 py-3 border transition-all ${checked('notifications') ? 'bg-[#edf7f0] border-[#a8d5b5] opacity-70' : 'bg-[#edf7f2] border-[#a8d5b5]'}`}>
+                <div className="flex items-start gap-3">
+                  <input type="checkbox" checked={checked('notifications')} onChange={() => toggle('notifications')}
+                    className="w-4 h-4 mt-0.5 rounded border-[#a8d5b5] bg-white shrink-0 accent-[#4caf7d]" />
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-sm font-semibold ${checked('notifications') ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>15 min Notifications</div>
+                    <div className="text-xs text-[#7a5c5c] mt-0.5">Emails + sports chats + school apps/messages</div>
+                  </div>
+                </div>
+                {!checked('notifications') && renderTimer(`today-notifications-${todayNYKey}`, 15)}
+              </div>
+
+            </div>
+          </div>
+
+          {/* More for Today drawer */}
+          <div className="mb-4"><MoreForTodayDrawer /></div>
+
+          {/* Today's Events */}
+          <div>
+            <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-2">Today&apos;s Events</div>
+            <div className="space-y-2">
+              {todayEvents.length ? todayEvents.map(event => (
+                <div key={event.id} className="bg-[#fff8ec] rounded-2xl p-3 border-l-4" style={{ borderLeftColor: getFolderColor(event.folder || 'PERSONAL') }}>
+                  <div className="text-[#3d2c2c] font-medium text-sm">{event.title}</div>
+                  <div className="text-xs text-[#7a5c5c]">{formatEventDate(event.date)}{event.time ? ` · ${toNYTimeDisplay(event.date + 'T' + event.time + ':00')}` : ''}</div>
+                </div>
+              )) : <div className="text-sm text-[#b8958a] italic">No time-specific events today.</div>}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const renderWeekView = () => {
+    const ws = getCurrentWeekStart()
+    const currentMissions = getCurrentWeekMissions()
+    const completedCount = currentMissions.filter(m => m.completed).length
+    const topPriorityAdminItems = lifeAdminCards.filter(c => c.column_key === 'top-priority' && !c.completed)
+
+    // Week events Mon-Sun
+    const { dates: weekDates, weekRange: wr } = getWeekDates(new Date())
+    const weekEvents = events.filter(e => {
+      const d = weekDates.map(wd => wd.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }))
+      return d.includes(e.date)
+    }).sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''))
+
+    const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+    return (
+      <div className="space-y-4 pb-24 md:pb-6">
+        {/* Header */}
+        <div className="bg-[#fffdf9] rounded-3xl p-5 md:p-6 border border-[#f0d9d0]">
+          <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-1">This Week</div>
+          <h2 className="text-2xl font-semibold text-[#3d2c2c]">If I get these done, I did enough.</h2>
+          <p className="text-sm text-[#7a5c5c] mt-1">{wr}</p>
+          <div className="mt-3">
+            <div className="flex items-center justify-between text-xs text-[#b8958a] mb-1">
+              <span>Weekly progress</span><span>{completedCount}/{currentMissions.length || 0}</span>
+            </div>
+            <div className="w-full h-2 rounded-full bg-[#f0d9d0] overflow-hidden">
+              <div className="h-full bg-[#4caf7d] transition-all duration-500 rounded-full" style={{ width: currentMissions.length > 0 ? `${(completedCount / currentMissions.length) * 100}%` : '0%' }} />
+            </div>
           </div>
         </div>
 
-        {/* Phase strip */}
-        <div className="bg-[#fff8ec] rounded-2xl px-4 py-3 mb-4 flex items-center justify-between gap-3 flex-wrap border border-[#f0d9d0]">
+        {/* Active Phase */}
+        <div className="bg-[#fff8ec] rounded-2xl px-4 py-3 border border-[#f0d9d0] flex items-center justify-between gap-3">
           <div>
             <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-0.5">Active Phase</div>
-            <div className="text-sm text-[#3d2c2c] font-medium">{getCurrentPhase()}</div>
-            {nextRoadmapTask && (
-              <div className="text-xs text-[#e8917a] mt-0.5 font-medium">Next: {nextRoadmapTask.title}</div>
-            )}
+            <div className="text-sm text-[#3d2c2c] font-semibold">{getCurrentPhase()}</div>
+            {nextRoadmapTask && <div className="text-xs text-[#e8917a] mt-0.5">Next task: {nextRoadmapTask.title}</div>}
           </div>
-          <button onClick={() => setActiveTab('roadmap')} className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors shrink-0 font-medium">Road Map →</button>
+          <button onClick={() => setActiveTab('roadmap')} className="text-xs text-[#e8917a] hover:text-[#d4745d] shrink-0 font-medium">Road Map →</button>
         </div>
 
-        {/* Enough For Today */}
-        <div className="mb-4">
-          <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-2">Enough For Today</div>
+        {/* Weekly Missions */}
+        <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0]">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm font-semibold text-[#3d2c2c]">This Week&apos;s Missions</div>
+            <button onClick={() => setAddingMission(true)} className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors">+ Add mission</button>
+          </div>
           <div className="space-y-2">
-            {enoughItems.map((item) => {
-              const ckKey = `${todayNYKey}__${item.key}`
-              const checked = !!enoughForTodayChecked[ckKey]
-              return (
-                <div key={item.key} className={`rounded-2xl px-4 py-3 border transition-all ${checked ? 'bg-[#edf7f0] border-[#a8d5b5] opacity-70' : 'bg-[#fdf0ec] border-[#f0d9d0]'}`}>
-                  <div className="flex items-start gap-3">
-                    <input type="checkbox" checked={checked}
-                      onChange={() => setEnoughForTodayChecked(prev => ({ ...prev, [ckKey]: !checked }))}
-                      className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white text-[#e8917a] focus:ring-[#e8917a] focus:ring-offset-0 shrink-0 accent-[#e8917a]" />
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-sm font-medium ${checked ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{item.label}</div>
-                      {item.sub && <div className="text-xs text-[#7a5c5c] mt-0.5">{item.sub}</div>}
-                    </div>
-                  </div>
-                  {item.timer > 0 && !checked && renderTimer(`today-${item.key}`, item.timer)}
+            {currentMissions.length === 0 && !addingMission && (
+              <div className="text-sm text-[#b8958a] italic py-2">No missions set yet. Add one below or assign from Road Map.</div>
+            )}
+            {currentMissions.map((m, idx) => (
+              <div key={m.id} className={`flex items-center gap-3 rounded-2xl px-4 py-3 border transition-all ${m.completed ? 'bg-[#edf7f0] border-[#a8d5b5]' : 'bg-[#fdf0ec] border-[#f0d9d0]'}`}>
+                <input type="checkbox" checked={m.completed} onChange={() => toggleMissionComplete(m)}
+                  className="w-4 h-4 rounded border-[#f0d9d0] bg-white shrink-0 accent-[#4caf7d]" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-[#b8958a] mb-0.5">Mission {idx + 1}</div>
+                  <div className={`text-sm font-medium ${m.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{m.title}</div>
+                  {m.rolled_over && <div className="text-xs text-[#b07d0a] mt-0.5">Rolled over from last week</div>}
                 </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Mission Block (Mission days) */}
-        {dayType === 'mission' && (
-          <div className="mb-4">
-            <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-2">Mission Block</div>
-            {(activeMission || nextRoadmapTask) ? (
-              <div className="bg-[#fdf0ec] rounded-2xl p-4 border border-[#f0d9d0]">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[#3d2c2c] font-semibold">{nextRoadmapTask?.title || activeMission?.title}</div>
-                    {activeMission?.notes && <div className="text-xs text-[#7a5c5c] mt-1">{activeMission.notes}</div>}
-                    <div className="text-xs text-[#b8958a] mt-1">2-hour block · do the next thing, not everything</div>
-                  </div>
-                  {activeMission && (
-                    <input type="checkbox" checked={activeMission.completed}
-                      onChange={() => toggleComplete(activeMission)}
-                      className="w-4 h-4 mt-1 rounded border-[#f0d9d0] bg-white text-[#e8917a] focus:ring-[#e8917a] focus:ring-offset-0 shrink-0 accent-[#e8917a]" />
-                  )}
-                </div>
-                {renderTimer('mission-block', 120)}
-                {missionRollover?.taskId === activeMission?.id ? (
-                  <div className="mt-3 pt-3 border-t border-[#f0d9d0]">
-                    <div className="text-xs text-[#7a5c5c] mb-2">Mission not finished — choose one:</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {([['continue', 'Continue next block'], ['shrink', 'Shrink it'], ['moveback', 'Move back to queue'], ['blocked', 'Mark blocked']] as const).map(([action, label]) => (
-                        <button key={action} onClick={() => {
-                          if (activeMission) {
-                            if (action === 'moveback') {
-                              supabase.from(TASKS_TABLE).update({ day_of_week: 'overflow', status: 'pending' }).eq('id', activeMission.id)
-                              setTasks(prev => prev.map(t => t.id === activeMission.id ? { ...t, day_of_week: 'overflow' } : t))
-                            } else if (action === 'blocked') {
-                              supabase.from(TASKS_TABLE).update({ status: 'blocked' }).eq('id', activeMission.id)
-                            }
-                          }
-                          setMissionRollover(null)
-                        }}
-                          className="text-xs bg-[#fffdf9] hover:bg-[#fdf0ec] text-[#3d2c2c] rounded-xl py-2 px-3 transition-colors border border-[#f0d9d0]">
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : activeMission && !activeMission.completed && (
-                  <button onClick={() => setMissionRollover({ taskId: activeMission.id, action: null })}
-                    className="mt-3 text-xs text-[#b8958a] hover:text-[#7a5c5c] transition-colors">
-                    Didn’t finish? Rollover →
-                  </button>
-                )}
+                <button onClick={() => deleteWeeklyMission(m.id)} className="text-[#b8958a] hover:text-red-400 text-sm shrink-0 transition-colors">×</button>
               </div>
-            ) : (
-              <div className="bg-[#fdf0ec] rounded-2xl p-4 border border-[#f0d9d0] text-sm text-[#b8958a] italic">
-                No mission scheduled — add one from This Week or Road Map
+            ))}
+            {addingMission && (
+              <div className="space-y-2">
+                <form onSubmit={async e => { e.preventDefault(); await addWeeklyMission(newMissionTitle, ws); setNewMissionTitle(''); setAddingMission(false) }} className="flex gap-2">
+                  <input autoFocus value={newMissionTitle} onChange={e => setNewMissionTitle(e.target.value)}
+                    placeholder="Mission title..." className="flex-1 text-sm rounded-xl px-3 py-2 border border-[#f0d9d0] text-[#3d2c2c] bg-white outline-none focus:border-[#e8917a]" />
+                  <button type="submit" className="bg-[#e8917a] text-white text-sm rounded-xl px-3 hover:bg-[#d4745d] transition-colors">Add</button>
+                  <button type="button" onClick={() => setAddingMission(false)} className="text-[#b8958a] text-sm px-2">✕</button>
+                </form>
+                {/* Quick-pick from Road Map */}
+                <div className="text-xs text-[#b8958a] mb-1">Or pick from Road Map:</div>
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {roadmapTasks.filter(t => !t.completed).slice(0, 6).map(task => (
+                    <button key={task.id} onClick={async () => { await addWeeklyMission(task.title, ws, undefined, task.id); setAddingMission(false) }}
+                      className="w-full text-left text-xs bg-[#fdf0ec] hover:bg-[#f0d9d0] text-[#3d2c2c] rounded-xl px-3 py-2 transition-colors border border-[#f0d9d0]">
+                      {task.title}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
-        )}
+        </div>
 
-        {/* Support Day — If I have extra time */}
-        {dayType === 'support' && (
-          <div className="mb-4">
-            <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-2">If I Have Extra Time</div>
-            <div className="bg-[#f0f0ff] rounded-2xl p-4 border border-[#d8d8f8] space-y-2">
-              <div className="text-xs text-[#7a5c5c] italic mb-1">Suggestions only — not obligations</div>
-              {nextLifeAdminItem && (
-                <div className="flex items-center gap-2 text-sm text-[#3d2c2c]">
-                  <span className="w-2 h-2 rounded-full bg-[#e8917a] shrink-0"></span>
-                  {nextLifeAdminItem.title} <span className="text-xs text-[#b8958a]">(Life Admin)</span>
-                </div>
-              )}
-              {nextRoadmapTask && (
-                <div className="flex items-center gap-2 text-sm text-[#3d2c2c]">
-                  <span className="w-2 h-2 rounded-full bg-[#4caf7d] shrink-0"></span>
-                  {nextRoadmapTask.title} <span className="text-xs text-[#b8958a]">(Road Map)</span>
-                </div>
-              )}
-              {['Review calendar', 'Tidy Life Admin', 'Tidy Parking Lot'].map(s => (
-                <div key={s} className="flex items-center gap-2 text-sm text-[#7a5c5c]">
-                  <span className="w-2 h-2 rounded-full bg-[#b8958a] shrink-0"></span>{s}
+        {/* Life Admin Top Priority */}
+        {topPriorityAdminItems.length > 0 && (
+          <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0]">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-semibold text-[#3d2c2c]">Life Admin — Top Priority</div>
+              <button onClick={() => setActiveTab('life-admin')} className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors">View all →</button>
+            </div>
+            <div className="space-y-2">
+              {topPriorityAdminItems.slice(0, 5).map(card => (
+                <div key={card.id} className={`flex items-center gap-3 rounded-2xl px-4 py-3 border transition-all ${card.completed ? 'bg-[#edf7f0] border-[#a8d5b5] opacity-60' : 'bg-[#fdf0ec] border-[#f0d9d0]'}`}>
+                  <input type="checkbox" checked={card.completed}
+                    onChange={async () => {
+                      const updated = { ...card, completed: !card.completed, column_key: !card.completed ? 'done' as const : 'top-priority' as const, updated_at: new Date().toISOString() }
+                      setLifeAdminCards(prev => prev.map(c => c.id === card.id ? updated : c))
+                      await supabase.from('life_admin_cards').update({ completed: !card.completed, column_key: !card.completed ? 'done' : 'top-priority', updated_at: new Date().toISOString() }).eq('id', card.id)
+                    }}
+                    className="w-4 h-4 rounded border-[#f0d9d0] bg-white shrink-0 accent-[#4caf7d]" />
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-sm font-medium ${card.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{card.title}</div>
+                    {card.notes && <div className="text-xs text-[#7a5c5c] truncate mt-0.5">{card.notes}</div>}
+                  </div>
+                  <button onClick={() => { setActiveTab('life-admin'); setEditingLifeCard(card) }} className="text-xs text-[#b8958a] hover:text-[#3d2c2c] transition-colors shrink-0">✎</button>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Friday Reset */}
-        {dayType === 'reset' && (
-          <div className="mb-4 space-y-3">
-            <div>
-              <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-2">Friday Reset</div>
-              <div className="bg-[#fff8ec] rounded-2xl p-4 border border-[#f0d9d0] space-y-2">
-                {FRIDAY_REVIEW_STEPS.map((step, i) => {
-                  const key = `${todayNYKey}__friday-${i}`
-                  const checked = !!fridayReviewChecked[key as unknown as number]
-                  return (
-                    <div key={key} className={`flex items-start gap-3 text-sm ${checked ? 'opacity-50' : ''}`}>
-                      <input type="checkbox" checked={checked}
-                        onChange={() => setFridayReviewChecked(prev => ({ ...prev, [key]: !checked } as Record<number, boolean>))}
-                        className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white accent-[#e8917a] shrink-0" />
-                      <span className={checked ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}>{i + 1}. {step}</span>
-                    </div>
-                  )
-                })}
-              </div>
-              {renderTimer('friday-reset', 15)}
-            </div>
-            <div className="flex items-center gap-3 bg-[#fff8ec] rounded-2xl px-4 py-3 border border-[#f0d9d0]">
-              <span className="text-sm text-[#3d2c2c] flex-1">{billsFriday ? '1-hour Bills Block' : 'Normal admin (10–15 min)'}</span>
-              <button onClick={() => setBillsFriday(prev => !prev)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${billsFriday ? 'bg-[#e8917a]' : 'bg-[#f0d9d0]'}`}>
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${billsFriday ? 'translate-x-6' : 'translate-x-1'}`} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Notifications */}
-        <div className="mb-4">
-          <div className="bg-[#edf7f2] rounded-2xl px-4 py-3 border border-[#a8d5b5]">
-            <div className="flex items-start gap-3">
-              <input type="checkbox"
-                checked={!!enoughForTodayChecked[`${todayNYKey}__notifications-block`]}
-                onChange={() => setEnoughForTodayChecked(prev => {
-                  const k = `${todayNYKey}__notifications-block`
-                  return { ...prev, [k]: !prev[k] }
-                })}
-                className="w-4 h-4 mt-0.5 rounded border-[#a8d5b5] bg-white accent-[#4caf7d] shrink-0" />
-              <div className="flex-1">
-                <div className="text-sm font-medium text-[#3d2c2c]">Notifications · 15 min</div>
-                <div className="text-xs text-[#7a5c5c]">Emails + sports chats + school apps/messages</div>
-              </div>
-            </div>
-            {renderTimer('notifications', 15)}
-          </div>
-        </div>
-
-        {/* More for Today */}
-        <div className="mb-4">
-          <details className="bg-[#fffdf9] rounded-2xl overflow-hidden border border-[#f0d9d0] group">
-            <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between text-sm text-[#3d2c2c] font-medium">
-              <span>More for Today</span><span className="text-[#b8958a] group-open:rotate-180 transition-transform duration-200">⌄</span>
-            </summary>
-            <div className="px-4 pb-4 space-y-3 text-sm">
-              {[
-                { label: 'Presence', sub: 'Phone at door by 3:30 · When today is done, be here now', key: 'presence' },
-                { label: 'Workout', sub: 'Strength / Stretching · Walk or Pickleball', key: 'workout' },
-                { label: 'Ground', sub: '3 slow breaths · Relax shoulders · Do the next thing, not everything', key: 'ground' }
-              ].map(item => {
-                const ck = `${todayNYKey}__more-${item.key}`
-                const checked = !!enoughForTodayChecked[ck]
-                return (
-                  <div key={item.key} className={`flex items-start gap-3 rounded-xl px-3 py-2 ${checked ? 'opacity-50' : ''}`}>
-                    <input type="checkbox" checked={checked}
-                      onChange={() => setEnoughForTodayChecked(prev => ({ ...prev, [ck]: !checked }))}
-                      className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white accent-[#e8917a] shrink-0" />
-                    <div>
-                      <div className={`font-medium ${checked ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{item.label}</div>
-                      <div className="text-xs text-[#7a5c5c]">{item.sub}</div>
-                    </div>
-                  </div>
-                )
-              })}
-              <div className="pt-1 border-t border-[#f0d9d0]">
-                <div className="text-xs text-[#b8958a] mb-2 font-medium uppercase tracking-wide">If I Have Extra Time</div>
-                {nextLifeAdminItem && (
-                  <div className="flex items-center gap-2 py-1 text-sm text-[#3d2c2c]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#e8917a] shrink-0"></span>
-                    {nextLifeAdminItem.title} <span className="text-xs text-[#b8958a] ml-1">(Life Admin)</span>
-                  </div>
-                )}
-                {nextRoadmapTask && (
-                  <div className="flex items-center gap-2 py-1 text-sm text-[#3d2c2c]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#4caf7d] shrink-0"></span>
-                    {nextRoadmapTask.title} <span className="text-xs text-[#b8958a] ml-1">(Road Map)</span>
-                  </div>
-                )}
-                {['Tidy Life Admin', 'Tidy Parking Lot', 'Review calendar'].map(s => (
-                  <div key={s} className="flex items-center gap-2 py-1 text-sm text-[#7a5c5c]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#b8958a] shrink-0"></span>{s}
+        {/* This Week's Events */}
+        <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0]">
+          <div className="text-sm font-semibold text-[#3d2c2c] mb-3">This Week&apos;s Events</div>
+          {weekEvents.length === 0 && <div className="text-sm text-[#b8958a] italic">No events this week.</div>}
+          {weekDates.map((date, di) => {
+            const dateStr = date.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+            const dayEvents = weekEvents.filter(e => e.date === dateStr)
+            const isToday = dateStr === getTodayNY()
+            return (
+              <div key={dateStr} className="mb-3 last:mb-0">
+                <div className={`text-xs font-semibold mb-1.5 ${isToday ? 'text-[#e8917a]' : 'text-[#b8958a]'}`}>
+                  {DAY_NAMES[di]} {date.getDate()} {isToday ? '· Today' : ''}
+                </div>
+                {dayEvents.length === 0 ? (
+                  <div className="text-xs text-[#b8958a] italic ml-1">—</div>
+                ) : dayEvents.map(event => (
+                  <div key={event.id} className="bg-[#fff8ec] rounded-xl px-3 py-2 mb-1 border-l-4" style={{ borderLeftColor: getFolderColor(event.folder || 'PERSONAL') }}>
+                    <div className="text-sm text-[#3d2c2c] font-medium">{event.title}</div>
+                    {event.time && <div className="text-xs text-[#7a5c5c]">{toNYTimeDisplay(event.date + 'T' + event.time + ':00')}</div>}
                   </div>
                 ))}
               </div>
-              <button onClick={() => setActiveTab('thumb-equity')} className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors mt-1">
-                Open Thumb Equity tab →
-              </button>
-            </div>
-          </details>
+            )
+          })}
         </div>
+      </div>
+    )
+  }
 
-        {/* Today’s Events */}
-        <div>
-          <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-2">Today’s Events</div>
-          <div className="space-y-2">
-            {todayEvents.length ? todayEvents.map(event => (
-              <div key={event.id} className="bg-[#fff8ec] rounded-2xl p-3 border-l-4" style={{ borderLeftColor: getFolderColor(event.folder || 'PERSONAL') }}>
-                <div className="text-[#3d2c2c] font-medium text-sm">{event.title}</div>
-                <div className="text-xs text-[#7a5c5c]">{formatEventDate(event.date)}{event.time ? ` · ${toNYTimeDisplay(event.date + 'T' + event.time + ':00')}` : ''}</div>
-              </div>
-            )) : <div className="text-sm text-[#b8958a] italic">No time-specific events today.</div>}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-  const renderWeekView = () => {
-  const jaclynTasks = tasks.filter(task => task.board === 'jaclyn' && !task.completed)
-  const missionCandidates = jaclynTasks.filter(task => task.folder !== 'daily-digest' && task.folder !== 'send-outs' && task.day_of_week !== 'overflow').slice(0, 3)
-  const weeklyAdminFocus = jaclynTasks.find(task => task.day_of_week === 'overflow')
-  const totalMissions = missionCandidates.length + (weeklyAdminFocus ? 1 : 0)
-  const completedMissions = missionCandidates.filter(t => t.completed).length + (weeklyAdminFocus?.completed ? 1 : 0)
-  const winItems = [
-    ...missionCandidates.map((t, i) => ({ id: String(t.id), label: t.title, sub: i === 2 ? 'Bonus mission' : `Mission ${i + 1}`, done: t.completed, task: t })),
-    ...(weeklyAdminFocus ? [{ id: String(weeklyAdminFocus.id), label: weeklyAdminFocus.title, sub: 'Weekly admin focus', done: weeklyAdminFocus.completed, task: weeklyAdminFocus }] : [])
-  ]
-  return (
-    <div className="space-y-4 pb-24 md:pb-6">
-      <div className="bg-[#fffdf9] rounded-3xl p-5 md:p-6 border border-[#f0d9d0]">
-        <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-1">This Week</div>
-        <h2 className="text-2xl font-semibold text-[#3d2c2c]">If I get these done, I did enough.</h2>
-        <p className="text-sm text-[#7a5c5c] mt-1">{weekRange}</p>
-        <div className="mt-3">
-          <div className="flex items-center justify-between text-xs text-[#b8958a] mb-1">
-            <span>Weekly progress</span><span>{completedMissions}/{totalMissions || 3}</span>
-          </div>
-          <div className="w-full h-2 rounded-full bg-[#f0d9d0] overflow-hidden">
-            <div className="h-full bg-[#4caf7d] transition-all duration-500 rounded-full" style={{ width: totalMissions > 0 ? `${(completedMissions / totalMissions) * 100}%` : '0%' }} />
-          </div>
-        </div>
-      </div>
-
-      {/* Win items */}
-      <div className="space-y-2">
-        {winItems.length === 0 && (
-          <div className="bg-[#fffdf9] rounded-2xl p-5 border border-[#f0d9d0] text-sm text-[#b8958a] italic">No missions set for this week yet. Add them from the weekly board.</div>
-        )}
-        {winItems.map(item => (
-          <div key={item.id} className={`bg-[#fffdf9] rounded-2xl px-4 py-4 border transition-all ${item.done ? 'border-[#a8d5b5] bg-[#edf7f0]' : 'border-[#f0d9d0]'}`}>
-            <div className="flex items-start gap-3">
-              <input type="checkbox" checked={item.done}
-                onChange={() => toggleComplete(item.task)}
-                className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white accent-[#e8917a] shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className={`text-sm font-medium ${item.done ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{item.label}</div>
-                <div className="text-xs text-[#b8958a] mt-0.5">{item.sub}</div>
-              </div>
-              <button onClick={() => setEditingTask(item.task)} className="text-xs text-[#b8958a] hover:text-[#7a5c5c] transition-colors shrink-0">Edit</button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Road Map strip */}
-      <div className="bg-[#fff8ec] rounded-2xl px-4 py-3 border border-[#f0d9d0] flex items-center justify-between gap-3">
-        <div>
-          <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-0.5">Active Phase</div>
-          <div className="text-sm text-[#3d2c2c] font-medium">{getCurrentPhase()}</div>
-          {nextRoadmapTask && <div className="text-xs text-[#e8917a] mt-0.5">Next: {nextRoadmapTask?.title}</div>}
-        </div>
-        <button onClick={() => setActiveTab('roadmap')} className="text-xs text-[#e8917a] hover:text-[#d4745d] shrink-0 font-medium">Road Map →</button>
-      </div>
-    </div>
-  )
-}
   const renderRoadMapView = () => {
   const totalMilestones = ROADMAP_PHASES.reduce((acc, p) => acc + p.milestones.length, 0)
   const completedMilestones = Object.values(phaseProgress).filter(Boolean).length
@@ -3445,7 +3759,12 @@ export default function Home() {
                             <span className="text-xs text-[#b8958a] w-5 shrink-0">{ti + 1}.</span>
                             <input type="checkbox" checked={task.completed} onChange={() => toggleRoadmapTask(task)}
                               className="w-4 h-4 rounded border-[#f0d9d0] bg-white accent-[#4caf7d] shrink-0" />
-                            <span className={`flex-1 ${task.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{task.title}</span>
+                            <span className={`flex-1 min-w-0 truncate ${task.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{task.title}</span>
+                            {!task.completed && (
+                              <button onClick={async () => { await addWeeklyMission(task.title, getCurrentWeekStart(), undefined, task.id) }}
+                                className="text-[10px] text-[#e8917a] hover:text-[#d4745d] transition-colors shrink-0 border border-[#f0d9d0] rounded-lg px-1.5 py-0.5"
+                                title="Add to this week's missions">+ Mission</button>
+                            )}
                             <button onClick={() => deleteRoadmapTask(task.id)} className="text-[#b8958a] hover:text-red-400 transition-colors text-sm shrink-0">×</button>
                           </div>
                         ))}
