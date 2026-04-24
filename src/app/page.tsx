@@ -285,6 +285,7 @@ export default function Home() {
   const [addingBillNote, setAddingBillNote] = useState(false)
   const [fridayMissionReview, setFridayMissionReview] = useState<Record<number, 'done' | 'roll' | 'remove' | null>>({})
   const [pickingNextMissions, setPickingNextMissions] = useState(false)
+  const [pickingMissionSlot, setPickingMissionSlot] = useState<number | null>(null)
 
   // Week navigation state - persist across page refreshes
   const [selectedWeek, setSelectedWeek] = useState<Date>(() => {
@@ -3124,22 +3125,29 @@ export default function Home() {
 
     const EnoughItem = ({ itemKey, label, sub, timerMins, color = 'pink' }: { itemKey: string; label: string; sub?: string; timerMins?: number; color?: 'pink' | 'green' | 'yellow' }) => {
       const isChecked = checked(itemKey)
+      if (isChecked) return (
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#edf7f0] border border-[#a8d5b5] opacity-60">
+          <input type="checkbox" checked={true} onChange={() => toggle(itemKey)} className="w-3.5 h-3.5 rounded border-[#a8d5b5] bg-white shrink-0 accent-[#4caf7d]" />
+          <span className="text-xs text-[#b8958a] line-through flex-1">{label}</span>
+          <span className="text-xs text-[#4caf7d]">✓</span>
+        </div>
+      )
       const colorMap = {
-        pink: { bg: isChecked ? 'bg-[#edf7f0] border-[#a8d5b5]' : 'bg-[#fdf0ec] border-[#f0d9d0]' },
-        green: { bg: isChecked ? 'bg-[#edf7f0] border-[#a8d5b5]' : 'bg-[#edf7f2] border-[#a8d5b5]' },
-        yellow: { bg: isChecked ? 'bg-[#edf7f0] border-[#a8d5b5]' : 'bg-[#fff8ec] border-[#f0d9d0]' }
+        pink: 'bg-[#fdf0ec] border-[#f0d9d0]',
+        green: 'bg-[#edf7f2] border-[#a8d5b5]',
+        yellow: 'bg-[#fff8ec] border-[#f0d9d0]'
       }
       return (
-        <div className={`rounded-2xl px-4 py-3 border transition-all ${colorMap[color].bg}`}>
+        <div className={`rounded-2xl px-4 py-3 border transition-all ${colorMap[color]}`}>
           <div className="flex items-start gap-3">
-            <input type="checkbox" checked={isChecked} onChange={() => toggle(itemKey)}
+            <input type="checkbox" checked={false} onChange={() => toggle(itemKey)}
               className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white shrink-0 accent-[#e8917a]" />
             <div className="flex-1 min-w-0">
-              <div className={`text-sm font-medium ${isChecked ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{label}</div>
+              <div className="text-sm font-medium text-[#3d2c2c]">{label}</div>
               {sub && <div className="text-xs text-[#7a5c5c] mt-0.5">{sub}</div>}
             </div>
           </div>
-          {timerMins && timerMins > 0 && !isChecked && renderTimer(`today-${itemKey}-${todayNYKey}`, timerMins)}
+          {timerMins && timerMins > 0 && renderTimer(`today-${itemKey}-${todayNYKey}`, timerMins)}
         </div>
       )
     }
@@ -3208,37 +3216,58 @@ export default function Home() {
 
           {/* ENOUGH FOR TODAY — day-specific */}
           <div className="mb-4">
-            <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-2">Enough For Today</div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a]">Enough For Today</div>
+              {Object.keys(enoughForTodayChecked).some(k => k.startsWith(todayNYKey) && enoughForTodayChecked[k]) && (
+                <button
+                  onClick={() => setEnoughForTodayChecked(prev => {
+                    const cleared = { ...prev }
+                    Object.keys(cleared).forEach(k => { if (k.startsWith(todayNYKey)) cleared[k] = false })
+                    return cleared
+                  })}
+                  className="text-[10px] text-[#b8958a] hover:text-[#e8917a] transition-colors border border-[#f0d9d0] rounded-full px-2 py-0.5"
+                >
+                  Show all
+                </button>
+              )}
+            </div>
             <div className="space-y-2">
 
               {/* MON / TUE — Mission Day */}
               {dayType === 'mission' && (
                 <>
                   {/* 2-hr Mission Block */}
-                  <div className={`rounded-2xl px-4 py-3 border transition-all ${checked('mission') ? 'bg-[#edf7f0] border-[#a8d5b5] opacity-70' : 'bg-[#fdf0ec] border-[#f0d9d0]'}`}>
-                    <div className="flex items-start gap-3">
-                      <input type="checkbox" checked={checked('mission')} onChange={() => toggle('mission')}
-                        className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white shrink-0 accent-[#e8917a]" />
-                      <div className="flex-1 min-w-0">
-                        <div className={`text-sm font-semibold ${checked('mission') ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>2-hour Mission Block</div>
-                        {activeMission ? (
-                          <div className="text-xs text-[#7a5c5c] mt-0.5">{activeMission.title}</div>
-                        ) : (
-                          <div className="text-xs text-[#b8958a] mt-0.5 italic">No mission set — assign one in This Week</div>
-                        )}
-                        {/* Show next mission if active is done */}
-                        {checked('mission') && (() => {
-                          const next = currentMissions.find(m => !m.completed && m.id !== activeMission?.id)
-                          return next ? <div className="text-xs text-[#4caf7d] mt-1 font-medium">Up next: {next.title}</div> : null
-                        })()}
-                      </div>
-                      {activeMission && (
-                        <input type="checkbox" checked={activeMission.completed} onChange={() => toggleMissionComplete(activeMission)}
-                          className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white shrink-0 accent-[#4caf7d]" />
-                      )}
+                  {checked('mission') ? (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#edf7f0] border border-[#a8d5b5] opacity-60">
+                      <input type="checkbox" checked={true} onChange={() => toggle('mission')} className="w-3.5 h-3.5 rounded border-[#a8d5b5] bg-white shrink-0 accent-[#4caf7d]" />
+                      <span className="text-xs text-[#b8958a] line-through flex-1">2-hour Mission Block</span>
+                      <span className="text-xs text-[#4caf7d]">✓</span>
                     </div>
-                    {!checked('mission') && renderTimer(`today-mission-${todayNYKey}`, 120)}
-                  </div>
+                  ) : (
+                    <div className="rounded-2xl px-4 py-3 border bg-[#fdf0ec] border-[#f0d9d0]">
+                      <div className="flex items-start gap-3">
+                        <input type="checkbox" checked={false} onChange={() => toggle('mission')}
+                          className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white shrink-0 accent-[#e8917a]" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold text-[#3d2c2c]">2-hour Mission Block</div>
+                          {activeMission ? (
+                            <div className="text-xs text-[#7a5c5c] mt-0.5">{activeMission.title}</div>
+                          ) : (
+                            <div className="text-xs text-[#b8958a] mt-0.5 italic">No mission set — assign one in This Week</div>
+                          )}
+                          {checked('mission') && (() => {
+                            const next = currentMissions.find(m => !m.completed && m.id !== activeMission?.id)
+                            return next ? <div className="text-xs text-[#4caf7d] mt-1 font-medium">Up next: {next.title}</div> : null
+                          })()}
+                        </div>
+                        {activeMission && (
+                          <input type="checkbox" checked={activeMission.completed} onChange={() => toggleMissionComplete(activeMission)}
+                            className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white shrink-0 accent-[#4caf7d]" />
+                        )}
+                      </div>
+                      {renderTimer(`today-mission-${todayNYKey}`, 120)}
+                    </div>
+                  )}
 
                   {/* Admin */}
                   <EnoughItem itemKey="admin" label="15 min Admin" sub={nextLifeAdminItem?.title || 'One concrete life or business admin item'} timerMins={15} />
@@ -3486,17 +3515,25 @@ export default function Home() {
               )}
 
               {/* Notifications — GREEN — all day types */}
-              <div className={`rounded-2xl px-4 py-3 border transition-all ${checked('notifications') ? 'bg-[#edf7f0] border-[#a8d5b5] opacity-70' : 'bg-[#edf7f2] border-[#a8d5b5]'}`}>
+              {checked('notifications') ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#edf7f0] border border-[#a8d5b5] opacity-60">
+                  <input type="checkbox" checked={true} onChange={() => toggle('notifications')} className="w-3.5 h-3.5 rounded border-[#a8d5b5] bg-white shrink-0 accent-[#4caf7d]" />
+                  <span className="text-xs text-[#b8958a] line-through flex-1">15 min Notifications</span>
+                  <span className="text-xs text-[#4caf7d]">✓</span>
+                </div>
+              ) : (
+              <div className="rounded-2xl px-4 py-3 border bg-[#edf7f2] border-[#a8d5b5]">
                 <div className="flex items-start gap-3">
-                  <input type="checkbox" checked={checked('notifications')} onChange={() => toggle('notifications')}
+                  <input type="checkbox" checked={false} onChange={() => toggle('notifications')}
                     className="w-4 h-4 mt-0.5 rounded border-[#a8d5b5] bg-white shrink-0 accent-[#4caf7d]" />
                   <div className="flex-1 min-w-0">
-                    <div className={`text-sm font-semibold ${checked('notifications') ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>15 min Notifications</div>
+                    <div className="text-sm font-semibold text-[#3d2c2c]">15 min Notifications</div>
                     <div className="text-xs text-[#7a5c5c] mt-0.5">Emails + sports chats + school apps/messages</div>
                   </div>
                 </div>
-                {!checked('notifications') && renderTimer(`today-notifications-${todayNYKey}`, 15)}
+                {renderTimer(`today-notifications-${todayNYKey}`, 15)}
               </div>
+              )}
 
             </div>
           </div>
@@ -3529,9 +3566,10 @@ export default function Home() {
 
     // Week events Mon-Sun
     const { dates: weekDates, weekRange: wr } = getWeekDates(new Date())
+    const todayStr = getTodayNY()
     const weekEvents = events.filter(e => {
       const d = weekDates.map(wd => wd.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }))
-      return d.includes(e.date)
+      return d.includes(e.date) && e.date >= todayStr
     }).sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''))
 
     const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -3642,8 +3680,9 @@ export default function Home() {
           {weekEvents.length === 0 && <div className="text-sm text-[#b8958a] italic">No events this week.</div>}
           {weekDates.map((date, di) => {
             const dateStr = date.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+            if (dateStr < todayStr) return null
             const dayEvents = weekEvents.filter(e => e.date === dateStr)
-            const isToday = dateStr === getTodayNY()
+            const isToday = dateStr === todayStr
             return (
               <div key={dateStr} className="mb-3 last:mb-0">
                 <div className={`text-xs font-semibold mb-1.5 ${isToday ? 'text-[#e8917a]' : 'text-[#b8958a]'}`}>
@@ -3695,6 +3734,43 @@ export default function Home() {
   const deleteRoadmapTask = async (id: number) => {
     setRoadmapTasks(prev => prev.filter(t => t.id !== id))
     await supabase.from('roadmap_tasks').delete().eq('id', id)
+  }
+
+  const editRoadmapTask = async (task: RoadmapTask, newTitle: string) => {
+    if (!newTitle.trim()) return
+    setRoadmapTasks(prev => prev.map(t => t.id === task.id ? { ...t, title: newTitle.trim() } : t))
+    await supabase.from('roadmap_tasks').update({ title: newTitle.trim(), updated_at: new Date().toISOString() }).eq('id', task.id)
+    setEditingRoadmapTask(null)
+  }
+
+  const moveRoadmapTaskUp = async (tasks: RoadmapTask[], index: number) => {
+    if (index === 0) return
+    const a = tasks[index], b = tasks[index - 1]
+    const newTasks = roadmapTasks.map(t => {
+      if (t.id === a.id) return { ...t, sort_order: b.sort_order }
+      if (t.id === b.id) return { ...t, sort_order: a.sort_order }
+      return t
+    })
+    setRoadmapTasks(newTasks)
+    await Promise.all([
+      supabase.from('roadmap_tasks').update({ sort_order: b.sort_order }).eq('id', a.id),
+      supabase.from('roadmap_tasks').update({ sort_order: a.sort_order }).eq('id', b.id)
+    ])
+  }
+
+  const moveRoadmapTaskDown = async (tasks: RoadmapTask[], index: number) => {
+    if (index === tasks.length - 1) return
+    const a = tasks[index], b = tasks[index + 1]
+    const newTasks = roadmapTasks.map(t => {
+      if (t.id === a.id) return { ...t, sort_order: b.sort_order }
+      if (t.id === b.id) return { ...t, sort_order: a.sort_order }
+      return t
+    })
+    setRoadmapTasks(newTasks)
+    await Promise.all([
+      supabase.from('roadmap_tasks').update({ sort_order: b.sort_order }).eq('id', a.id),
+      supabase.from('roadmap_tasks').update({ sort_order: a.sort_order }).eq('id', b.id)
+    ])
   }
 
   return (
@@ -3755,15 +3831,46 @@ export default function Home() {
                       </summary>
                       <div className="px-4 pb-4 border-t border-[#f0d9d0] pt-3 space-y-2">
                         {milestoneTasks.map((task, ti) => (
-                          <div key={task.id} className={`flex items-center gap-2 text-sm rounded-xl px-3 py-2 ${task.completed ? 'bg-[#edf7f0] opacity-60' : 'bg-white border border-[#f0d9d0]'}`}>
-                            <span className="text-xs text-[#b8958a] w-5 shrink-0">{ti + 1}.</span>
+                          <div key={task.id} className={`flex items-center gap-2 text-sm rounded-xl px-3 py-2 group ${task.completed ? 'bg-[#edf7f0] opacity-60' : 'bg-white border border-[#f0d9d0]'}`}>
+                            {/* Up/down reorder */}
+                            <div className="flex flex-col gap-0.5 shrink-0">
+                              <button onClick={() => moveRoadmapTaskUp(milestoneTasks, ti)} disabled={ti === 0}
+                                className="text-[10px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 leading-none">▲</button>
+                              <button onClick={() => moveRoadmapTaskDown(milestoneTasks, ti)} disabled={ti === milestoneTasks.length - 1}
+                                className="text-[10px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 leading-none">▼</button>
+                            </div>
+                            <span className="text-xs text-[#b8958a] w-4 shrink-0">{ti + 1}.</span>
                             <input type="checkbox" checked={task.completed} onChange={() => toggleRoadmapTask(task)}
                               className="w-4 h-4 rounded border-[#f0d9d0] bg-white accent-[#4caf7d] shrink-0" />
-                            <span className={`flex-1 min-w-0 truncate ${task.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{task.title}</span>
-                            {!task.completed && (
-                              <button onClick={async () => { await addWeeklyMission(task.title, getCurrentWeekStart(), undefined, task.id) }}
-                                className="text-[10px] text-[#e8917a] hover:text-[#d4745d] transition-colors shrink-0 border border-[#f0d9d0] rounded-lg px-1.5 py-0.5"
-                                title="Add to this week's missions">+ Mission</button>
+                            {editingRoadmapTask?.id === task.id ? (
+                              <form onSubmit={async e => { e.preventDefault(); await editRoadmapTask(task, editingRoadmapTask!.title) }} className="flex-1 flex gap-1">
+                                <input autoFocus value={editingRoadmapTask!.title}
+                                  onChange={e => setEditingRoadmapTask({ ...editingRoadmapTask!, title: e.target.value })}
+                                  className="flex-1 text-sm rounded-lg px-2 py-0.5 border border-[#f0d9d0] text-[#3d2c2c] bg-white outline-none focus:border-[#e8917a]" />
+                                <button type="submit" className="text-xs text-[#4caf7d] font-medium px-1">Save</button>
+                                <button type="button" onClick={() => setEditingRoadmapTask(null)} className="text-xs text-[#b8958a]">✕</button>
+                              </form>
+                            ) : (
+                              <span className={`flex-1 min-w-0 truncate ${task.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{task.title}</span>
+                            )}
+                            {!task.completed && editingRoadmapTask?.id !== task.id && (
+                              <>
+                                <button onClick={() => setEditingRoadmapTask(task)}
+                                  className="opacity-0 group-hover:opacity-100 text-xs text-[#b8958a] hover:text-[#3d2c2c] transition-all shrink-0">✎</button>
+                                {pickingMissionSlot === task.id ? (
+                                  <div className="flex gap-1 shrink-0">
+                                    {[['1','M1'],['2','M2'],['3','Bonus']].map(([slot, label]) => (
+                                      <button key={slot} onClick={async () => { await addWeeklyMission(task.title, getCurrentWeekStart(), parseInt(slot), task.id); setPickingMissionSlot(null) }}
+                                        className="text-[10px] bg-[#e8917a] text-white rounded-lg px-1.5 py-0.5 hover:bg-[#d4745d] transition-colors">{label}</button>
+                                    ))}
+                                    <button onClick={() => setPickingMissionSlot(null)} className="text-[10px] text-[#b8958a]">✕</button>
+                                  </div>
+                                ) : (
+                                  <button onClick={() => setPickingMissionSlot(task.id)}
+                                    className="text-[10px] text-[#e8917a] hover:text-[#d4745d] transition-colors shrink-0 border border-[#f0d9d0] rounded-lg px-1.5 py-0.5"
+                                    title="Add to mission block">+ Mission</button>
+                                )}
+                              </>
                             )}
                             <button onClick={() => deleteRoadmapTask(task.id)} className="text-[#b8958a] hover:text-red-400 transition-colors text-sm shrink-0">×</button>
                           </div>
@@ -3838,6 +3945,36 @@ export default function Home() {
     setLifeAdminCards(prev => prev.map(c => c.id === card.id ? card : c))
     await supabase.from('life_admin_cards').update({ title: card.title, notes: card.notes, updated_at: new Date().toISOString() }).eq('id', card.id)
     setEditingLifeCard(null)
+  }
+
+  const moveLifeCardUp = async (cards: LifeAdminCard[], index: number) => {
+    if (index === 0) return
+    const a = cards[index], b = cards[index - 1]
+    const updated = lifeAdminCards.map(c => {
+      if (c.id === a.id) return { ...c, sort_order: b.sort_order }
+      if (c.id === b.id) return { ...c, sort_order: a.sort_order }
+      return c
+    })
+    setLifeAdminCards(updated)
+    await Promise.all([
+      supabase.from('life_admin_cards').update({ sort_order: b.sort_order }).eq('id', a.id),
+      supabase.from('life_admin_cards').update({ sort_order: a.sort_order }).eq('id', b.id)
+    ])
+  }
+
+  const moveLifeCardDown = async (cards: LifeAdminCard[], index: number) => {
+    if (index === cards.length - 1) return
+    const a = cards[index], b = cards[index + 1]
+    const updated = lifeAdminCards.map(c => {
+      if (c.id === a.id) return { ...c, sort_order: b.sort_order }
+      if (c.id === b.id) return { ...c, sort_order: a.sort_order }
+      return c
+    })
+    setLifeAdminCards(updated)
+    await Promise.all([
+      supabase.from('life_admin_cards').update({ sort_order: b.sort_order }).eq('id', a.id),
+      supabase.from('life_admin_cards').update({ sort_order: a.sort_order }).eq('id', b.id)
+    ])
   }
 
   const visibleColumns = showDoneColumn ? COLUMNS : COLUMNS.filter(c => c.key !== 'done')
@@ -3918,15 +4055,21 @@ export default function Home() {
               )}
               <div className="space-y-2">
                 {cards.length === 0 && !isAdding && <div className="text-xs text-[#b8958a] italic py-2">Nothing here yet</div>}
-                {cards.map(card => (
-                  <div key={card.id} onClick={() => setEditingLifeCard(card)}
-                    className="bg-white rounded-2xl px-3 py-3 border border-[#f0d9d0] cursor-pointer hover:border-[#e8917a] transition-all group">
+                {cards.map((card, ci) => (
+                  <div key={card.id} className="bg-white rounded-2xl px-3 py-3 border border-[#f0d9d0] hover:border-[#e8917a] transition-all group">
                     <div className="flex items-start gap-2">
-                      <div className="flex-1 min-w-0">
+                      {/* Up/down arrows */}
+                      <div className="flex flex-col gap-0.5 pt-0.5 shrink-0">
+                        <button onClick={() => moveLifeCardUp(cards, ci)} disabled={ci === 0}
+                          className="text-[10px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 leading-none">▲</button>
+                        <button onClick={() => moveLifeCardDown(cards, ci)} disabled={ci === cards.length - 1}
+                          className="text-[10px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 leading-none">▼</button>
+                      </div>
+                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setEditingLifeCard(card)}>
                         <div className={`text-sm font-medium ${card.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{card.title}</div>
                         {card.notes && <div className="text-xs text-[#7a5c5c] mt-0.5 truncate">{card.notes}</div>}
                       </div>
-                      <span className="text-[#f0d9d0] group-hover:text-[#e8917a] text-sm transition-colors shrink-0">✎</span>
+                      <span className="text-[#f0d9d0] group-hover:text-[#e8917a] text-sm transition-colors shrink-0 cursor-pointer" onClick={() => setEditingLifeCard(card)}>✎</span>
                     </div>
                   </div>
                 ))}
@@ -3982,6 +4125,36 @@ export default function Home() {
     setParkingLotDBCards(prev => prev.map(c => c.id === card.id ? card : c))
     await supabase.from('parking_lot_cards').update({ title: card.title, description: card.description, bucket: card.bucket, tag: card.tag, updated_at: new Date().toISOString() }).eq('id', card.id)
     setEditingParkingCard(null)
+  }
+
+  const moveParkingCardUp = async (cards: ParkingLotCard[], index: number) => {
+    if (index === 0) return
+    const a = cards[index], b = cards[index - 1]
+    const updated = parkingLotDBCards.map(c => {
+      if (c.id === a.id) return { ...c, sort_order: b.sort_order }
+      if (c.id === b.id) return { ...c, sort_order: a.sort_order }
+      return c
+    })
+    setParkingLotDBCards(updated)
+    await Promise.all([
+      supabase.from('parking_lot_cards').update({ sort_order: b.sort_order }).eq('id', a.id),
+      supabase.from('parking_lot_cards').update({ sort_order: a.sort_order }).eq('id', b.id)
+    ])
+  }
+
+  const moveParkingCardDown = async (cards: ParkingLotCard[], index: number) => {
+    if (index === cards.length - 1) return
+    const a = cards[index], b = cards[index + 1]
+    const updated = parkingLotDBCards.map(c => {
+      if (c.id === a.id) return { ...c, sort_order: b.sort_order }
+      if (c.id === b.id) return { ...c, sort_order: a.sort_order }
+      return c
+    })
+    setParkingLotDBCards(updated)
+    await Promise.all([
+      supabase.from('parking_lot_cards').update({ sort_order: b.sort_order }).eq('id', a.id),
+      supabase.from('parking_lot_cards').update({ sort_order: a.sort_order }).eq('id', b.id)
+    ])
   }
 
   return (
@@ -4060,15 +4233,21 @@ export default function Home() {
               )}
               <div className="space-y-2">
                 {cards.length === 0 && !isAdding && <div className="text-xs text-[#b8958a] italic py-2">Nothing parked here yet</div>}
-                {cards.map(card => (
-                  <div key={card.id} onClick={() => setEditingParkingCard(card)}
-                    className="bg-white rounded-2xl px-3 py-3 border border-white hover:border-[#e8917a] transition-all cursor-pointer group">
+                {cards.map((card, ci) => (
+                  <div key={card.id} className="bg-white rounded-2xl px-3 py-3 border border-white hover:border-[#e8917a] transition-all group">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
+                      {/* Up/down arrows */}
+                      <div className="flex flex-col gap-0.5 pt-0.5 shrink-0">
+                        <button onClick={() => moveParkingCardUp(cards, ci)} disabled={ci === 0}
+                          className="text-[10px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 leading-none">▲</button>
+                        <button onClick={() => moveParkingCardDown(cards, ci)} disabled={ci === cards.length - 1}
+                          className="text-[10px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 leading-none">▼</button>
+                      </div>
+                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setEditingParkingCard(card)}>
                         <div className="text-sm font-medium text-[#3d2c2c]">{card.title}</div>
                         {card.description && <div className="text-xs text-[#7a5c5c] mt-0.5">{card.description}</div>}
                       </div>
-                      <span className="text-[#f0d9d0] group-hover:text-[#e8917a] text-sm transition-colors shrink-0">✎</span>
+                      <span className="text-[#f0d9d0] group-hover:text-[#e8917a] text-sm transition-colors shrink-0 cursor-pointer" onClick={() => setEditingParkingCard(card)}>✎</span>
                     </div>
                     <div className="mt-2">
                       <span className={`inline-flex text-xs px-2 py-0.5 rounded-full font-medium ${TAG_COLORS[card.tag] || 'bg-[#f0d9d0] text-[#7a5c5c]'}`}>{card.tag}</span>
