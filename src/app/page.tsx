@@ -206,38 +206,10 @@ export default function Home() {
 
   // STEELE LIFE v2 state
   const [missionRollover, setMissionRollover] = useState<{taskId: number; action: 'continue' | 'shrink' | 'moveback' | 'blocked' | null} | null>(null)
-  const [billsFriday, setBillsFriday] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('billsFriday') === 'true'
-    return false
-  })
-  const [fridayReviewChecked, setFridayReviewChecked] = useState<Record<number, boolean>>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('fridayReviewChecked')
-      return stored ? JSON.parse(stored) : {}
-    }
-    return {}
-  })
-  const [enoughForTodayChecked, setEnoughForTodayChecked] = useState<Record<string, boolean>>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('enoughForTodayChecked')
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        // Only keep today's entries
-        const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-        const filtered: Record<string, boolean> = {}
-        Object.keys(parsed).forEach(k => { if (k.startsWith(todayKey)) filtered[k] = parsed[k] })
-        return filtered
-      }
-    }
-    return {}
-  })
-  const [phaseProgress, setPhaseProgress] = useState<Record<string, boolean>>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('phaseProgress')
-      return stored ? JSON.parse(stored) : {}
-    }
-    return {}
-  })
+  const [billsFriday, setBillsFriday] = useState<boolean>(false)
+  const [fridayReviewChecked, setFridayReviewChecked] = useState<Record<string, boolean>>({})
+  const [enoughForTodayChecked, setEnoughForTodayChecked] = useState<Record<string, boolean>>({})
+  const [phaseProgress, setPhaseProgress] = useState<Record<string, boolean>>({})
   const [parkingLotCards, setParkingLotCards] = useState<{id: string; bucket: 'Home'|'Personal'|'Kids'|'SteeleBroz'; title: string; description: string; notes: string; tag: string; created_at: string}[]>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('parkingLotCards')
@@ -271,6 +243,7 @@ export default function Home() {
   // Timer state
   const [activeTimers, setActiveTimers] = useState<Record<string, {seconds: number; running: boolean; preset: number}>>({})
   const timerIntervalRef = useRef<Record<string, NodeJS.Timeout>>({})
+  const prefsLoadedRef = useRef(false)
   const [editingTimerKey, setEditingTimerKey] = useState<string | null>(null)
   const [editingTimerInput, setEditingTimerInput] = useState('')
 
@@ -308,24 +281,28 @@ export default function Home() {
     }
   }, [selectedWeek])
 
-  // Persist billsFriday
+  // Sync billsFriday to Supabase
   useEffect(() => {
-    if (typeof window !== 'undefined') localStorage.setItem('billsFriday', String(billsFriday))
+    if (!prefsLoadedRef.current) return
+    supabase.from('user_prefs').upsert({ key: 'billsFriday', value: billsFriday, updated_at: new Date().toISOString() }).then(() => {})
   }, [billsFriday])
 
-  // Persist fridayReviewChecked
+  // Sync fridayReviewChecked to Supabase
   useEffect(() => {
-    if (typeof window !== 'undefined') localStorage.setItem('fridayReviewChecked', JSON.stringify(fridayReviewChecked))
+    if (!prefsLoadedRef.current) return
+    supabase.from('user_prefs').upsert({ key: 'fridayReviewChecked', value: fridayReviewChecked, updated_at: new Date().toISOString() }).then(() => {})
   }, [fridayReviewChecked])
 
-  // Persist enoughForTodayChecked
+  // Sync enoughForTodayChecked to Supabase
   useEffect(() => {
-    if (typeof window !== 'undefined') localStorage.setItem('enoughForTodayChecked', JSON.stringify(enoughForTodayChecked))
+    if (!prefsLoadedRef.current) return
+    supabase.from('user_prefs').upsert({ key: 'enoughForTodayChecked', value: enoughForTodayChecked, updated_at: new Date().toISOString() }).then(() => {})
   }, [enoughForTodayChecked])
 
-  // Persist phaseProgress
+  // Sync phaseProgress to Supabase
   useEffect(() => {
-    if (typeof window !== 'undefined') localStorage.setItem('phaseProgress', JSON.stringify(phaseProgress))
+    if (!prefsLoadedRef.current) return
+    supabase.from('user_prefs').upsert({ key: 'phaseProgress', value: phaseProgress, updated_at: new Date().toISOString() }).then(() => {})
   }, [phaseProgress])
 
   // Persist parkingLotCards
@@ -508,12 +485,29 @@ export default function Home() {
       prevMonday.setDate(monday.getDate() - 7)
       const prevWeekStart = prevMonday.toISOString().split('T')[0]
 
-      const [missRes, billRes] = await Promise.all([
+      const [missRes, billRes, prefsRes] = await Promise.all([
         supabase.from('weekly_missions').select('*').gte('week_start', prevWeekStart).order('week_start').order('slot').order('sort_order'),
-        supabase.from('bills_notes').select('*').order('sort_order')
+        supabase.from('bills_notes').select('*').order('sort_order'),
+        supabase.from('user_prefs').select('*')
       ])
       if (missRes.data) setWeeklyMissions(missRes.data)
       if (billRes.data) setBillNotes(billRes.data)
+      if (prefsRes.data) {
+        prefsRes.data.forEach((row: { key: string; value: unknown }) => {
+          if (row.key === 'billsFriday') setBillsFriday(row.value === true || row.value === 'true')
+          if (row.key === 'enoughForTodayChecked') {
+            const val = row.value as Record<string, boolean>
+            // Filter to only keep today's entries
+            const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+            const filtered: Record<string, boolean> = {}
+            Object.keys(val).forEach(k => { if (k.startsWith(todayKey)) filtered[k] = val[k] })
+            setEnoughForTodayChecked(filtered)
+          }
+          if (row.key === 'fridayReviewChecked') setFridayReviewChecked(row.value as Record<string, boolean>)
+          if (row.key === 'phaseProgress') setPhaseProgress(row.value as Record<string, boolean>)
+        })
+        prefsLoadedRef.current = true
+      }
     } catch (e) {
       console.warn('v2.2 data fetch error:', e)
     }
