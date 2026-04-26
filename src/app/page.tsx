@@ -209,6 +209,17 @@ export default function Home() {
   const [billsFriday, setBillsFriday] = useState<boolean>(false)
   const [fridayReviewChecked, setFridayReviewChecked] = useState<Record<string, boolean>>({})
   const [enoughForTodayChecked, setEnoughForTodayChecked] = useState<Record<string, boolean>>({})
+  const [showEnoughCompleted, setShowEnoughCompleted] = useState(false)
+  const [weekendCards, setWeekendCards] = useState<{
+    marriage: { phrase: string; full: string } | null;
+    sons: { phrase: string; full: string } | null;
+    healing: { phrase: string; full: string } | null;
+    sports: string | null;
+    gratitude: { phrase: string; full: string } | null;
+  }>({ marriage: null, sons: null, healing: null, sports: null, gratitude: null })
+  const [weekendCardsLoading, setWeekendCardsLoading] = useState(false)
+  const [weekendCardsError, setWeekendCardsError] = useState(false)
+  const weekendCardsLoadedRef = useRef(false)
   const [phaseProgress, setPhaseProgress] = useState<Record<string, boolean>>({})
   const [parkingLotCards, setParkingLotCards] = useState<{id: string; bucket: 'Home'|'Personal'|'Kids'|'SteeleBroz'; title: string; description: string; notes: string; tag: string; created_at: string}[]>(() => {
     if (typeof window !== 'undefined') {
@@ -309,6 +320,20 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== 'undefined') localStorage.setItem('parkingLotCards', JSON.stringify(parkingLotCards))
   }, [parkingLotCards])
+
+  // Fetch weekend cards when on a weekend
+  useEffect(() => {
+    const day = new Date().toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/New_York' })
+    if (day === 'Saturday' || day === 'Sunday') {
+      if (weekendCardsLoadedRef.current) return
+      weekendCardsLoadedRef.current = true
+      setWeekendCardsLoading(true)
+      fetch('/api/weekend-cards')
+        .then(r => r.json())
+        .then(data => { setWeekendCards(data); setWeekendCardsLoading(false) })
+        .catch(() => { setWeekendCardsError(true); setWeekendCardsLoading(false) })
+    }
+  }, [])
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setSyncing(true)
@@ -2967,6 +2992,23 @@ export default function Home() {
     return missions.find(m => !m.completed) || null
   }
 
+  const fetchWeekendCards = async () => {
+    if (weekendCardsLoadedRef.current) return
+    weekendCardsLoadedRef.current = true
+    setWeekendCardsLoading(true)
+    setWeekendCardsError(false)
+    try {
+      const res = await fetch('/api/weekend-cards')
+      if (!res.ok) throw new Error('Failed')
+      const data = await res.json()
+      setWeekendCards(data)
+    } catch {
+      setWeekendCardsError(true)
+    } finally {
+      setWeekendCardsLoading(false)
+    }
+  }
+
   const toggleMissionComplete = async (mission: WeeklyMission) => {
     const updated = { ...mission, completed: !mission.completed, updated_at: new Date().toISOString() }
     setWeeklyMissions(prev => prev.map(m => m.id === mission.id ? updated : m))
@@ -3117,9 +3159,10 @@ export default function Home() {
     const checked = (key: string) => !!enoughForTodayChecked[ck(key)]
     const toggle = (key: string) => setEnoughForTodayChecked(prev => ({ ...prev, [ck(key)]: !prev[ck(key)] }))
 
-    const EnoughItem = ({ itemKey, label, sub, timerMins, color = 'pink' }: { itemKey: string; label: string; sub?: string; timerMins?: number; color?: 'pink' | 'green' | 'yellow' }) => {
+    const EnoughItem = ({ itemKey, label, sub, timerMins, color = 'pink', dropdownContent }: { itemKey: string; label: string; sub?: string; timerMins?: number; color?: 'pink' | 'green' | 'yellow'; dropdownContent?: React.ReactNode }) => {
       const isChecked = checked(itemKey)
-      if (isChecked) return (
+      if (isChecked && !showEnoughCompleted) return null
+      if (isChecked && showEnoughCompleted) return (
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#edf7f0] border border-[#a8d5b5] opacity-60">
           <input type="checkbox" checked={true} onChange={() => toggle(itemKey)} className="w-3.5 h-3.5 rounded border-[#a8d5b5] bg-white shrink-0 accent-[#4caf7d]" />
           <span className="text-xs text-[#b8958a] line-through flex-1">{label}</span>
@@ -3130,6 +3173,26 @@ export default function Home() {
         pink: 'bg-[#fdf0ec] border-[#f0d9d0]',
         green: 'bg-[#edf7f2] border-[#a8d5b5]',
         yellow: 'bg-[#fff8ec] border-[#f0d9d0]'
+      }
+      if (dropdownContent) {
+        return (
+          <details className={`rounded-2xl border transition-all ${colorMap[color]} group`}>
+            <summary className="list-none cursor-pointer px-4 py-3">
+              <div className="flex items-start gap-3">
+                <input type="checkbox" checked={false} onChange={() => toggle(itemKey)}
+                  className="w-4 h-4 mt-0.5 rounded border-[#f0d9d0] bg-white shrink-0 accent-[#e8917a]" onClick={e => e.stopPropagation()} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-[#3d2c2c]">{label}</div>
+                  {sub && <div className="text-xs text-[#7a5c5c] mt-0.5">{sub}</div>}
+                </div>
+                <span className="text-[#b8958a] text-xs group-open:rotate-90 transition-transform mt-0.5">▸</span>
+              </div>
+            </summary>
+            <div className="px-4 pb-4 pt-2 border-t border-[#f0d9d0]">
+              {dropdownContent}
+            </div>
+          </details>
+        )
       }
       return (
         <div className={`rounded-2xl px-4 py-3 border transition-all ${colorMap[color]}`}>
@@ -3198,32 +3261,20 @@ export default function Home() {
             <div className={`inline-flex items-center gap-2 mt-1 px-3 py-1.5 rounded-full text-sm font-semibold w-fit ${dayBadgeColor}`}>{dayLabel}</div>
           </div>
 
-          {/* Active Phase — auto-computed from Road Map */}
-          <div className="bg-[#fff8ec] rounded-2xl px-4 py-3 mb-4 flex items-center justify-between gap-3 flex-wrap border border-[#f0d9d0]">
-            <div>
-              <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-0.5">Active Phase</div>
-              <div className="text-sm text-[#3d2c2c] font-semibold">{getCurrentPhase()}</div>
-              {activeMission && <div className="text-xs text-[#e8917a] mt-0.5 font-medium">Now: {activeMission.title}</div>}
-            </div>
-            <button onClick={() => setActiveTab('roadmap')} className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors shrink-0 font-medium">Road Map →</button>
-          </div>
-
           {/* ENOUGH FOR TODAY — day-specific */}
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a]">Enough For Today</div>
-              {Object.keys(enoughForTodayChecked).some(k => k.startsWith(todayNYKey) && enoughForTodayChecked[k]) && (
-                <button
-                  onClick={() => setEnoughForTodayChecked(prev => {
-                    const cleared = { ...prev }
-                    Object.keys(cleared).forEach(k => { if (k.startsWith(todayNYKey)) cleared[k] = false })
-                    return cleared
-                  })}
-                  className="text-[10px] text-[#b8958a] hover:text-[#e8917a] transition-colors border border-[#f0d9d0] rounded-full px-2 py-0.5"
-                >
-                  Show all
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {Object.keys(enoughForTodayChecked).some(k => k.startsWith(todayNYKey) && enoughForTodayChecked[k]) && (
+                  <button
+                    onClick={() => setShowEnoughCompleted(prev => !prev)}
+                    className="text-[10px] text-[#b8958a] hover:text-[#e8917a] transition-colors border border-[#f0d9d0] rounded-full px-2 py-0.5"
+                  >
+                    {showEnoughCompleted ? 'Hide completed' : 'Show completed'}
+                  </button>
+                )}
+              </div>
             </div>
             <div className="space-y-2">
 
@@ -3503,8 +3554,78 @@ export default function Home() {
               {/* WEEKEND */}
               {dayType === 'weekend' && (
                 <>
-                  <EnoughItem itemKey="presence" label="Phone at door by 3:30" sub="Weekend rhythm — be here now" />
-                  <EnoughItem itemKey="ground" label="Ground" sub="3 slow breaths · Relax shoulders" />
+                  {weekendCardsLoading && (
+                    <div className="rounded-2xl bg-[#fdf0ec] border border-[#f0d9d0] px-4 py-6 text-center">
+                      <div className="text-sm text-[#b8958a] animate-pulse">Loading your weekend reflections...</div>
+                    </div>
+                  )}
+                  {weekendCardsError && (
+                    <div className="rounded-2xl bg-[#fdf0ec] border border-[#f0d9d0] px-4 py-4 text-center space-y-2">
+                      <div className="text-sm text-[#b8958a]">Couldn&apos;t load weekend cards.</div>
+                      <button onClick={() => { weekendCardsLoadedRef.current = false; setWeekendCards({ marriage: null, sons: null, healing: null, sports: null, gratitude: null }); fetchWeekendCards() }}
+                        className="text-xs text-[#e8917a] hover:text-[#d4745d] border border-[#f0d9d0] rounded-full px-3 py-1">Try again</button>
+                    </div>
+                  )}
+                  {!weekendCardsLoading && !weekendCardsError && (
+                    <>
+                      {/* Marriage */}
+                      <EnoughItem
+                        itemKey="weekend-marriage"
+                        label={weekendCards.marriage?.phrase || 'Lead with love today'}
+                        sub="Marriage · Tap to read more"
+                        color="pink"
+                        dropdownContent={weekendCards.marriage ? (
+                          <p className="text-sm text-[#7a5c5c] leading-relaxed">{weekendCards.marriage.full}</p>
+                        ) : undefined}
+                      />
+
+                      {/* Sons */}
+                      <EnoughItem
+                        itemKey="weekend-sons"
+                        label={weekendCards.sons?.phrase || 'Meet them where they are'}
+                        sub="Your boys · Tap to read more"
+                        color="yellow"
+                        dropdownContent={weekendCards.sons ? (
+                          <p className="text-sm text-[#7a5c5c] leading-relaxed">{weekendCards.sons.full}</p>
+                        ) : undefined}
+                      />
+
+                      {/* Healing */}
+                      <EnoughItem
+                        itemKey="weekend-healing"
+                        label={weekendCards.healing?.phrase || 'One step toward healing'}
+                        sub="For you · Tap to read more"
+                        color="green"
+                        dropdownContent={weekendCards.healing ? (
+                          <p className="text-sm text-[#7a5c5c] leading-relaxed">{weekendCards.healing.full}</p>
+                        ) : undefined}
+                      />
+
+                      {/* Sports Recap */}
+                      <EnoughItem
+                        itemKey="weekend-sports"
+                        label="This week in sports"
+                        sub="NBA · NFL · MLB · Tap to read"
+                        color="yellow"
+                        dropdownContent={weekendCards.sports ? (
+                          <div className="text-sm text-[#7a5c5c] leading-relaxed whitespace-pre-wrap">{weekendCards.sports}</div>
+                        ) : (
+                          <p className="text-sm text-[#b8958a] italic">Loading sports recap...</p>
+                        )}
+                      />
+
+                      {/* Gratitude */}
+                      <EnoughItem
+                        itemKey="weekend-gratitude"
+                        label={weekendCards.gratitude?.phrase || 'Practice gratitude today'}
+                        sub="Train your mind · Tap to read"
+                        color="pink"
+                        dropdownContent={weekendCards.gratitude ? (
+                          <p className="text-sm text-[#7a5c5c] leading-relaxed">{weekendCards.gratitude.full}</p>
+                        ) : undefined}
+                      />
+                    </>
+                  )}
                 </>
               )}
 
@@ -3535,6 +3656,18 @@ export default function Home() {
           {/* More for Today drawer */}
           <div className="mb-4"><MoreForTodayDrawer /></div>
 
+          {/* Active Phase — auto-computed from Road Map */}
+          {dayType !== 'weekend' && (
+            <div className="bg-[#fff8ec] rounded-2xl px-4 py-3 mb-4 flex items-center justify-between gap-3 flex-wrap border border-[#f0d9d0]">
+              <div>
+                <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-0.5">Active Phase</div>
+                <div className="text-sm text-[#3d2c2c] font-semibold">{getCurrentPhase()}</div>
+                {activeMission && <div className="text-xs text-[#e8917a] mt-0.5 font-medium">Now: {activeMission.title}</div>}
+              </div>
+              <button onClick={() => setActiveTab('roadmap')} className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors shrink-0 font-medium">Road Map →</button>
+            </div>
+          )}
+
           {/* Today's Events */}
           <div>
             <div className="text-xs uppercase tracking-[0.2em] text-[#b8958a] mb-2">Today&apos;s Events</div>
@@ -3559,7 +3692,9 @@ export default function Home() {
     const topPriorityAdminItems = lifeAdminCards.filter(c => c.column_key === 'top-priority' && !c.completed)
 
     // Week events Mon-Sun
-    const { dates: weekDates, weekRange: wr } = getWeekDates(new Date())
+    const isSaturday = new Date().toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/New_York' }) === 'Saturday'
+    const weekRef = isSaturday ? (() => { const d = new Date(); d.setDate(d.getDate() + 7); return d })() : new Date()
+    const { dates: weekDates, weekRange: wr } = getWeekDates(weekRef)
     const todayStr = getTodayNY()
     const weekEvents = events.filter(e => {
       const d = weekDates.map(wd => wd.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }))
@@ -3575,6 +3710,7 @@ export default function Home() {
           <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-1">This Week</div>
           <h2 className="text-2xl font-semibold text-[#3d2c2c]">If I get these done, I did enough.</h2>
           <p className="text-sm text-[#7a5c5c] mt-1">{wr}</p>
+          {isSaturday && <p className="text-xs text-[#b8958a] mt-0.5">Previewing next week — plan ahead</p>}
           <div className="mt-3">
             <div className="flex items-center justify-between text-xs text-[#b8958a] mb-1">
               <span>Weekly progress</span><span>{completedCount}/{currentMissions.length || 0}</span>
@@ -5658,7 +5794,7 @@ export default function Home() {
 
       {/* Mobile bottom tab bar */}
       <div className="fixed bottom-0 left-0 right-0 md:hidden bg-[#fffdf9] border-t border-[#f0d9d0] z-40 safe-area-pb">
-        <div className="flex items-center justify-around px-1 py-2">
+        <div className="flex items-center overflow-x-auto scrollbar-hide px-2 py-1.5 gap-1">
           {[
             { id: 'today', label: 'Today', icon: '⌂' },
             { id: 'week', label: 'Week', icon: '◎' },
@@ -5669,9 +5805,9 @@ export default function Home() {
             { id: 'thumb-equity', label: 'Thumb', icon: '♡' }
           ].map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
-              className={`flex flex-col items-center gap-0.5 px-1 py-1 rounded-xl transition-all min-w-0 ${activeTab === tab.id ? 'text-[#e8917a]' : 'text-[#b8958a]'}`}>
-              <span className="text-lg leading-none">{tab.icon}</span>
-              <span className={`text-[10px] leading-tight font-medium truncate max-w-[44px] ${activeTab === tab.id ? 'text-[#e8917a]' : 'text-[#b8958a]'}`}>{tab.label}</span>
+              className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-2xl transition-all shrink-0 min-w-[60px] ${activeTab === tab.id ? 'bg-[#fdf0ec] text-[#e8917a]' : 'text-[#b8958a]'}`}>
+              <span className="text-2xl leading-none">{tab.icon}</span>
+              <span className={`text-[10px] leading-tight font-medium ${activeTab === tab.id ? 'text-[#e8917a]' : 'text-[#b8958a]'}`}>{tab.label}</span>
             </button>
           ))}
         </div>

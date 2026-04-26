@@ -11,3 +11,11 @@ body {
 ::-webkit-scrollbar { height: 4px; width: 4px; }
 ::-webkit-scrollbar-track { background: #16213e; }
 ::-webkit-scrollbar-thumb { background: #4a4a6a; border-radius: 4px; }
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
