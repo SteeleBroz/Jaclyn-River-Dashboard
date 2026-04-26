@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 // Weekend cards: generates fresh content each weekend
-// Marriage, Sons, Healing, Gratitude via OpenAI. Sports via Perplexity.
+// All cards via OpenAI (gpt-4o with web search for sports)
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY
 
@@ -27,16 +27,15 @@ async function generateCard(prompt: string): Promise<{ phrase: string; full: str
 }
 
 async function getSportsRecap(): Promise<string> {
-  const PERPLEXITY_KEY = process.env.PERPLEXITY_API_KEY
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-  const res = await fetch('https://api.perplexity.ai/chat/completions', {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${PERPLEXITY_KEY}`, 'Content-Type': 'application/json' },
+    headers: { 'Authorization': `Bearer ${OPENAI_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'sonar',
+      model: 'gpt-4o-search-preview',
       messages: [
         { role: 'system', content: 'You are a sports expert. Be detailed and conversational. Today is ' + today },
-        { role: 'user', content: 'Give me a detailed sports recap of the past week (NBA, NFL, MLB) through today. I need to be able to hold real conversations about what happened. Include key games, scores, standings, notable performances, trades, injuries, and storylines. Format it clearly by sport. Be thorough — I want to be knowledgeable.' }
+        { role: 'user', content: 'Search the web and give me a detailed sports recap of the past week (NBA, NFL, MLB) through today. I need to be able to hold real conversations about what happened. Include key games, scores, standings, notable performances, trades, injuries, and storylines. Format it clearly by sport with headers. Be thorough — I want to be knowledgeable enough to talk sports with my husband and 4 boys.' }
       ],
       max_tokens: 1200
     })
