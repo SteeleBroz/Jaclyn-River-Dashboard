@@ -220,6 +220,11 @@ export default function Home() {
   const [weekendCardsLoading, setWeekendCardsLoading] = useState(false)
   const [weekendCardsError, setWeekendCardsError] = useState(false)
   const weekendCardsLoadedRef = useRef(false)
+  const [weekendAudioUrl, setWeekendAudioUrl] = useState<string | null>(null)
+  const [weekendAudioLoading, setWeekendAudioLoading] = useState(false)
+  const [weekendAudioError, setWeekendAudioError] = useState(false)
+  const weekendAudioRef = useRef<HTMLAudioElement | null>(null)
+  const [weekendAudioPlaying, setWeekendAudioPlaying] = useState(false)
   const [phaseProgress, setPhaseProgress] = useState<Record<string, boolean>>({})
   const [parkingLotCards, setParkingLotCards] = useState<{id: string; bucket: 'Home'|'Personal'|'Kids'|'SteeleBroz'; title: string; description: string; notes: string; tag: string; created_at: string}[]>(() => {
     if (typeof window !== 'undefined') {
@@ -3009,6 +3014,45 @@ export default function Home() {
     }
   }
 
+  const generateWeekendAudio = async () => {
+    if (weekendAudioLoading) return
+    // If already generated, just toggle play/pause
+    if (weekendAudioUrl && weekendAudioRef.current) {
+      if (weekendAudioPlaying) {
+        weekendAudioRef.current.pause()
+        setWeekendAudioPlaying(false)
+      } else {
+        weekendAudioRef.current.play()
+        setWeekendAudioPlaying(true)
+      }
+      return
+    }
+    setWeekendAudioLoading(true)
+    setWeekendAudioError(false)
+    try {
+      const res = await fetch('/api/weekend-audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(weekendCards)
+      })
+      if (!res.ok) throw new Error('Failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      setWeekendAudioUrl(url)
+      const audio = new Audio(url)
+      weekendAudioRef.current = audio
+      audio.onended = () => setWeekendAudioPlaying(false)
+      audio.onpause = () => setWeekendAudioPlaying(false)
+      audio.onplay = () => setWeekendAudioPlaying(true)
+      audio.play()
+      setWeekendAudioPlaying(true)
+    } catch {
+      setWeekendAudioError(true)
+    } finally {
+      setWeekendAudioLoading(false)
+    }
+  }
+
   const toggleMissionComplete = async (mission: WeeklyMission) => {
     const updated = { ...mission, completed: !mission.completed, updated_at: new Date().toISOString() }
     setWeeklyMissions(prev => prev.map(m => m.id === mission.id ? updated : m))
@@ -3568,6 +3612,32 @@ export default function Home() {
                   )}
                   {!weekendCardsLoading && !weekendCardsError && (
                     <>
+                      {/* Listen button */}
+                      <div className="flex items-center justify-between px-1 mb-1">
+                        <button
+                          onClick={generateWeekendAudio}
+                          disabled={weekendAudioLoading}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all ${
+                            weekendAudioLoading
+                              ? 'bg-[#f0d9d0] text-[#b8958a] cursor-wait'
+                              : weekendAudioPlaying
+                              ? 'bg-[#edf7f0] border border-[#a8d5b5] text-[#2d6a4f]'
+                              : 'bg-[#e8917a] text-white shadow-sm hover:bg-[#d4745d]'
+                          }`}
+                        >
+                          {weekendAudioLoading ? (
+                            <><span className="animate-pulse">◉</span> Generating audio...</>
+                          ) : weekendAudioPlaying ? (
+                            <><span>⏸</span> Pause</>
+                          ) : weekendAudioUrl ? (
+                            <><span>▶</span> Resume</>
+                          ) : (
+                            <><span>♪</span> Listen to my morning</>
+                          )}
+                        </button>
+                        {weekendAudioError && <span className="text-xs text-red-400">Couldn&apos;t generate audio. Try again.</span>}
+                      </div>
+
                       {/* Marriage */}
                       <EnoughItem
                         itemKey="weekend-marriage"
