@@ -3616,7 +3616,7 @@ export default function Home() {
                       <div className="flex items-center justify-between px-1 mb-1">
                         <button
                           onClick={generateWeekendAudio}
-                          disabled={weekendAudioLoading}
+                          disabled={weekendAudioLoading || !weekendCards.marriage}
                           className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all ${
                             weekendAudioLoading
                               ? 'bg-[#f0d9d0] text-[#b8958a] cursor-wait'
