@@ -183,3 +183,31 @@ export type BillNote = {
   created_at: string
   updated_at: string
 }
+
+export type RoadmapPhase = {
+  id: number
+  name: string
+  goal: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export type RoadmapMilestone = {
+  id: number
+  phase_id: number
+  title: string
+  completed: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export type PromptCard = {
+  id: number
+  title: string
+  prompt: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}

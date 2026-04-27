@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, LifeAdminCard, ParkingLotCard, RoadmapTask, WeeklyMission, BillNote, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
+import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, LifeAdminCard, ParkingLotCard, RoadmapTask, WeeklyMission, BillNote, RoadmapPhase, RoadmapMilestone, PromptCard, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday','overflow'] as const
 const DAY_LABELS: Record<string, string> = {
@@ -244,6 +244,29 @@ export default function Home() {
   const [lifeAdminCards, setLifeAdminCards] = useState<LifeAdminCard[]>([])
   const [parkingLotDBCards, setParkingLotDBCards] = useState<ParkingLotCard[]>([])
   const [roadmapTasks, setRoadmapTasks] = useState<RoadmapTask[]>([])
+  const [roadmapPhases, setRoadmapPhases] = useState<RoadmapPhase[]>([])
+  const [roadmapMilestones, setRoadmapMilestones] = useState<RoadmapMilestone[]>([])
+  const [promptCards, setPromptCards] = useState<PromptCard[]>([])
+
+  // Roadmap phase/milestone editing state
+  const [editingPhaseId, setEditingPhaseId] = useState<number | null>(null)
+  const [editingPhaseValue, setEditingPhaseValue] = useState('')
+  const [editingPhaseGoal, setEditingPhaseGoal] = useState('')
+  const [addingPhase, setAddingPhase] = useState(false)
+  const [newPhaseName, setNewPhaseName] = useState('')
+  const [newPhaseGoal, setNewPhaseGoal] = useState('')
+  const [addingMilestone, setAddingMilestoneForPhase] = useState<number | null>(null) // phase_id
+  const [newMilestoneTitle, setNewMilestoneTitle] = useState('')
+  const [editingMilestoneId, setEditingMilestoneId] = useState<number | null>(null)
+  const [editingMilestoneValue, setEditingMilestoneValue] = useState('')
+
+  // Prompt library editing state
+  const [editingPromptId, setEditingPromptId] = useState<number | null>(null)
+  const [editingPromptTitle, setEditingPromptTitle] = useState('')
+  const [editingPromptText, setEditingPromptText] = useState('')
+  const [addingPrompt, setAddingPrompt] = useState(false)
+  const [newPromptTitle, setNewPromptTitle] = useState('')
+  const [newPromptText, setNewPromptText] = useState('')
   const [lifeAdminLoading, setLifeAdminLoading] = useState(false)
   const [showDoneColumn, setShowDoneColumn] = useState(false)
   const [editingLifeCard, setEditingLifeCard] = useState<LifeAdminCard | null>(null)
@@ -257,7 +280,7 @@ export default function Home() {
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
   const [dragOverBucket, setDragOverBucket] = useState<string | null>(null)
   // Timer state
-  const [activeTimers, setActiveTimers] = useState<Record<string, {seconds: number; running: boolean; preset: number}>>({})
+  const [activeTimers, setActiveTimers] = useState<Record<string, {seconds: number; running: boolean; preset: number; startTime?: number}>>({})
   const timerIntervalRef = useRef<Record<string, NodeJS.Timeout>>({})
   const prefsLoadedRef = useRef(false)
   const [editingTimerKey, setEditingTimerKey] = useState<string | null>(null)
@@ -515,11 +538,17 @@ export default function Home() {
       prevMonday.setDate(monday.getDate() - 7)
       const prevWeekStart = prevMonday.toISOString().split('T')[0]
 
-      const [missRes, billRes, prefsRes] = await Promise.all([
+      const [missRes, billRes, prefsRes, phasesRes, milestonesRes, promptsRes] = await Promise.all([
         supabase.from('weekly_missions').select('*').gte('week_start', prevWeekStart).order('week_start').order('slot').order('sort_order'),
         supabase.from('bills_notes').select('*').order('sort_order'),
-        supabase.from('user_prefs').select('*')
+        supabase.from('user_prefs').select('*'),
+        supabase.from('roadmap_phases').select('*').order('sort_order'),
+        supabase.from('roadmap_milestones').select('*').order('sort_order'),
+        supabase.from('prompt_library').select('*').order('sort_order')
       ])
+      if (phasesRes.data) setRoadmapPhases(phasesRes.data)
+      if (milestonesRes.data) setRoadmapMilestones(milestonesRes.data)
+      if (promptsRes.data) setPromptCards(promptsRes.data)
       if (missRes.data) setWeeklyMissions(missRes.data)
       if (billRes.data) setBillNotes(billRes.data)
       if (prefsRes.data) {
@@ -535,6 +564,36 @@ export default function Home() {
           }
           if (row.key === 'fridayReviewChecked') setFridayReviewChecked(row.value as Record<string, boolean>)
           if (row.key === 'phaseProgress') setPhaseProgress(row.value as Record<string, boolean>)
+        })
+        // Restore any running timers from Supabase
+        const timerRows = (prefsRes.data || []).filter((r: {key: string; value: unknown}) => r.key.startsWith('timer_start_'))
+        timerRows.forEach((row: {key: string; value: {startTime: number; preset: number}}) => {
+          const timerKey = row.key.replace('timer_start_', '')
+          const { startTime, preset } = row.value
+          const presetSeconds = preset * 60
+          const elapsed = Math.floor((Date.now() - startTime) / 1000)
+          const remaining = Math.max(0, presetSeconds - elapsed)
+          if (remaining > 0) {
+            // Timer still has time left — restore it
+            setActiveTimers(prev => ({ ...prev, [timerKey]: { seconds: remaining, running: true, preset, startTime } }))
+            if (timerIntervalRef.current[timerKey]) clearInterval(timerIntervalRef.current[timerKey])
+            timerIntervalRef.current[timerKey] = setInterval(() => {
+              const elapsedNow = Math.floor((Date.now() - startTime) / 1000)
+              const remainingNow = Math.max(0, presetSeconds - elapsedNow)
+              setActiveTimers(prev => {
+                if (!prev[timerKey]?.running) return prev
+                if (remainingNow <= 0) {
+                  clearInterval(timerIntervalRef.current[timerKey])
+                  supabase.from('user_prefs').delete().match({ key: `timer_start_${timerKey}` }).then(() => {})
+                  return { ...prev, [timerKey]: { ...prev[timerKey], seconds: 0, running: false } }
+                }
+                return { ...prev, [timerKey]: { ...prev[timerKey], seconds: remainingNow } }
+              })
+            }, 1000)
+          } else {
+            // Timer expired while away — clean it up
+            supabase.from('user_prefs').delete().match({ key: `timer_start_${timerKey}` }).then(() => {})
+          }
         })
         prefsLoadedRef.current = true
       }
@@ -3087,14 +3146,17 @@ export default function Home() {
   }
 
   const getCurrentPhase = (): string => {
-    // Auto-compute from phaseProgress: find first phase that is NOT fully complete
-    for (let i = 0; i < ROADMAP_PHASES.length; i++) {
-      const phase = ROADMAP_PHASES[i]
-      const allDone = phase.milestones.every((_, mi) => !!phaseProgress[`${i}-${mi}`])
+    if (roadmapPhases.length === 0) return ROADMAP_PHASES[0]?.name || 'Phase 1'
+    const sorted = [...roadmapPhases].sort((a, b) => a.sort_order - b.sort_order)
+    for (let i = 0; i < sorted.length; i++) {
+      const phase = sorted[i]
+      const milestones = roadmapMilestones.filter(m => m.phase_id === phase.id).sort((a, b) => a.sort_order - b.sort_order)
+      const allDone = milestones.length > 0 && milestones.every((m, mi) =>
+        !!phaseProgress[m.id.toString()] || !!phaseProgress[`${i}-${mi}`]
+      )
       if (!allDone) return phase.name
     }
-    // All phases complete
-    return ROADMAP_PHASES[ROADMAP_PHASES.length - 1].name + ' ✓ Complete'
+    return (sorted[sorted.length - 1]?.name || 'Phase Complete') + ' ✓ Complete'
   }
 
   const getDayType = () => {
@@ -3110,26 +3172,34 @@ export default function Home() {
 
   // v2.1 Timer helpers
   const startTimer = (key: string, preset: number) => {
-    setActiveTimers(prev => ({ ...prev, [key]: { seconds: preset * 60, running: true, preset } }))
+    const presetSeconds = preset * 60
+    const startTime = Date.now()
+    setActiveTimers(prev => ({ ...prev, [key]: { seconds: presetSeconds, running: true, preset, startTime } }))
+    // Persist startTime to Supabase
+    supabase.from('user_prefs').upsert({ key: `timer_start_${key}`, value: { startTime, preset }, updated_at: new Date().toISOString() }).then(() => {})
     if (timerIntervalRef.current[key]) clearInterval(timerIntervalRef.current[key])
     timerIntervalRef.current[key] = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000)
+      const remaining = Math.max(0, presetSeconds - elapsed)
       setActiveTimers(prev => {
-        const t = prev[key]
-        if (!t || !t.running) return prev
-        if (t.seconds <= 1) {
+        if (!prev[key]?.running) return prev
+        if (remaining <= 0) {
           clearInterval(timerIntervalRef.current[key])
-          return { ...prev, [key]: { ...t, seconds: 0, running: false } }
+          supabase.from('user_prefs').delete().match({ key: `timer_start_${key}` }).then(() => {})
+          return { ...prev, [key]: { ...prev[key], seconds: 0, running: false } }
         }
-        return { ...prev, [key]: { ...t, seconds: t.seconds - 1 } }
+        return { ...prev, [key]: { ...prev[key], seconds: remaining } }
       })
     }, 1000)
   }
   const stopTimer = (key: string) => {
     if (timerIntervalRef.current[key]) clearInterval(timerIntervalRef.current[key])
+    supabase.from('user_prefs').delete().match({ key: `timer_start_${key}` }).then(() => {})
     setActiveTimers(prev => ({ ...prev, [key]: { ...prev[key], running: false } }))
   }
   const resetTimer = (key: string) => {
     if (timerIntervalRef.current[key]) clearInterval(timerIntervalRef.current[key])
+    supabase.from('user_prefs').delete().match({ key: `timer_start_${key}` }).then(() => {})
     setActiveTimers(prev => {
       const t = prev[key]
       if (!t) return prev
@@ -3531,14 +3601,14 @@ export default function Home() {
                           <div className="space-y-2">
                             {/* Road Map action steps not yet completed */}
                             {roadmapTasks.filter(t => !t.completed).slice(0, 8).map(task => {
-                              const phase = ROADMAP_PHASES[task.phase_index]
-                              const milestone = phase?.milestones[task.milestone_index]
+                              const dynPhase = roadmapPhases.find(p => p.sort_order === task.phase_index)
+                              const dynMilestone = roadmapMilestones.find(m => m.phase_id === dynPhase?.id && m.sort_order === task.milestone_index)
                               const alreadyAssigned = weeklyMissions.some(m => m.week_start === getNextWeekStart() && m.roadmap_task_id === task.id)
                               return (
                                 <div key={task.id} className={`flex items-center gap-2 rounded-xl px-3 py-2 border text-sm ${alreadyAssigned ? 'bg-[#edf7f0] border-[#a8d5b5]' : 'bg-white border-[#f0d9d0]'}`}>
                                   <div className="flex-1 min-w-0">
                                     <div className="text-[#3d2c2c] truncate">{task.title}</div>
-                                    <div className="text-xs text-[#b8958a] truncate">{phase?.name} — {milestone}</div>
+                                    <div className="text-xs text-[#b8958a] truncate">{dynPhase?.name || ROADMAP_PHASES[task.phase_index]?.name} — {dynMilestone?.title || ROADMAP_PHASES[task.phase_index]?.milestones[task.milestone_index]}</div>
                                   </div>
                                   <button
                                     onClick={async () => {
@@ -3905,25 +3975,99 @@ export default function Home() {
   }
 
   const renderRoadMapView = () => {
-  const totalMilestones = ROADMAP_PHASES.reduce((acc, p) => acc + p.milestones.length, 0)
-  const completedMilestones = Object.values(phaseProgress).filter(Boolean).length
+  const totalMilestones = roadmapMilestones.length
+  const completedMilestones = roadmapMilestones.filter(m => {
+    return !!phaseProgress[m.id.toString()] || !!phaseProgress[`${roadmapPhases.find(p => p.id === m.phase_id)?.sort_order ?? 99}-${m.sort_order}`]
+  }).length
   const overallPct = totalMilestones > 0 ? Math.round((completedMilestones / totalMilestones) * 100) : 0
 
-  const getTasksForMilestone = (phaseIndex: number, milestoneIndex: number) =>
-    roadmapTasks.filter(t => t.phase_index === phaseIndex && t.milestone_index === milestoneIndex).sort((a, b) => a.sort_order - b.sort_order)
+  const getMilestonesForPhase = (phaseId: number) =>
+    roadmapMilestones.filter(m => m.phase_id === phaseId).sort((a, b) => a.sort_order - b.sort_order)
 
+  const getTasksForMilestone = (phaseId: number, milestoneId: number) => {
+    const phase = roadmapPhases.find(p => p.id === phaseId)
+    const milestone = roadmapMilestones.find(m => m.id === milestoneId)
+    if (!phase || !milestone) return []
+    // Support both new (by ID) and legacy (by index) lookups
+    return roadmapTasks.filter(t =>
+      (t.phase_index === phase.sort_order && t.milestone_index === milestone.sort_order)
+    ).sort((a, b) => a.sort_order - b.sort_order)
+  }
+
+  const isMilestoneDone = (milestone: RoadmapMilestone, phaseOrderIndex: number) => {
+    return !!phaseProgress[milestone.id.toString()] || !!phaseProgress[`${phaseOrderIndex}-${milestone.sort_order}`]
+  }
+
+  const toggleMilestone = (milestone: RoadmapMilestone, phaseOrderIndex: number) => {
+    const currentlyDone = isMilestoneDone(milestone, phaseOrderIndex)
+    // Write to both new (by id) and legacy key
+    setPhaseProgress(prev => ({
+      ...prev,
+      [milestone.id.toString()]: !currentlyDone,
+      [`${phaseOrderIndex}-${milestone.sort_order}`]: !currentlyDone
+    }))
+  }
+
+  // Phase CRUD
+  const addPhase = async () => {
+    if (!newPhaseName.trim()) return
+    const sortOrder = roadmapPhases.length
+    const { data } = await supabase.from('roadmap_phases').insert({ name: newPhaseName.trim(), goal: newPhaseGoal.trim(), sort_order: sortOrder }).select().single()
+    if (data) setRoadmapPhases(prev => [...prev, data])
+    setNewPhaseName('')
+    setNewPhaseGoal('')
+    setAddingPhase(false)
+  }
+
+  const updatePhase = async (id: number) => {
+    if (!editingPhaseValue.trim()) return
+    setRoadmapPhases(prev => prev.map(p => p.id === id ? { ...p, name: editingPhaseValue.trim(), goal: editingPhaseGoal.trim() } : p))
+    await supabase.from('roadmap_phases').update({ name: editingPhaseValue.trim(), goal: editingPhaseGoal.trim(), updated_at: new Date().toISOString() }).eq('id', id)
+    setEditingPhaseId(null)
+  }
+
+  const deletePhase = async (id: number) => {
+    setRoadmapPhases(prev => prev.filter(p => p.id !== id))
+    setRoadmapMilestones(prev => prev.filter(m => m.phase_id !== id))
+    await supabase.from('roadmap_phases').delete().eq('id', id)
+  }
+
+  // Milestone CRUD
+  const addMilestone = async (phaseId: number) => {
+    if (!newMilestoneTitle.trim()) return
+    const existing = getMilestonesForPhase(phaseId)
+    const sortOrder = existing.length
+    const { data } = await supabase.from('roadmap_milestones').insert({ phase_id: phaseId, title: newMilestoneTitle.trim(), completed: false, sort_order: sortOrder }).select().single()
+    if (data) setRoadmapMilestones(prev => [...prev, data])
+    setNewMilestoneTitle('')
+    setAddingMilestoneForPhase(null)
+  }
+
+  const updateMilestone = async (id: number) => {
+    if (!editingMilestoneValue.trim()) return
+    setRoadmapMilestones(prev => prev.map(m => m.id === id ? { ...m, title: editingMilestoneValue.trim() } : m))
+    await supabase.from('roadmap_milestones').update({ title: editingMilestoneValue.trim(), updated_at: new Date().toISOString() }).eq('id', id)
+    setEditingMilestoneId(null)
+  }
+
+  const deleteMilestone = async (id: number) => {
+    setRoadmapMilestones(prev => prev.filter(m => m.id !== id))
+    await supabase.from('roadmap_milestones').delete().eq('id', id)
+  }
+
+  // Roadmap task CRUD (reuse existing functions from outer scope)
   const toggleRoadmapTask = async (task: RoadmapTask) => {
     const updated = !task.completed
     setRoadmapTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: updated } : t))
     await supabase.from('roadmap_tasks').update({ completed: updated, updated_at: new Date().toISOString() }).eq('id', task.id)
   }
 
-  const addRoadmapTask = async (phaseIndex: number, milestoneIndex: number) => {
+  const addRoadmapTask = async (phaseOrderIndex: number, milestoneOrderIndex: number) => {
     if (!newRoadmapTaskTitle.trim()) return
-    const existing = getTasksForMilestone(phaseIndex, milestoneIndex)
+    const existing = roadmapTasks.filter(t => t.phase_index === phaseOrderIndex && t.milestone_index === milestoneOrderIndex)
     const sortOrder = existing.length
     const { data } = await supabase.from('roadmap_tasks').insert({
-      phase_index: phaseIndex, milestone_index: milestoneIndex,
+      phase_index: phaseOrderIndex, milestone_index: milestoneOrderIndex,
       title: newRoadmapTaskTitle.trim(), sort_order: sortOrder, completed: false
     }).select().single()
     if (data) setRoadmapTasks(prev => [...prev, data])
@@ -3973,8 +4117,35 @@ export default function Home() {
     ])
   }
 
+  // Prompt library CRUD
+  const addPrompt = async () => {
+    if (!newPromptTitle.trim()) return
+    const sortOrder = promptCards.length
+    const { data } = await supabase.from('prompt_library').insert({ title: newPromptTitle.trim(), prompt: newPromptText.trim(), sort_order: sortOrder }).select().single()
+    if (data) setPromptCards(prev => [...prev, data])
+    setNewPromptTitle('')
+    setNewPromptText('')
+    setAddingPrompt(false)
+  }
+
+  const updatePrompt = async (id: number) => {
+    setPromptCards(prev => prev.map(p => p.id === id ? { ...p, title: editingPromptTitle, prompt: editingPromptText } : p))
+    await supabase.from('prompt_library').update({ title: editingPromptTitle, prompt: editingPromptText, updated_at: new Date().toISOString() }).eq('id', id)
+    setEditingPromptId(null)
+  }
+
+  const deletePrompt = async (id: number) => {
+    setPromptCards(prev => prev.filter(p => p.id !== id))
+    await supabase.from('prompt_library').delete().eq('id', id)
+  }
+
+  const copyPrompt = (text: string) => {
+    navigator.clipboard.writeText(text).catch(() => {})
+  }
+
   return (
     <div className="space-y-4 pb-24 md:pb-6">
+      {/* Header */}
       <div className="bg-[#fffdf9] rounded-3xl p-5 md:p-6 border border-[#f0d9d0]">
         <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-2">SteeleBroz Phase Map</div>
         <h2 className="text-2xl font-semibold text-[#3d2c2c]">Strategic view</h2>
@@ -3988,114 +4159,278 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Phases */}
       <div className="grid gap-4">
-        {ROADMAP_PHASES.map((phase, phaseIndex) => {
-          const phaseCompleted = phase.milestones.filter((_, mi) => !!phaseProgress[`${phaseIndex}-${mi}`]).length
-          const phasePct = phase.milestones.length > 0 ? Math.round((phaseCompleted / phase.milestones.length) * 100) : 0
+        {roadmapPhases.sort((a, b) => a.sort_order - b.sort_order).map((phase, phaseOrderIndex) => {
+          const milestones = getMilestonesForPhase(phase.id)
+          const phaseCompleted = milestones.filter(m => isMilestoneDone(m, phaseOrderIndex)).length
+          const phasePct = milestones.length > 0 ? Math.round((phaseCompleted / milestones.length) * 100) : 0
+          const isEditingThisPhase = editingPhaseId === phase.id
+
           return (
-            <div key={phase.name} className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0]">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-8 h-8 rounded-full bg-[#fdf0ec] text-[#e8917a] border border-[#f0d9d0] flex items-center justify-center text-sm font-bold shrink-0">{phaseIndex + 1}</div>
-                <h3 className="text-base font-semibold text-[#3d2c2c]">{phase.name}</h3>
-              </div>
-              <p className="text-sm text-[#7a5c5c] mb-3">{phase.goal}</p>
-              <div className="mb-3">
-                <div className="flex items-center justify-between text-xs text-[#b8958a] mb-1">
-                  <span>Phase progress</span><span>{phaseCompleted}/{phase.milestones.length}</span>
+            <div key={phase.id} className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0]">
+              {/* Phase header */}
+              <div className="flex items-start gap-3 mb-2">
+                <div className="w-8 h-8 rounded-full bg-[#fdf0ec] text-[#e8917a] border border-[#f0d9d0] flex items-center justify-center text-sm font-bold shrink-0">{phaseOrderIndex + 1}</div>
+                <div className="flex-1 min-w-0">
+                  {isEditingThisPhase ? (
+                    <div className="space-y-2">
+                      <input autoFocus value={editingPhaseValue} onChange={e => setEditingPhaseValue(e.target.value)}
+                        className="w-full text-base font-semibold rounded-xl px-3 py-1.5 border border-[#f0d9d0] text-[#3d2c2c] bg-white outline-none focus:border-[#e8917a]" />
+                      <input value={editingPhaseGoal} onChange={e => setEditingPhaseGoal(e.target.value)}
+                        placeholder="Goal description..."
+                        className="w-full text-sm rounded-xl px-3 py-1.5 border border-[#f0d9d0] text-[#7a5c5c] bg-white outline-none focus:border-[#e8917a]" />
+                      <div className="flex gap-2">
+                        <button onClick={() => updatePhase(phase.id)} className="text-xs bg-[#e8917a] text-white rounded-xl px-3 py-1.5 hover:bg-[#d4745d]">Save</button>
+                        <button onClick={() => setEditingPhaseId(null)} className="text-xs text-[#b8958a] px-2">Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-semibold text-[#3d2c2c]">{phase.name}</h3>
+                        <button onClick={() => { setEditingPhaseId(phase.id); setEditingPhaseValue(phase.name); setEditingPhaseGoal(phase.goal) }}
+                          className="text-[#b8958a] hover:text-[#e8917a] text-xs transition-colors shrink-0">✎</button>
+                        <button onClick={() => deletePhase(phase.id)}
+                          className="text-[#b8958a] hover:text-red-400 text-xs transition-colors shrink-0 ml-1">×</button>
+                      </div>
+                      {phase.goal && <p className="text-sm text-[#7a5c5c] mt-0.5">{phase.goal}</p>}
+                    </>
+                  )}
                 </div>
-                <div className="w-full h-1.5 rounded-full bg-[#f0d9d0] overflow-hidden">
-                  <div className="h-full bg-[#f6c94e] transition-all duration-500 rounded-full" style={{ width: `${phasePct}%` }} />
-                </div>
               </div>
-              <div className="space-y-2">
-                {phase.milestones.map((milestone, milestoneIndex) => {
-                  const mKey = `${phaseIndex}-${milestoneIndex}`
-                  const milestoneDone = !!phaseProgress[mKey]
-                  const milestoneTasks = getTasksForMilestone(phaseIndex, milestoneIndex)
-                  const completedTasks = milestoneTasks.filter(t => t.completed).length
-                  const isAddingHere = addingRoadmapTask?.phaseIndex === phaseIndex && addingRoadmapTask?.milestoneIndex === milestoneIndex
-                  return (
-                    <details key={milestone} className={`rounded-2xl overflow-hidden border transition-all ${milestoneDone ? 'border-[#a8d5b5] bg-[#edf7f0]' : 'border-[#f0d9d0] bg-[#fdf0ec]'}`}>
-                      <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <button onClick={(e) => { e.preventDefault(); setPhaseProgress(prev => ({ ...prev, [mKey]: !milestoneDone })) }}
-                            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${milestoneDone ? 'bg-[#4caf7d] border-[#4caf7d]' : 'bg-white border-[#f0d9d0]'}`}>
-                            {milestoneDone && <span className="text-white text-xs">✓</span>}
-                          </button>
-                          <span className={`text-sm font-medium ${milestoneDone ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{milestone}</span>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {milestoneTasks.length > 0 && <span className="text-xs text-[#b8958a]">{completedTasks}/{milestoneTasks.length}</span>}
-                          <span className="text-[#b8958a] text-xs">▸</span>
-                        </div>
-                      </summary>
-                      <div className="px-4 pb-4 border-t border-[#f0d9d0] pt-3 space-y-2">
-                        {milestoneTasks.map((task, ti) => (
-                          <div key={task.id} className={`flex items-center gap-2 text-sm rounded-xl px-3 py-2 group ${task.completed ? 'bg-[#edf7f0] opacity-60' : 'bg-white border border-[#f0d9d0]'}`}>
-                            {/* Up/down reorder */}
-                            <div className="flex flex-col gap-0.5 shrink-0">
-                              <button onClick={() => moveRoadmapTaskUp(milestoneTasks, ti)} disabled={ti === 0}
-                                className="text-[10px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 leading-none">▲</button>
-                              <button onClick={() => moveRoadmapTaskDown(milestoneTasks, ti)} disabled={ti === milestoneTasks.length - 1}
-                                className="text-[10px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 leading-none">▼</button>
-                            </div>
-                            <span className="text-xs text-[#b8958a] w-4 shrink-0">{ti + 1}.</span>
-                            <input type="checkbox" checked={task.completed} onChange={() => toggleRoadmapTask(task)}
-                              className="w-4 h-4 rounded border-[#f0d9d0] bg-white accent-[#4caf7d] shrink-0" />
-                            {editingRoadmapTask?.id === task.id ? (
-                              <form onSubmit={async e => { e.preventDefault(); await editRoadmapTask(task, editingRoadmapTask!.title) }} className="flex-1 flex gap-1">
-                                <input autoFocus value={editingRoadmapTask!.title}
-                                  onChange={e => setEditingRoadmapTask({ ...editingRoadmapTask!, title: e.target.value })}
+
+              {/* Phase progress bar */}
+              {!isEditingThisPhase && (
+                <div className="mb-3">
+                  <div className="flex items-center justify-between text-xs text-[#b8958a] mb-1">
+                    <span>Phase progress</span><span>{phaseCompleted}/{milestones.length}</span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-[#f0d9d0] overflow-hidden">
+                    <div className="h-full bg-[#f6c94e] transition-all duration-500 rounded-full" style={{ width: `${phasePct}%` }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Milestones */}
+              {!isEditingThisPhase && (
+                <div className="space-y-2">
+                  {milestones.map((milestone, milestoneOrderIndex) => {
+                    const mDone = isMilestoneDone(milestone, phaseOrderIndex)
+                    const milestoneTasks = getTasksForMilestone(phase.id, milestone.id)
+                    const completedTasks = milestoneTasks.filter(t => t.completed).length
+                    const isAddingHere = addingRoadmapTask?.phaseIndex === phaseOrderIndex && addingRoadmapTask?.milestoneIndex === milestoneOrderIndex
+                    const isEditingThisMilestone = editingMilestoneId === milestone.id
+
+                    return (
+                      <details key={milestone.id} className={`rounded-2xl overflow-hidden border transition-all ${mDone ? 'border-[#a8d5b5] bg-[#edf7f0]' : 'border-[#f0d9d0] bg-[#fdf0ec]'}`}>
+                        <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <button onClick={(e) => { e.preventDefault(); toggleMilestone(milestone, phaseOrderIndex) }}
+                              className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${mDone ? 'bg-[#4caf7d] border-[#4caf7d]' : 'bg-white border-[#f0d9d0]'}`}>
+                              {mDone && <span className="text-white text-xs">✓</span>}
+                            </button>
+                            {isEditingThisMilestone ? (
+                              <form onSubmit={async e => { e.preventDefault(); await updateMilestone(milestone.id) }} className="flex-1 flex gap-1" onClick={e => e.stopPropagation()}>
+                                <input autoFocus value={editingMilestoneValue} onChange={e => setEditingMilestoneValue(e.target.value)}
                                   className="flex-1 text-sm rounded-lg px-2 py-0.5 border border-[#f0d9d0] text-[#3d2c2c] bg-white outline-none focus:border-[#e8917a]" />
                                 <button type="submit" className="text-xs text-[#4caf7d] font-medium px-1">Save</button>
-                                <button type="button" onClick={() => setEditingRoadmapTask(null)} className="text-xs text-[#b8958a]">✕</button>
+                                <button type="button" onClick={e => { e.stopPropagation(); setEditingMilestoneId(null) }} className="text-xs text-[#b8958a]">✕</button>
                               </form>
                             ) : (
-                              <span className={`flex-1 min-w-0 truncate ${task.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{task.title}</span>
+                              <div className="flex items-center gap-1 flex-1 min-w-0">
+                                <span className={`text-sm font-medium truncate ${mDone ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{milestone.title}</span>
+                                <button onClick={e => { e.preventDefault(); e.stopPropagation(); setEditingMilestoneId(milestone.id); setEditingMilestoneValue(milestone.title) }}
+                                  className="text-[10px] text-[#b8958a] hover:text-[#e8917a] shrink-0 transition-colors">✎</button>
+                                <button onClick={e => { e.preventDefault(); e.stopPropagation(); deleteMilestone(milestone.id) }}
+                                  className="text-[10px] text-[#b8958a] hover:text-red-400 shrink-0 transition-colors">×</button>
+                              </div>
                             )}
-                            {!task.completed && editingRoadmapTask?.id !== task.id && (
-                              <>
-                                <button onClick={() => setEditingRoadmapTask(task)}
-                                  className="opacity-0 group-hover:opacity-100 text-xs text-[#b8958a] hover:text-[#3d2c2c] transition-all shrink-0">✎</button>
-                                {pickingMissionSlot === task.id ? (
-                                  <div className="flex gap-1 shrink-0">
-                                    {[['1','M1'],['2','M2'],['3','Bonus']].map(([slot, label]) => (
-                                      <button key={slot} onClick={async () => { await addWeeklyMission(task.title, getCurrentWeekStart(), parseInt(slot), task.id); setPickingMissionSlot(null) }}
-                                        className="text-[10px] bg-[#e8917a] text-white rounded-lg px-1.5 py-0.5 hover:bg-[#d4745d] transition-colors">{label}</button>
-                                    ))}
-                                    <button onClick={() => setPickingMissionSlot(null)} className="text-[10px] text-[#b8958a]">✕</button>
-                                  </div>
-                                ) : (
-                                  <button onClick={() => setPickingMissionSlot(task.id)}
-                                    className="text-[10px] text-[#e8917a] hover:text-[#d4745d] transition-colors shrink-0 border border-[#f0d9d0] rounded-lg px-1.5 py-0.5"
-                                    title="Add to mission block">+ Mission</button>
-                                )}
-                              </>
-                            )}
-                            <button onClick={() => deleteRoadmapTask(task.id)} className="text-[#b8958a] hover:text-red-400 transition-colors text-sm shrink-0">×</button>
                           </div>
-                        ))}
-                        {isAddingHere ? (
-                          <div className="flex gap-2">
-                            <input value={newRoadmapTaskTitle} onChange={e => setNewRoadmapTaskTitle(e.target.value)}
-                              onKeyDown={e => { if (e.key === 'Enter') addRoadmapTask(phaseIndex, milestoneIndex); if (e.key === 'Escape') setAddingRoadmapTask(null) }}
-                              placeholder="Add action step..." autoFocus
-                              className="flex-1 bg-white rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
-                            <button onClick={() => addRoadmapTask(phaseIndex, milestoneIndex)} className="bg-[#e8917a] text-white text-sm rounded-xl px-3 py-2 hover:bg-[#d4745d] transition-colors">Add</button>
-                            <button onClick={() => setAddingRoadmapTask(null)} className="text-[#b8958a] text-sm px-2">✕</button>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {milestoneTasks.length > 0 && <span className="text-xs text-[#b8958a]">{completedTasks}/{milestoneTasks.length}</span>}
+                            <span className="text-[#b8958a] text-xs">▸</span>
                           </div>
-                        ) : (
-                          <button onClick={() => { setAddingRoadmapTask({ phaseIndex, milestoneIndex }); setNewRoadmapTaskTitle('') }}
-                            className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors">+ Add action step</button>
-                        )}
-                      </div>
-                    </details>
-                  )
-                })}
-              </div>
+                        </summary>
+                        <div className="px-4 pb-4 border-t border-[#f0d9d0] pt-3 space-y-2">
+                          {milestoneTasks.map((task, ti) => (
+                            <div key={task.id} className={`flex items-center gap-2 text-sm rounded-xl px-3 py-2 group ${task.completed ? 'bg-[#edf7f0] opacity-60' : 'bg-white border border-[#f0d9d0]'}`}>
+                              <div className="flex flex-col gap-0.5 shrink-0">
+                                <button onClick={() => moveRoadmapTaskUp(milestoneTasks, ti)} disabled={ti === 0}
+                                  className="text-[10px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 leading-none">▲</button>
+                                <button onClick={() => moveRoadmapTaskDown(milestoneTasks, ti)} disabled={ti === milestoneTasks.length - 1}
+                                  className="text-[10px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 leading-none">▼</button>
+                              </div>
+                              <span className="text-xs text-[#b8958a] w-4 shrink-0">{ti + 1}.</span>
+                              <input type="checkbox" checked={task.completed} onChange={() => toggleRoadmapTask(task)}
+                                className="w-4 h-4 rounded border-[#f0d9d0] bg-white accent-[#4caf7d] shrink-0" />
+                              {editingRoadmapTask?.id === task.id ? (
+                                <form onSubmit={async e => { e.preventDefault(); await editRoadmapTask(task, editingRoadmapTask!.title) }} className="flex-1 flex gap-1">
+                                  <input autoFocus value={editingRoadmapTask!.title}
+                                    onChange={e => setEditingRoadmapTask({ ...editingRoadmapTask!, title: e.target.value })}
+                                    className="flex-1 text-sm rounded-lg px-2 py-0.5 border border-[#f0d9d0] text-[#3d2c2c] bg-white outline-none focus:border-[#e8917a]" />
+                                  <button type="submit" className="text-xs text-[#4caf7d] font-medium px-1">Save</button>
+                                  <button type="button" onClick={() => setEditingRoadmapTask(null)} className="text-xs text-[#b8958a]">✕</button>
+                                </form>
+                              ) : (
+                                <span className={`flex-1 min-w-0 truncate ${task.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{task.title}</span>
+                              )}
+                              {!task.completed && editingRoadmapTask?.id !== task.id && (
+                                <>
+                                  <button onClick={() => setEditingRoadmapTask(task)}
+                                    className="opacity-0 group-hover:opacity-100 text-xs text-[#b8958a] hover:text-[#3d2c2c] transition-all shrink-0">✎</button>
+                                  {pickingMissionSlot === task.id ? (
+                                    <div className="flex gap-1 shrink-0">
+                                      {[['1','M1'],['2','M2'],['3','Bonus']].map(([slot, label]) => (
+                                        <button key={slot} onClick={async () => { await addWeeklyMission(task.title, getCurrentWeekStart(), parseInt(slot), task.id); setPickingMissionSlot(null) }}
+                                          className="text-[10px] bg-[#e8917a] text-white rounded-lg px-1.5 py-0.5 hover:bg-[#d4745d] transition-colors">{label}</button>
+                                      ))}
+                                      <button onClick={() => setPickingMissionSlot(null)} className="text-[10px] text-[#b8958a]">✕</button>
+                                    </div>
+                                  ) : (
+                                    <button onClick={() => setPickingMissionSlot(task.id)}
+                                      className="text-[10px] text-[#e8917a] hover:text-[#d4745d] transition-colors shrink-0 border border-[#f0d9d0] rounded-lg px-1.5 py-0.5"
+                                      title="Add to mission block">+ Mission</button>
+                                  )}
+                                </>
+                              )}
+                              <button onClick={() => deleteRoadmapTask(task.id)} className="text-[#b8958a] hover:text-red-400 transition-colors text-sm shrink-0">×</button>
+                            </div>
+                          ))}
+                          {isAddingHere ? (
+                            <div className="flex gap-2">
+                              <input value={newRoadmapTaskTitle} onChange={e => setNewRoadmapTaskTitle(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') addRoadmapTask(phaseOrderIndex, milestoneOrderIndex); if (e.key === 'Escape') setAddingRoadmapTask(null) }}
+                                placeholder="Add action step..." autoFocus
+                                className="flex-1 bg-white rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
+                              <button onClick={() => addRoadmapTask(phaseOrderIndex, milestoneOrderIndex)} className="bg-[#e8917a] text-white text-sm rounded-xl px-3 py-2 hover:bg-[#d4745d] transition-colors">Add</button>
+                              <button onClick={() => setAddingRoadmapTask(null)} className="text-[#b8958a] text-sm px-2">✕</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => { setAddingRoadmapTask({ phaseIndex: phaseOrderIndex, milestoneIndex: milestoneOrderIndex }); setNewRoadmapTaskTitle('') }}
+                              className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors">+ Add action step</button>
+                          )}
+                          {/* Add milestone button inside phase */}
+                          {addingMilestone === phase.id ? (
+                            <div className="flex gap-2 mt-2 pt-2 border-t border-[#f0d9d0]">
+                              <input value={newMilestoneTitle} onChange={e => setNewMilestoneTitle(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') addMilestone(phase.id); if (e.key === 'Escape') setAddingMilestoneForPhase(null) }}
+                                placeholder="New milestone..." autoFocus
+                                className="flex-1 bg-white rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
+                              <button onClick={() => addMilestone(phase.id)} className="bg-[#e8917a] text-white text-sm rounded-xl px-3 py-2 hover:bg-[#d4745d]">Add</button>
+                              <button onClick={() => setAddingMilestoneForPhase(null)} className="text-[#b8958a] text-sm px-2">✕</button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </details>
+                    )
+                  })}
+                  {/* Add milestone button (below milestones) */}
+                  {addingMilestone !== phase.id && (
+                    <button onClick={() => { setAddingMilestoneForPhase(phase.id); setNewMilestoneTitle('') }}
+                      className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors pl-1">+ Add milestone</button>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}
+      </div>
+
+      {/* Add Phase button */}
+      {addingPhase ? (
+        <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0] space-y-3">
+          <div className="text-sm font-semibold text-[#3d2c2c]">New Phase</div>
+          <input value={newPhaseName} onChange={e => setNewPhaseName(e.target.value)}
+            placeholder="Phase name (e.g. Phase 4 – Growth)" autoFocus
+            className="w-full bg-white rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
+          <input value={newPhaseGoal} onChange={e => setNewPhaseGoal(e.target.value)}
+            placeholder="Goal description (optional)"
+            className="w-full bg-white rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
+          <div className="flex gap-2">
+            <button onClick={addPhase} className="bg-[#e8917a] text-white text-sm rounded-xl px-4 py-2 hover:bg-[#d4745d]">Add Phase</button>
+            <button onClick={() => setAddingPhase(false)} className="text-[#b8958a] text-sm px-3">Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setAddingPhase(true)}
+          className="w-full bg-[#fffdf9] rounded-3xl p-4 border border-dashed border-[#f0d9d0] text-sm text-[#e8917a] hover:border-[#e8917a] transition-colors">
+          + Add Phase
+        </button>
+      )}
+
+      {/* AI Prompt Library */}
+      <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0]">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-1">Quick Reference</div>
+            <h2 className="text-lg font-semibold text-[#3d2c2c]">AI Prompt Library</h2>
+          </div>
+          <button onClick={() => { setAddingPrompt(true); setNewPromptTitle(''); setNewPromptText('') }}
+            className="text-xs bg-[#e8917a] text-white rounded-xl px-3 py-1.5 hover:bg-[#d4745d] transition-colors">+ Add</button>
+        </div>
+
+        {promptCards.length === 0 && !addingPrompt && (
+          <div className="text-sm text-[#b8958a] italic text-center py-4">No prompts yet. Add your first one.</div>
+        )}
+
+        <div className="space-y-2">
+          {promptCards.sort((a, b) => a.sort_order - b.sort_order).map(card => (
+            <details key={card.id} className="rounded-2xl border border-[#f0d9d0] bg-[#fdf0ec] group">
+              <summary className="list-none cursor-pointer px-4 py-3">
+                <div className="flex items-center justify-between gap-2">
+                  {editingPromptId === card.id ? (
+                    <input autoFocus value={editingPromptTitle} onChange={e => setEditingPromptTitle(e.target.value)}
+                      onClick={e => e.stopPropagation()}
+                      className="flex-1 text-sm font-medium rounded-lg px-2 py-0.5 border border-[#f0d9d0] text-[#3d2c2c] bg-white outline-none focus:border-[#e8917a]" />
+                  ) : (
+                    <span className="text-sm font-medium text-[#3d2c2c] flex-1">{card.title}</span>
+                  )}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button onClick={e => { e.preventDefault(); e.stopPropagation(); copyPrompt(card.prompt) }}
+                      className="text-[10px] text-[#b8958a] hover:text-[#e8917a] border border-[#f0d9d0] rounded-lg px-1.5 py-0.5 transition-colors">Copy</button>
+                    <button onClick={e => { e.preventDefault(); e.stopPropagation(); setEditingPromptId(card.id); setEditingPromptTitle(card.title); setEditingPromptText(card.prompt) }}
+                      className="text-[10px] text-[#b8958a] hover:text-[#e8917a] transition-colors">✎</button>
+                    <button onClick={e => { e.preventDefault(); e.stopPropagation(); deletePrompt(card.id) }}
+                      className="text-[10px] text-[#b8958a] hover:text-red-400 transition-colors">×</button>
+                    <span className="text-[#b8958a] text-xs group-open:rotate-90 transition-transform">▸</span>
+                  </div>
+                </div>
+              </summary>
+              <div className="px-4 pb-4 pt-2 border-t border-[#f0d9d0]">
+                {editingPromptId === card.id ? (
+                  <div className="space-y-2">
+                    <textarea value={editingPromptText} onChange={e => setEditingPromptText(e.target.value)}
+                      rows={6}
+                      className="w-full bg-white rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a] resize-none font-mono" />
+                    <div className="flex gap-2">
+                      <button onClick={() => updatePrompt(card.id)} className="bg-[#e8917a] text-white text-xs rounded-xl px-3 py-1.5 hover:bg-[#d4745d]">Save</button>
+                      <button onClick={() => setEditingPromptId(null)} className="text-[#b8958a] text-xs px-2">Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <pre className="text-sm text-[#7a5c5c] whitespace-pre-wrap font-mono leading-relaxed">{card.prompt}</pre>
+                )}
+              </div>
+            </details>
+          ))}
+
+          {addingPrompt && (
+            <div className="rounded-2xl border border-[#e8917a] bg-[#fdf0ec] p-4 space-y-2">
+              <input value={newPromptTitle} onChange={e => setNewPromptTitle(e.target.value)}
+                placeholder="Prompt title (e.g. Caption Writer)" autoFocus
+                className="w-full bg-white rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
+              <textarea value={newPromptText} onChange={e => setNewPromptText(e.target.value)}
+                rows={5} placeholder="Paste your prompt here..."
+                className="w-full bg-white rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a] resize-none font-mono" />
+              <div className="flex gap-2">
+                <button onClick={addPrompt} className="bg-[#e8917a] text-white text-sm rounded-xl px-4 py-2 hover:bg-[#d4745d]">Save Prompt</button>
+                <button onClick={() => setAddingPrompt(false)} className="text-[#b8958a] text-sm px-3">Cancel</button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
