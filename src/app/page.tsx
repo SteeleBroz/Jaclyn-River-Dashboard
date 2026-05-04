@@ -4172,7 +4172,23 @@ export default function Home() {
             <div key={phase.id} className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0]">
               {/* Phase header */}
               <div className="flex items-start gap-3 mb-2">
-                <div className="w-8 h-8 rounded-full bg-[#fdf0ec] text-[#e8917a] border border-[#f0d9d0] flex items-center justify-center text-sm font-bold shrink-0">{phaseOrderIndex + 1}</div>
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-[#fdf0ec] text-[#e8917a] border border-[#f0d9d0] flex items-center justify-center text-sm font-bold">{phaseOrderIndex + 1}</div>
+                  <button onClick={async () => {
+                    const sorted = [...roadmapPhases].sort((a,b) => a.sort_order - b.sort_order)
+                    if (phaseOrderIndex === 0) return
+                    const prev = sorted[phaseOrderIndex - 1]
+                    setRoadmapPhases(ps => ps.map(p => p.id === phase.id ? {...p, sort_order: prev.sort_order} : p.id === prev.id ? {...p, sort_order: phase.sort_order} : p))
+                    await Promise.all([supabase.from('roadmap_phases').update({sort_order: prev.sort_order}).eq('id', phase.id), supabase.from('roadmap_phases').update({sort_order: phase.sort_order}).eq('id', prev.id)])
+                  }} disabled={phaseOrderIndex === 0} className="text-[10px] text-[#b8958a] hover:text-[#e8917a] disabled:opacity-20 transition-colors leading-none">▲</button>
+                  <button onClick={async () => {
+                    const sorted = [...roadmapPhases].sort((a,b) => a.sort_order - b.sort_order)
+                    if (phaseOrderIndex === sorted.length - 1) return
+                    const next = sorted[phaseOrderIndex + 1]
+                    setRoadmapPhases(ps => ps.map(p => p.id === phase.id ? {...p, sort_order: next.sort_order} : p.id === next.id ? {...p, sort_order: phase.sort_order} : p))
+                    await Promise.all([supabase.from('roadmap_phases').update({sort_order: next.sort_order}).eq('id', phase.id), supabase.from('roadmap_phases').update({sort_order: phase.sort_order}).eq('id', next.id)])
+                  }} disabled={phaseOrderIndex === roadmapPhases.length - 1} className="text-[10px] text-[#b8958a] hover:text-[#e8917a] disabled:opacity-20 transition-colors leading-none">▼</button>
+                </div>
                 <div className="flex-1 min-w-0">
                   {isEditingThisPhase ? (
                     <div className="space-y-2">
@@ -4216,6 +4232,9 @@ export default function Home() {
               {/* Milestones */}
               {!isEditingThisPhase && (
                 <div className="space-y-2">
+                  {milestones.length === 0 && (
+                    <div className="text-xs text-[#b8958a] italic pl-1 pb-1">No milestones yet.</div>
+                  )}
                   {milestones.map((milestone, milestoneOrderIndex) => {
                     const mDone = isMilestoneDone(milestone, phaseOrderIndex)
                     const milestoneTasks = getTasksForMilestone(phase.id, milestone.id)
@@ -4311,23 +4330,22 @@ export default function Home() {
                             <button onClick={() => { setAddingRoadmapTask({ phaseIndex: phaseOrderIndex, milestoneIndex: milestoneOrderIndex }); setNewRoadmapTaskTitle('') }}
                               className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors">+ Add action step</button>
                           )}
-                          {/* Add milestone button inside phase */}
-                          {addingMilestone === phase.id ? (
-                            <div className="flex gap-2 mt-2 pt-2 border-t border-[#f0d9d0]">
-                              <input value={newMilestoneTitle} onChange={e => setNewMilestoneTitle(e.target.value)}
-                                onKeyDown={e => { if (e.key === 'Enter') addMilestone(phase.id); if (e.key === 'Escape') setAddingMilestoneForPhase(null) }}
-                                placeholder="New milestone..." autoFocus
-                                className="flex-1 bg-white rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
-                              <button onClick={() => addMilestone(phase.id)} className="bg-[#e8917a] text-white text-sm rounded-xl px-3 py-2 hover:bg-[#d4745d]">Add</button>
-                              <button onClick={() => setAddingMilestoneForPhase(null)} className="text-[#b8958a] text-sm px-2">✕</button>
-                            </div>
-                          ) : null}
+
                         </div>
                       </details>
                     )
                   })}
-                  {/* Add milestone button (below milestones) */}
-                  {addingMilestone !== phase.id && (
+                  {/* Add milestone button — always visible at bottom of phase */}
+                  {addingMilestone === phase.id ? (
+                    <div className="flex gap-2 mt-1">
+                      <input value={newMilestoneTitle} onChange={e => setNewMilestoneTitle(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') addMilestone(phase.id); if (e.key === 'Escape') setAddingMilestoneForPhase(null) }}
+                        placeholder="New milestone..." autoFocus
+                        className="flex-1 bg-white rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
+                      <button onClick={() => addMilestone(phase.id)} className="bg-[#e8917a] text-white text-sm rounded-xl px-3 py-2 hover:bg-[#d4745d]">Add</button>
+                      <button onClick={() => setAddingMilestoneForPhase(null)} className="text-[#b8958a] text-sm px-2">✕</button>
+                    </div>
+                  ) : (
                     <button onClick={() => { setAddingMilestoneForPhase(phase.id); setNewMilestoneTitle('') }}
                       className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors pl-1">+ Add milestone</button>
                   )}
