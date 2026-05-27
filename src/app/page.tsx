@@ -4305,6 +4305,39 @@ export default function Home() {
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             {milestoneTasks.length > 0 && <span className="text-xs text-[#b8958a]">{completedTasks}/{milestoneTasks.length}</span>}
+                            {/* Milestone reorder arrows */}
+                            <div className="flex flex-col gap-0" onClick={e => e.preventDefault()}>
+                              <button onClick={async e => {
+                                e.preventDefault(); e.stopPropagation()
+                                if (milestoneOrderIndex === 0) return
+                                const prev = milestones[milestoneOrderIndex - 1]
+                                setRoadmapMilestones(ms => ms.map(m =>
+                                  m.id === milestone.id ? {...m, sort_order: prev.sort_order}
+                                  : m.id === prev.id ? {...m, sort_order: milestone.sort_order}
+                                  : m
+                                ))
+                                await Promise.all([
+                                  supabase.from('roadmap_milestones').update({sort_order: prev.sort_order}).eq('id', milestone.id),
+                                  supabase.from('roadmap_milestones').update({sort_order: milestone.sort_order}).eq('id', prev.id)
+                                ])
+                              }} disabled={milestoneOrderIndex === 0}
+                                className="text-[9px] text-[#b8958a] hover:text-[#e8917a] disabled:opacity-20 leading-none px-0.5">▲</button>
+                              <button onClick={async e => {
+                                e.preventDefault(); e.stopPropagation()
+                                if (milestoneOrderIndex === milestones.length - 1) return
+                                const next = milestones[milestoneOrderIndex + 1]
+                                setRoadmapMilestones(ms => ms.map(m =>
+                                  m.id === milestone.id ? {...m, sort_order: next.sort_order}
+                                  : m.id === next.id ? {...m, sort_order: milestone.sort_order}
+                                  : m
+                                ))
+                                await Promise.all([
+                                  supabase.from('roadmap_milestones').update({sort_order: next.sort_order}).eq('id', milestone.id),
+                                  supabase.from('roadmap_milestones').update({sort_order: milestone.sort_order}).eq('id', next.id)
+                                ])
+                              }} disabled={milestoneOrderIndex === milestones.length - 1}
+                                className="text-[9px] text-[#b8958a] hover:text-[#e8917a] disabled:opacity-20 leading-none px-0.5">▼</button>
+                            </div>
                             <span className="text-[#b8958a] text-xs">▸</span>
                           </div>
                         </summary>
