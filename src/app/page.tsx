@@ -3997,17 +3997,23 @@ export default function Home() {
   }
 
   const isMilestoneDone = (milestone: RoadmapMilestone, phaseOrderIndex: number) => {
-    return !!phaseProgress[milestone.id.toString()] || !!phaseProgress[`${phaseOrderIndex}-${milestone.sort_order}`]
+    // Primary: stable milestone ID key
+    if (phaseProgress[milestone.id.toString()] !== undefined) {
+      return !!phaseProgress[milestone.id.toString()]
+    }
+    // Legacy fallback only if no ID key exists yet (migrates old data on first toggle)
+    return !!phaseProgress[`${phaseOrderIndex}-${milestone.sort_order}`]
   }
 
   const toggleMilestone = (milestone: RoadmapMilestone, phaseOrderIndex: number) => {
     const currentlyDone = isMilestoneDone(milestone, phaseOrderIndex)
-    // Write to both new (by id) and legacy key
-    setPhaseProgress(prev => ({
-      ...prev,
-      [milestone.id.toString()]: !currentlyDone,
-      [`${phaseOrderIndex}-${milestone.sort_order}`]: !currentlyDone
-    }))
+    const legacyKey = `${phaseOrderIndex}-${milestone.sort_order}`
+    setPhaseProgress(prev => {
+      const next = { ...prev, [milestone.id.toString()]: !currentlyDone }
+      // Remove legacy positional key to prevent it from ghosting on other phases
+      delete next[legacyKey]
+      return next
+    })
   }
 
   // Phase CRUD
