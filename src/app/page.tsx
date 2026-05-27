@@ -3985,12 +3985,14 @@ export default function Home() {
     roadmapMilestones.filter(m => m.phase_id === phaseId).sort((a, b) => a.sort_order - b.sort_order)
 
   const getTasksForMilestone = (phaseId: number, milestoneId: number) => {
-    const phase = roadmapPhases.find(p => p.id === phaseId)
-    const milestone = roadmapMilestones.find(m => m.id === milestoneId)
-    if (!phase || !milestone) return []
-    // Support both new (by ID) and legacy (by index) lookups
+    const sortedPhases = [...roadmapPhases].sort((a, b) => a.sort_order - b.sort_order)
+    const phaseIdx = sortedPhases.findIndex(p => p.id === phaseId)
+    const milestonesForPhase = roadmapMilestones.filter(m => m.phase_id === phaseId).sort((a, b) => a.sort_order - b.sort_order)
+    const milestoneIdx = milestonesForPhase.findIndex(m => m.id === milestoneId)
+    if (phaseIdx === -1 || milestoneIdx === -1) return []
+    // Look up by stable positional index (matches how tasks were originally saved)
     return roadmapTasks.filter(t =>
-      (t.phase_index === phase.sort_order && t.milestone_index === milestone.sort_order)
+      t.phase_index === phaseIdx && t.milestone_index === milestoneIdx
     ).sort((a, b) => a.sort_order - b.sort_order)
   }
 
@@ -4178,15 +4180,43 @@ export default function Home() {
                     const sorted = [...roadmapPhases].sort((a,b) => a.sort_order - b.sort_order)
                     if (phaseOrderIndex === 0) return
                     const prev = sorted[phaseOrderIndex - 1]
+                    const prevIdx = phaseOrderIndex - 1
+                    const curIdx = phaseOrderIndex
+                    // Swap sort_orders between this phase and the one above
                     setRoadmapPhases(ps => ps.map(p => p.id === phase.id ? {...p, sort_order: prev.sort_order} : p.id === prev.id ? {...p, sort_order: phase.sort_order} : p))
-                    await Promise.all([supabase.from('roadmap_phases').update({sort_order: prev.sort_order}).eq('id', phase.id), supabase.from('roadmap_phases').update({sort_order: phase.sort_order}).eq('id', prev.id)])
+                    // Update tasks: swap phase_index for tasks belonging to each phase
+                    setRoadmapTasks(ts => ts.map(t => {
+                      if (t.phase_index === curIdx) return {...t, phase_index: prevIdx}
+                      if (t.phase_index === prevIdx) return {...t, phase_index: curIdx}
+                      return t
+                    }))
+                    await Promise.all([
+                      supabase.from('roadmap_phases').update({sort_order: prev.sort_order}).eq('id', phase.id),
+                      supabase.from('roadmap_phases').update({sort_order: phase.sort_order}).eq('id', prev.id),
+                      supabase.from('roadmap_tasks').update({phase_index: prevIdx}).eq('phase_index', curIdx),
+                      supabase.from('roadmap_tasks').update({phase_index: curIdx}).eq('phase_index', prevIdx),
+                    ])
                   }} disabled={phaseOrderIndex === 0} className="text-[10px] text-[#b8958a] hover:text-[#e8917a] disabled:opacity-20 transition-colors leading-none">▲</button>
                   <button onClick={async () => {
                     const sorted = [...roadmapPhases].sort((a,b) => a.sort_order - b.sort_order)
                     if (phaseOrderIndex === sorted.length - 1) return
                     const next = sorted[phaseOrderIndex + 1]
+                    const nextIdx = phaseOrderIndex + 1
+                    const curIdx = phaseOrderIndex
+                    // Swap sort_orders between this phase and the one below
                     setRoadmapPhases(ps => ps.map(p => p.id === phase.id ? {...p, sort_order: next.sort_order} : p.id === next.id ? {...p, sort_order: phase.sort_order} : p))
-                    await Promise.all([supabase.from('roadmap_phases').update({sort_order: next.sort_order}).eq('id', phase.id), supabase.from('roadmap_phases').update({sort_order: phase.sort_order}).eq('id', next.id)])
+                    // Update tasks: swap phase_index for tasks belonging to each phase
+                    setRoadmapTasks(ts => ts.map(t => {
+                      if (t.phase_index === curIdx) return {...t, phase_index: nextIdx}
+                      if (t.phase_index === nextIdx) return {...t, phase_index: curIdx}
+                      return t
+                    }))
+                    await Promise.all([
+                      supabase.from('roadmap_phases').update({sort_order: next.sort_order}).eq('id', phase.id),
+                      supabase.from('roadmap_phases').update({sort_order: phase.sort_order}).eq('id', next.id),
+                      supabase.from('roadmap_tasks').update({phase_index: nextIdx}).eq('phase_index', curIdx),
+                      supabase.from('roadmap_tasks').update({phase_index: curIdx}).eq('phase_index', nextIdx),
+                    ])
                   }} disabled={phaseOrderIndex === roadmapPhases.length - 1} className="text-[10px] text-[#b8958a] hover:text-[#e8917a] disabled:opacity-20 transition-colors leading-none">▼</button>
                 </div>
                 <div className="flex-1 min-w-0">
@@ -4399,21 +4429,26 @@ export default function Home() {
               <summary className="list-none cursor-pointer px-4 py-3">
                 <div className="flex items-center justify-between gap-2">
                   {editingPromptId === card.id ? (
-                    <input autoFocus value={editingPromptTitle} onChange={e => setEditingPromptTitle(e.target.value)}
-                      onClick={e => e.stopPropagation()}
-                      className="flex-1 text-sm font-medium rounded-lg px-2 py-0.5 border border-[#f0d9d0] text-[#3d2c2c] bg-white outline-none focus:border-[#e8917a]" />
+                    <form onSubmit={e => { e.preventDefault(); updatePrompt(card.id) }} className="flex-1 flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                      <input autoFocus value={editingPromptTitle} onChange={e => setEditingPromptTitle(e.target.value)}
+                        className="flex-1 text-sm font-medium rounded-lg px-2 py-0.5 border border-[#f0d9d0] text-[#3d2c2c] bg-white outline-none focus:border-[#e8917a] min-w-0" />
+                      <button type="submit" className="text-[10px] text-[#4caf7d] font-semibold shrink-0">Save</button>
+                      <button type="button" onClick={e => { e.stopPropagation(); setEditingPromptId(null) }} className="text-[10px] text-[#b8958a] shrink-0">✕</button>
+                    </form>
                   ) : (
-                    <span className="text-sm font-medium text-[#3d2c2c] flex-1">{card.title}</span>
+                    <span className="text-sm font-medium text-[#3d2c2c] flex-1 min-w-0 truncate">{card.title}</span>
                   )}
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button onClick={e => { e.preventDefault(); e.stopPropagation(); copyPrompt(card.prompt) }}
-                      className="text-[10px] text-[#b8958a] hover:text-[#e8917a] border border-[#f0d9d0] rounded-lg px-1.5 py-0.5 transition-colors">Copy</button>
-                    <button onClick={e => { e.preventDefault(); e.stopPropagation(); setEditingPromptId(card.id); setEditingPromptTitle(card.title); setEditingPromptText(card.prompt) }}
-                      className="text-[10px] text-[#b8958a] hover:text-[#e8917a] transition-colors">✎</button>
-                    <button onClick={e => { e.preventDefault(); e.stopPropagation(); deletePrompt(card.id) }}
-                      className="text-[10px] text-[#b8958a] hover:text-red-400 transition-colors">×</button>
-                    <span className="text-[#b8958a] text-xs group-open:rotate-90 transition-transform">▸</span>
-                  </div>
+                  {editingPromptId !== card.id && (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button onClick={e => { e.preventDefault(); e.stopPropagation(); copyPrompt(card.prompt) }}
+                        className="text-[10px] text-[#b8958a] hover:text-[#e8917a] border border-[#f0d9d0] rounded-lg px-1.5 py-0.5 transition-colors">Copy</button>
+                      <button onClick={e => { e.preventDefault(); e.stopPropagation(); setEditingPromptId(card.id); setEditingPromptTitle(card.title); setEditingPromptText(card.prompt) }}
+                        className="text-[10px] text-[#b8958a] hover:text-[#e8917a] transition-colors">✎</button>
+                      <button onClick={e => { e.preventDefault(); e.stopPropagation(); deletePrompt(card.id) }}
+                        className="text-[10px] text-[#b8958a] hover:text-red-400 transition-colors">×</button>
+                      <span className="text-[#b8958a] text-xs group-open:rotate-90 transition-transform">▸</span>
+                    </div>
+                  )}
                 </div>
               </summary>
               <div className="px-4 pb-4 pt-2 border-t border-[#f0d9d0]">

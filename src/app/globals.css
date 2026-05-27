@@ -5,6 +5,33 @@
 body {
   background: #1a1a2e;
   color: #e0e0e0;
+  /* Prevent horizontal scroll on mobile */
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* Global text wrapping — no horizontal overflow anywhere */
+* {
+  min-width: 0;
+}
+
+p, span, div, pre, textarea, input, li, td, th, summary {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Prevent any element from pushing page wider than viewport */
+#__next, [data-nextjs-scroll-focus-boundary] {
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 
 /* Custom scrollbar */
