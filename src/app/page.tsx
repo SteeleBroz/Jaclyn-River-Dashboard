@@ -4576,32 +4576,30 @@ export default function Home() {
 
   const moveLifeCardUp = async (cards: LifeAdminCard[], index: number) => {
     if (index === 0) return
-    const a = cards[index], b = cards[index - 1]
-    const updated = lifeAdminCards.map(c => {
+    // Normalise sort_orders first so they are always unique integers 0,1,2...
+    const normalised = cards.map((c, i) => ({ ...c, sort_order: i }))
+    const a = normalised[index], b = normalised[index - 1]
+    const swapped = normalised.map(c => {
       if (c.id === a.id) return { ...c, sort_order: b.sort_order }
       if (c.id === b.id) return { ...c, sort_order: a.sort_order }
       return c
     })
-    setLifeAdminCards(updated)
-    await Promise.all([
-      supabase.from('life_admin_cards').update({ sort_order: b.sort_order }).eq('id', a.id),
-      supabase.from('life_admin_cards').update({ sort_order: a.sort_order }).eq('id', b.id)
-    ])
+    setLifeAdminCards(prev => prev.map(c => { const s = swapped.find(x => x.id === c.id); return s ?? c }))
+    await Promise.all(swapped.map(c => supabase.from('life_admin_cards').update({ sort_order: c.sort_order }).eq('id', c.id)))
   }
 
   const moveLifeCardDown = async (cards: LifeAdminCard[], index: number) => {
     if (index === cards.length - 1) return
-    const a = cards[index], b = cards[index + 1]
-    const updated = lifeAdminCards.map(c => {
+    // Normalise sort_orders first so they are always unique integers 0,1,2...
+    const normalised = cards.map((c, i) => ({ ...c, sort_order: i }))
+    const a = normalised[index], b = normalised[index + 1]
+    const swapped = normalised.map(c => {
       if (c.id === a.id) return { ...c, sort_order: b.sort_order }
       if (c.id === b.id) return { ...c, sort_order: a.sort_order }
       return c
     })
-    setLifeAdminCards(updated)
-    await Promise.all([
-      supabase.from('life_admin_cards').update({ sort_order: b.sort_order }).eq('id', a.id),
-      supabase.from('life_admin_cards').update({ sort_order: a.sort_order }).eq('id', b.id)
-    ])
+    setLifeAdminCards(prev => prev.map(c => { const s = swapped.find(x => x.id === c.id); return s ?? c }))
+    await Promise.all(swapped.map(c => supabase.from('life_admin_cards').update({ sort_order: c.sort_order }).eq('id', c.id)))
   }
 
   const visibleColumns = showDoneColumn ? COLUMNS : COLUMNS.filter(c => c.key !== 'done')
@@ -4756,32 +4754,28 @@ export default function Home() {
 
   const moveParkingCardUp = async (cards: ParkingLotCard[], index: number) => {
     if (index === 0) return
-    const a = cards[index], b = cards[index - 1]
-    const updated = parkingLotDBCards.map(c => {
+    const normalised = cards.map((c, i) => ({ ...c, sort_order: i }))
+    const a = normalised[index], b = normalised[index - 1]
+    const swapped = normalised.map(c => {
       if (c.id === a.id) return { ...c, sort_order: b.sort_order }
       if (c.id === b.id) return { ...c, sort_order: a.sort_order }
       return c
     })
-    setParkingLotDBCards(updated)
-    await Promise.all([
-      supabase.from('parking_lot_cards').update({ sort_order: b.sort_order }).eq('id', a.id),
-      supabase.from('parking_lot_cards').update({ sort_order: a.sort_order }).eq('id', b.id)
-    ])
+    setParkingLotDBCards(prev => prev.map(c => { const s = swapped.find(x => x.id === c.id); return s ?? c }))
+    await Promise.all(swapped.map(c => supabase.from('parking_lot_cards').update({ sort_order: c.sort_order }).eq('id', c.id)))
   }
 
   const moveParkingCardDown = async (cards: ParkingLotCard[], index: number) => {
     if (index === cards.length - 1) return
-    const a = cards[index], b = cards[index + 1]
-    const updated = parkingLotDBCards.map(c => {
+    const normalised = cards.map((c, i) => ({ ...c, sort_order: i }))
+    const a = normalised[index], b = normalised[index + 1]
+    const swapped = normalised.map(c => {
       if (c.id === a.id) return { ...c, sort_order: b.sort_order }
       if (c.id === b.id) return { ...c, sort_order: a.sort_order }
       return c
     })
-    setParkingLotDBCards(updated)
-    await Promise.all([
-      supabase.from('parking_lot_cards').update({ sort_order: b.sort_order }).eq('id', a.id),
-      supabase.from('parking_lot_cards').update({ sort_order: a.sort_order }).eq('id', b.id)
-    ])
+    setParkingLotDBCards(prev => prev.map(c => { const s = swapped.find(x => x.id === c.id); return s ?? c }))
+    await Promise.all(swapped.map(c => supabase.from('parking_lot_cards').update({ sort_order: c.sort_order }).eq('id', c.id)))
   }
 
   return (
