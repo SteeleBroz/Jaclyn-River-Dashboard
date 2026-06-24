@@ -4604,9 +4604,24 @@ export default function Home() {
 
   const visibleColumns = showDoneColumn ? COLUMNS : COLUMNS.filter(c => c.key !== 'done')
   const doneCount = lifeAdminCards.filter(c => c.column_key === 'done').length
+  const todayEventsForAdmin = getTodayEvents()
 
   return (
     <div className="space-y-4 pb-24 md:pb-6">
+
+      {/* Today's Events at top */}
+      <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0]">
+        <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-3">Today&apos;s Events</div>
+        <div className="space-y-2">
+          {todayEventsForAdmin.length ? todayEventsForAdmin.map(event => (
+            <div key={event.id} className="bg-[#fff8ec] rounded-2xl p-3 border-l-4" style={{ borderLeftColor: getFolderColor(event.folder || 'PERSONAL') }}>
+              <div className="text-[#3d2c2c] font-medium text-sm">{event.title}</div>
+              <div className="text-xs text-[#7a5c5c]">{formatEventDate(event.date)}{event.time ? ` · ${toNYTimeDisplay(event.date + 'T' + event.time + ':00')}` : ''}</div>
+            </div>
+          )) : <div className="text-sm text-[#b8958a] italic">No events today.</div>}
+        </div>
+      </div>
+
       <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0]">
         <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-2">Life Admin</div>
         <h2 className="text-2xl font-semibold text-[#3d2c2c]">Concrete life logistics</h2>
@@ -4616,6 +4631,17 @@ export default function Home() {
             className="text-xs text-[#b8958a] hover:text-[#7a5c5c] transition-colors border border-[#f0d9d0] rounded-full px-3 py-1">
             {showDoneColumn ? 'Hide Done' : `Show Done (${doneCount})`}
           </button>
+          {doneCount > 0 && (
+            <button onClick={async () => {
+              if (!window.confirm(`Delete all ${doneCount} done item${doneCount > 1 ? 's' : ''}? This cannot be undone.`)) return
+              const doneIds = lifeAdminCards.filter(c => c.column_key === 'done').map(c => c.id)
+              setLifeAdminCards(prev => prev.filter(c => c.column_key !== 'done'))
+              await supabase.from('life_admin_cards').delete().in('id', doneIds)
+            }}
+              className="text-xs text-red-400 hover:text-red-600 transition-colors border border-red-200 rounded-full px-3 py-1">
+              Clear Done ({doneCount})
+            </button>
+          )}
         </div>
       </div>
 
