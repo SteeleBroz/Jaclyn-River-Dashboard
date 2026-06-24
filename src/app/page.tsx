@@ -4622,28 +4622,6 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0]">
-        <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-2">Life Admin</div>
-        <h2 className="text-2xl font-semibold text-[#3d2c2c]">Concrete life logistics</h2>
-        <p className="text-sm text-[#7a5c5c] mt-1">Top Priority items surface in today’s focus automatically.</p>
-        <div className="flex items-center gap-3 mt-3">
-          <button onClick={() => setShowDoneColumn(prev => !prev)}
-            className="text-xs text-[#b8958a] hover:text-[#7a5c5c] transition-colors border border-[#f0d9d0] rounded-full px-3 py-1">
-            {showDoneColumn ? 'Hide Done' : `Show Done (${doneCount})`}
-          </button>
-          {doneCount > 0 && (
-            <button onClick={async () => {
-              if (!window.confirm(`Delete all ${doneCount} done item${doneCount > 1 ? 's' : ''}? This cannot be undone.`)) return
-              const doneIds = lifeAdminCards.filter(c => c.column_key === 'done').map(c => c.id)
-              setLifeAdminCards(prev => prev.filter(c => c.column_key !== 'done'))
-              await supabase.from('life_admin_cards').delete().in('id', doneIds)
-            }}
-              className="text-xs text-red-400 hover:text-red-600 transition-colors border border-red-200 rounded-full px-3 py-1">
-              Clear Done ({doneCount})
-            </button>
-          )}
-        </div>
-      </div>
 
       {/* Edit modal */}
       {editingLifeCard && (
@@ -4728,6 +4706,30 @@ export default function Home() {
             </div>
           )
         })}
+      </div>
+
+      {/* Life Admin controls — at bottom */}
+      <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0]">
+        <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-2">Life Admin</div>
+        <h2 className="text-xl font-semibold text-[#3d2c2c]">Concrete life logistics</h2>
+        <p className="text-sm text-[#7a5c5c] mt-1">Top Priority items surface in today’s focus automatically.</p>
+        <div className="flex items-center gap-3 mt-3">
+          <button onClick={() => setShowDoneColumn(prev => !prev)}
+            className="text-xs text-[#b8958a] hover:text-[#7a5c5c] transition-colors border border-[#f0d9d0] rounded-full px-3 py-1">
+            {showDoneColumn ? 'Hide Done' : `Show Done (${doneCount})`}
+          </button>
+          {doneCount > 0 && (
+            <button onClick={async () => {
+              if (!window.confirm(`Delete all ${doneCount} done item${doneCount > 1 ? 's' : ''}? This cannot be undone.`)) return
+              const doneIds = lifeAdminCards.filter(c => c.column_key === 'done').map(c => c.id)
+              setLifeAdminCards(prev => prev.filter(c => c.column_key !== 'done'))
+              await supabase.from('life_admin_cards').delete().in('id', doneIds)
+            }}
+              className="text-xs text-red-400 hover:text-red-600 transition-colors border border-red-200 rounded-full px-3 py-1">
+              Clear Done ({doneCount})
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
