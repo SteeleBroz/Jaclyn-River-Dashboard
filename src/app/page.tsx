@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, LifeAdminCard, ParkingLotCard, RoadmapTask, WeeklyMission, BillNote, RoadmapPhase, RoadmapMilestone, PromptCard, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
+import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, LifeAdminCard, ParkingLotCard, RoadmapTask, WeeklyMission, BillNote, RoadmapPhase, RoadmapMilestone, PromptCard, DayPlan, TimeBlock, BlockOption, DayTarget, ShoppingItem, HydrationLog, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday','overflow'] as const
 const DAY_LABELS: Record<string, string> = {
@@ -68,7 +68,7 @@ export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [weeklyNotes, setWeeklyNotes] = useState<WeeklyNote[]>([])
-  const [activeTab, setActiveTab] = useState<'today' | 'week' | 'roadmap' | 'life-admin' | 'parking-lot' | 'calendar' | 'thumb-equity'>('today')
+  const [activeTab, setActiveTab] = useState<'today' | 'week' | 'roadmap' | 'life-admin' | 'parking-lot' | 'calendar' | 'thumb-equity' | 'nutrition'>('today')
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day' | 'year'>('month')
   const [calendarDate, setCalendarDate] = useState(new Date())
@@ -247,6 +247,39 @@ export default function Home() {
   const [roadmapPhases, setRoadmapPhases] = useState<RoadmapPhase[]>([])
   const [roadmapMilestones, setRoadmapMilestones] = useState<RoadmapMilestone[]>([])
   const [promptCards, setPromptCards] = useState<PromptCard[]>([])
+
+  // Nutrition state
+  const [dayPlans, setDayPlans] = useState<DayPlan[]>([])
+  const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([])
+  const [blockOptions, setBlockOptions] = useState<BlockOption[]>([])
+  const [dayTargets, setDayTargets] = useState<DayTarget[]>([])
+  const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>([])
+  const [hydrationLog, setHydrationLog] = useState<HydrationLog | null>(null)
+  const [nutritionLoaded, setNutritionLoaded] = useState(false)
+  const [activeDayPlanId, setActiveDayPlanId] = useState<string | null>(null)
+  // Non-Pickle / Work toggle per card: 'home' | 'work'
+  const [nonPickleVariant, setNonPickleVariant] = useState<'home' | 'work'>('home')
+  // Edit mode per day card
+  const [editingDayPlanId, setEditingDayPlanId] = useState<string | null>(null)
+  // Inline add/edit block
+  const [addingBlockForPlan, setAddingBlockForPlan] = useState<string | null>(null)
+  const [newBlockTime, setNewBlockTime] = useState('')
+  const [newBlockTitle, setNewBlockTitle] = useState('')
+  const [newBlockNote, setNewBlockNote] = useState('')
+  const [editingBlockId, setEditingBlockId] = useState<string | null>(null)
+  const [editingBlockData, setEditingBlockData] = useState<{time:string;title:string;note:string} | null>(null)
+  // Add option inline
+  const [addingOptionForBlock, setAddingOptionForBlock] = useState<string | null>(null)
+  const [newOptionLabel, setNewOptionLabel] = useState('')
+  const [editingOptionId, setEditingOptionId] = useState<string | null>(null)
+  const [editingOptionLabel, setEditingOptionLabel] = useState('')
+  // Shopping
+  const [addingShoppingItem, setAddingShoppingItem] = useState<{store:'costco'|'publix';category:string} | null>(null)
+  const [newShoppingName, setNewShoppingName] = useState('')
+  const [editingShoppingId, setEditingShoppingId] = useState<string | null>(null)
+  const [editingShoppingName, setEditingShoppingName] = useState('')
+  const [addingCategory, setAddingCategory] = useState<'costco'|'publix'|null>(null)
+  const [newCategoryName, setNewCategoryName] = useState('')
 
   // Roadmap phase/milestone editing state
   const [editingPhaseId, setEditingPhaseId] = useState<number | null>(null)
@@ -601,6 +634,31 @@ export default function Home() {
       console.warn('v2.2 data fetch error:', e)
     }
   }, [])
+
+  // Nutrition fetch
+  const fetchNutritionData = useCallback(async () => {
+    if (nutritionLoaded) return
+    try {
+      const todayNY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+      const [plansRes, blocksRes, optionsRes, targetsRes, itemsRes, hydRes] = await Promise.all([
+        supabase.from('day_plans').select('*').order('sort_order'),
+        supabase.from('time_blocks').select('*').order('sort_order'),
+        supabase.from('block_options').select('*').order('sort_order'),
+        supabase.from('day_targets').select('*'),
+        supabase.from('shopping_items').select('*').order('category_sort_order').order('sort_order'),
+        supabase.from('hydration_log').select('*').eq('log_date', todayNY).maybeSingle()
+      ])
+      if (plansRes.data) setDayPlans(plansRes.data)
+      if (blocksRes.data) setTimeBlocks(blocksRes.data)
+      if (optionsRes.data) setBlockOptions(optionsRes.data)
+      if (targetsRes.data) setDayTargets(targetsRes.data)
+      if (itemsRes.data) setShoppingItems(itemsRes.data)
+      if (hydRes.data) setHydrationLog(hydRes.data)
+      setNutritionLoaded(true)
+    } catch (e) {
+      console.warn('Nutrition fetch error:', e)
+    }
+  }, [nutritionLoaded])
 
   // Admin Mode functions
   const handleHeaderWordsClick = () => {
@@ -1256,7 +1314,10 @@ export default function Home() {
     if (activeTab === 'thumb-equity') {
       fetchThumbEquity()
     }
-  }, [activeTab, fetchThumbEquity])
+    if (activeTab === 'nutrition') {
+      fetchNutritionData()
+    }
+  }, [activeTab, fetchThumbEquity, fetchNutritionData])
 
   const toggleComplete = async (task: Task) => {
     const updated = !task.completed
@@ -4609,6 +4670,18 @@ export default function Home() {
   return (
     <div className="space-y-4 pb-24 md:pb-6">
 
+      {/* Nutrition shortcut */}
+      <button onClick={() => setActiveTab('nutrition')} className="w-full bg-[#fffdf9] rounded-3xl p-4 border border-[#f0d9d0] flex items-center justify-between hover:bg-[#fdf0ec] transition-colors group">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">🥗</span>
+          <div className="text-left">
+            <div className="text-sm font-semibold text-[#3d2c2c]">Nutrition Plan</div>
+            <div className="text-xs text-[#b8958a]">Day plans · Costco &amp; Publix lists</div>
+          </div>
+        </div>
+        <span className="text-[#e8917a] text-lg group-hover:translate-x-0.5 transition-transform">→</span>
+      </button>
+
       {/* Today's Events at top */}
       <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0]">
         <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-3">Today&apos;s Events</div>
@@ -6278,6 +6351,475 @@ export default function Home() {
     )
   }
 
+
+  // ─── NUTRITION VIEW ──────────────────────────────────────────────────────────
+  const renderNutritionView = () => {
+    const todayNY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+
+    const adjustHydration = async (field: 'bottles_count' | 'packets_count', delta: number) => {
+      const current = hydrationLog ? hydrationLog[field] : 0
+      const next = Math.max(0, current + delta)
+      if (hydrationLog) {
+        const updated = { ...hydrationLog, [field]: next }
+        setHydrationLog(updated)
+        await supabase.from('hydration_log').update({ [field]: next }).eq('log_date', todayNY)
+      } else {
+        const newRow = { log_date: todayNY, day_plan_id: activeDayPlanId, bottles_count: field === 'bottles_count' ? next : 0, packets_count: field === 'packets_count' ? next : 0 }
+        const { data } = await supabase.from('hydration_log').insert(newRow).select().single()
+        if (data) setHydrationLog(data)
+      }
+    }
+
+    const activeDayTarget = activeDayPlanId ? dayTargets.find(t => t.day_plan_id === activeDayPlanId) : null
+
+    const getCategories = (store: 'costco' | 'publix') => {
+      const items = shoppingItems.filter(i => i.store === store)
+      const seen = new Map<string, number>()
+      items.forEach(i => { if (!seen.has(i.category)) seen.set(i.category, i.category_sort_order) })
+      return Array.from(seen.entries()).sort((a, b) => a[1] - b[1]).map(([cat]) => cat)
+    }
+
+    const checkItem = async (item: ShoppingItem) => {
+      setShoppingItems(prev => prev.map(i => i.id === item.id ? { ...i, checked: true } : i))
+      await supabase.from('shopping_items').update({ checked: true }).eq('id', item.id)
+    }
+
+    const resetStore = async (store: 'costco' | 'publix') => {
+      setShoppingItems(prev => prev.map(i => i.store === store ? { ...i, checked: false } : i))
+      await supabase.from('shopping_items').update({ checked: false }).eq('store', store)
+    }
+
+    const addShoppingItem = async (store: 'costco' | 'publix', category: string, name: string) => {
+      if (!name.trim()) return
+      const existing = shoppingItems.filter(i => i.store === store && i.category === category)
+      const catSortOrder = shoppingItems.find(i => i.store === store && i.category === category)?.category_sort_order ?? shoppingItems.filter(i => i.store === store).length
+      const newItem = { store, category, category_sort_order: catSortOrder, name: name.trim(), sort_order: existing.length, checked: false }
+      const { data } = await supabase.from('shopping_items').insert(newItem).select().single()
+      if (data) setShoppingItems(prev => [...prev, data])
+    }
+
+    const addCategory = async (store: 'costco' | 'publix', categoryName: string) => {
+      if (!categoryName.trim()) return
+      const storeItems = shoppingItems.filter(i => i.store === store)
+      const maxCatOrder = storeItems.length > 0 ? Math.max(...storeItems.map(i => i.category_sort_order)) + 1 : 0
+      const newItem = { store, category: categoryName.trim(), category_sort_order: maxCatOrder, name: 'New item', sort_order: 0, checked: false }
+      const { data } = await supabase.from('shopping_items').insert(newItem).select().single()
+      if (data) setShoppingItems(prev => [...prev, data])
+    }
+
+    const deleteShoppingItem = async (id: string) => {
+      setShoppingItems(prev => prev.filter(i => i.id !== id))
+      await supabase.from('shopping_items').delete().eq('id', id)
+    }
+
+    const saveShoppingName = async (id: string, name: string) => {
+      setShoppingItems(prev => prev.map(i => i.id === id ? { ...i, name } : i))
+      await supabase.from('shopping_items').update({ name, updated_at: new Date().toISOString() }).eq('id', id)
+      setEditingShoppingId(null)
+    }
+
+    const moveItemToStore = async (item: ShoppingItem, targetStore: 'costco' | 'publix') => {
+      const targetItems = shoppingItems.filter(i => i.store === targetStore && i.category === item.category)
+      const catOrder = targetItems[0]?.category_sort_order ?? shoppingItems.filter(i => i.store === targetStore).length
+      const maxOrder = targetItems.length > 0 ? Math.max(...targetItems.map(i => i.sort_order)) + 1 : 0
+      setShoppingItems(prev => prev.map(i => i.id === item.id ? { ...i, store: targetStore, sort_order: maxOrder, category_sort_order: catOrder } : i))
+      await supabase.from('shopping_items').update({ store: targetStore, sort_order: maxOrder, category_sort_order: catOrder, updated_at: new Date().toISOString() }).eq('id', item.id)
+    }
+
+    const moveItemUp = async (items: ShoppingItem[], index: number) => {
+      if (index === 0) return
+      const a = items[index], b = items[index - 1]
+      const ao = a.sort_order, bo = b.sort_order
+      setShoppingItems(prev => prev.map(i => i.id === a.id ? { ...i, sort_order: bo } : i.id === b.id ? { ...i, sort_order: ao } : i))
+      await Promise.all([supabase.from('shopping_items').update({ sort_order: bo }).eq('id', a.id), supabase.from('shopping_items').update({ sort_order: ao }).eq('id', b.id)])
+    }
+
+    const moveItemDown = async (items: ShoppingItem[], index: number) => { if (index < items.length - 1) await moveItemUp(items, index + 1) }
+
+    const moveCategoryUp = async (store: 'costco' | 'publix', categories: string[], catIndex: number) => {
+      if (catIndex === 0) return
+      const catA = categories[catIndex], catB = categories[catIndex - 1]
+      const itemsA = shoppingItems.filter(i => i.store === store && i.category === catA)
+      const itemsB = shoppingItems.filter(i => i.store === store && i.category === catB)
+      const orderA = itemsA[0]?.category_sort_order ?? catIndex
+      const orderB = itemsB[0]?.category_sort_order ?? (catIndex - 1)
+      setShoppingItems(prev => prev.map(i => {
+        if (i.store === store && i.category === catA) return { ...i, category_sort_order: orderB }
+        if (i.store === store && i.category === catB) return { ...i, category_sort_order: orderA }
+        return i
+      }))
+      await Promise.all([...itemsA.map(i => supabase.from('shopping_items').update({ category_sort_order: orderB }).eq('id', i.id)), ...itemsB.map(i => supabase.from('shopping_items').update({ category_sort_order: orderA }).eq('id', i.id))])
+    }
+
+    const moveCategoryDown = async (store: 'costco' | 'publix', categories: string[], catIndex: number) => {
+      if (catIndex < categories.length - 1) await moveCategoryUp(store, categories, catIndex + 1)
+    }
+
+    const addTimeBlock = async (dayPlanId: string) => {
+      if (!newBlockTime.trim() || !newBlockTitle.trim()) return
+      const existing = timeBlocks.filter(b => b.day_plan_id === dayPlanId)
+      const { data } = await supabase.from('time_blocks').insert({ day_plan_id: dayPlanId, time: newBlockTime.trim(), title: newBlockTitle.trim(), note: newBlockNote.trim() || null, variant: 'both', sort_order: existing.length }).select().single()
+      if (data) setTimeBlocks(prev => [...prev, data])
+      setAddingBlockForPlan(null); setNewBlockTime(''); setNewBlockTitle(''); setNewBlockNote('')
+    }
+
+    const saveTimeBlock = async (id: string) => {
+      if (!editingBlockData) return
+      setTimeBlocks(prev => prev.map(b => b.id === id ? { ...b, ...editingBlockData } : b))
+      await supabase.from('time_blocks').update({ ...editingBlockData, updated_at: new Date().toISOString() }).eq('id', id)
+      setEditingBlockId(null); setEditingBlockData(null)
+    }
+
+    const deleteTimeBlock = async (id: string) => {
+      setTimeBlocks(prev => prev.filter(b => b.id !== id))
+      setBlockOptions(prev => prev.filter(o => o.time_block_id !== id))
+      await supabase.from('time_blocks').delete().eq('id', id)
+    }
+
+    const moveBlockUp = async (blocks: TimeBlock[], index: number) => {
+      if (index === 0) return
+      const a = blocks[index], b = blocks[index - 1]
+      const ao = a.sort_order, bo = b.sort_order
+      setTimeBlocks(prev => prev.map(bl => bl.id === a.id ? { ...bl, sort_order: bo } : bl.id === b.id ? { ...bl, sort_order: ao } : bl))
+      await Promise.all([supabase.from('time_blocks').update({ sort_order: bo }).eq('id', a.id), supabase.from('time_blocks').update({ sort_order: ao }).eq('id', b.id)])
+    }
+
+    const addBlockOption = async (blockId: string) => {
+      if (!newOptionLabel.trim()) return
+      const existing = blockOptions.filter(o => o.time_block_id === blockId)
+      const { data } = await supabase.from('block_options').insert({ time_block_id: blockId, label: newOptionLabel.trim(), sort_order: existing.length }).select().single()
+      if (data) setBlockOptions(prev => [...prev, data])
+      setAddingOptionForBlock(null); setNewOptionLabel('')
+    }
+
+    const saveOption = async (id: string, label: string) => {
+      setBlockOptions(prev => prev.map(o => o.id === id ? { ...o, label } : o))
+      await supabase.from('block_options').update({ label, updated_at: new Date().toISOString() }).eq('id', id)
+      setEditingOptionId(null)
+    }
+
+    const deleteOption = async (id: string) => {
+      setBlockOptions(prev => prev.filter(o => o.id !== id))
+      await supabase.from('block_options').delete().eq('id', id)
+    }
+
+    const moveOptionUp = async (options: BlockOption[], index: number) => {
+      if (index === 0) return
+      const a = options[index], b = options[index - 1]
+      const ao = a.sort_order, bo = b.sort_order
+      setBlockOptions(prev => prev.map(o => o.id === a.id ? { ...o, sort_order: bo } : o.id === b.id ? { ...o, sort_order: ao } : o))
+      await Promise.all([supabase.from('block_options').update({ sort_order: bo }).eq('id', a.id), supabase.from('block_options').update({ sort_order: ao }).eq('id', b.id)])
+    }
+
+    const renderShoppingList = (store: 'costco' | 'publix') => {
+      const categories = getCategories(store)
+      const storeLabel = store === 'costco' ? '🛒 Costco' : '🛒 Publix'
+      const uncheckedCount = shoppingItems.filter(i => i.store === store && !i.checked).length
+      return (
+        <div className="bg-[#fffdf9] rounded-3xl p-4 border border-[#f0d9d0] flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-bold text-[#3d2c2c]">{storeLabel}</div>
+              <div className="text-xs text-[#b8958a]">{uncheckedCount} remaining</div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { setAddingCategory(store); setNewCategoryName('') }}
+                className="text-xs bg-[#fdf0ec] text-[#e8917a] border border-[#f0d9d0] rounded-xl px-2.5 py-1 hover:bg-[#fce4dc] transition-colors">+ Category</button>
+              <button onClick={() => resetStore(store)}
+                className="text-xs bg-[#fdf0ec] text-[#e8917a] border border-[#f0d9d0] rounded-xl px-2.5 py-1 hover:bg-[#fce4dc] transition-colors">Reset ↺</button>
+            </div>
+          </div>
+          {addingCategory === store && (
+            <div className="flex gap-2">
+              <input autoFocus value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { addCategory(store, newCategoryName); setAddingCategory(null) } if (e.key === 'Escape') setAddingCategory(null) }}
+                className="flex-1 bg-[#fdf0ec] rounded-xl px-3 py-1.5 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]" placeholder="Category name..." />
+              <button onClick={() => { addCategory(store, newCategoryName); setAddingCategory(null) }} className="text-xs bg-[#e8917a] text-white rounded-xl px-3 py-1.5">Add</button>
+              <button onClick={() => setAddingCategory(null)} className="text-xs text-[#b8958a] px-2">✕</button>
+            </div>
+          )}
+          {categories.map((cat, catIndex) => {
+            const catItems = shoppingItems.filter(i => i.store === store && i.category === cat && !i.checked).sort((a, b) => a.sort_order - b.sort_order)
+            return (
+              <div key={cat}>
+                <div className="flex items-center gap-1 mb-1.5">
+                  <button onClick={() => moveCategoryUp(store, categories, catIndex)} className="text-[#b8958a] hover:text-[#3d2c2c] text-xs leading-none px-0.5">▲</button>
+                  <button onClick={() => moveCategoryDown(store, categories, catIndex)} className="text-[#b8958a] hover:text-[#3d2c2c] text-xs leading-none px-0.5">▼</button>
+                  <span className="text-xs font-semibold text-[#7a5c5c] uppercase tracking-wide flex-1">{cat}</span>
+                  <button onClick={() => { setAddingShoppingItem({ store, category: cat }); setNewShoppingName('') }}
+                    className="text-[10px] text-[#e8917a] hover:text-[#d4745d] transition-colors">+ add</button>
+                </div>
+                <div className="space-y-1 pl-5">
+                  {catItems.map((item, idx) => (
+                    <div key={item.id} className="flex items-center gap-1.5 group">
+                      <input type="checkbox" checked={false} onChange={() => checkItem(item)}
+                        className="w-4 h-4 rounded border-[#e8917a] accent-[#e8917a] shrink-0 cursor-pointer" />
+                      {editingShoppingId === item.id ? (
+                        <input autoFocus value={editingShoppingName}
+                          onChange={e => setEditingShoppingName(e.target.value)}
+                          onBlur={() => saveShoppingName(item.id, editingShoppingName)}
+                          onKeyDown={e => { if (e.key === 'Enter') saveShoppingName(item.id, editingShoppingName); if (e.key === 'Escape') setEditingShoppingId(null) }}
+                          className="flex-1 bg-[#fdf0ec] rounded-lg px-2 py-0.5 text-sm border border-[#e8917a] text-[#3d2c2c] outline-none" />
+                      ) : (
+                        <span className="flex-1 text-sm text-[#3d2c2c] cursor-pointer" onDoubleClick={() => { setEditingShoppingId(item.id); setEditingShoppingName(item.name) }}>{item.name}</span>
+                      )}
+                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => moveItemUp(catItems, idx)} className="text-[10px] text-[#b8958a] hover:text-[#3d2c2c] px-0.5">▲</button>
+                        <button onClick={() => moveItemDown(catItems, idx)} className="text-[10px] text-[#b8958a] hover:text-[#3d2c2c] px-0.5">▼</button>
+                        <button onClick={() => { setEditingShoppingId(item.id); setEditingShoppingName(item.name) }} className="text-[10px] text-[#b8958a] hover:text-[#e8917a] px-0.5">✏</button>
+                        <button onClick={() => moveItemToStore(item, store === 'costco' ? 'publix' : 'costco')} className="text-[10px] text-[#b8958a] hover:text-[#4caf7d] px-0.5" title={store === 'costco' ? 'Move to Publix' : 'Move to Costco'}>{store === 'costco' ? 'P↔' : 'C↔'}</button>
+                        <button onClick={() => deleteShoppingItem(item.id)} className="text-[10px] text-[#b8958a] hover:text-red-400 px-0.5">✕</button>
+                      </div>
+                    </div>
+                  ))}
+                  {addingShoppingItem?.store === store && addingShoppingItem.category === cat ? (
+                    <div className="flex gap-1.5 items-center">
+                      <div className="w-4 shrink-0" />
+                      <input autoFocus value={newShoppingName} onChange={e => setNewShoppingName(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { addShoppingItem(store, cat, newShoppingName); setAddingShoppingItem(null) } if (e.key === 'Escape') setAddingShoppingItem(null) }}
+                        className="flex-1 bg-[#fdf0ec] rounded-lg px-2 py-0.5 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]" placeholder="Item name..." />
+                      <button onClick={() => { addShoppingItem(store, cat, newShoppingName); setAddingShoppingItem(null) }} className="text-xs bg-[#e8917a] text-white rounded-lg px-2 py-0.5">Add</button>
+                      <button onClick={() => setAddingShoppingItem(null)} className="text-[10px] text-[#b8958a]">✕</button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )
+    }
+
+    const renderDayCard = (plan: DayPlan) => {
+      const isEditing = editingDayPlanId === plan.id
+      const target = dayTargets.find(t => t.day_plan_id === plan.id)
+      const isNonPickle = plan.label.includes('Non-Pickle')
+      const planBlocks = timeBlocks
+        .filter(b => b.day_plan_id === plan.id)
+        .filter(b => {
+          if (!isNonPickle) return true
+          const v = b.variant ?? 'both'
+          if (v === 'both') return true
+          if (v === 'home') return nonPickleVariant === 'home'
+          if (v === 'work') return nonPickleVariant === 'work'
+          return true
+        })
+        .sort((a, b) => a.sort_order - b.sort_order)
+
+      return (
+        <div key={plan.id} className="bg-[#fffdf9] rounded-3xl p-4 border border-[#f0d9d0] flex flex-col gap-3">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <div className="text-sm font-bold text-[#3d2c2c]">{plan.emoji} {plan.label}</div>
+              <div className="text-xs text-[#b8958a]">{plan.days}</div>
+              {target && (
+                <div className="text-xs text-[#7a5c5c] mt-0.5">
+                  💧 {target.bottles_target} bottles · ⚡ {target.packets_target} packets{target.protein_g ? ` · ${target.protein_g}g protein` : ''}{target.cal_floor ? ` · ${target.cal_floor} cal floor` : ''}
+                </div>
+              )}
+            </div>
+            <div className="flex gap-1.5 shrink-0 flex-wrap justify-end">
+              {isNonPickle && (
+                <div className="flex rounded-xl overflow-hidden border border-[#f0d9d0] text-[10px]">
+                  <button onClick={() => setNonPickleVariant('home')} className={`px-2 py-1 transition-colors ${nonPickleVariant === 'home' ? 'bg-[#e8917a] text-white' : 'text-[#7a5c5c] hover:bg-[#fdf0ec]'}`}>🏠 Home</button>
+                  <button onClick={() => setNonPickleVariant('work')} className={`px-2 py-1 transition-colors ${nonPickleVariant === 'work' ? 'bg-[#e8917a] text-white' : 'text-[#7a5c5c] hover:bg-[#fdf0ec]'}`}>💼 Work</button>
+                </div>
+              )}
+              <button onClick={() => setEditingDayPlanId(isEditing ? null : plan.id)}
+                className={`text-xs px-2.5 py-1 rounded-xl border transition-colors ${isEditing ? 'bg-[#e8917a] text-white border-[#e8917a]' : 'bg-[#fdf0ec] text-[#e8917a] border-[#f0d9d0] hover:bg-[#fce4dc]'}`}>
+                {isEditing ? 'Done ✓' : '✏ Edit'}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {planBlocks.map((block, blockIdx) => {
+              const options = blockOptions.filter(o => o.time_block_id === block.id).sort((a, b) => a.sort_order - b.sort_order)
+              const isEditingBlock = editingBlockId === block.id
+              return (
+                <div key={block.id} className="border-l-2 border-[#f0d9d0] pl-3">
+                  {isEditingBlock && editingBlockData ? (
+                    <div className="space-y-1.5 bg-[#fdf0ec] rounded-xl p-2">
+                      <div className="flex gap-1.5">
+                        <input value={editingBlockData.time} onChange={e => setEditingBlockData({ ...editingBlockData, time: e.target.value })}
+                          className="w-16 bg-white rounded-lg px-2 py-1 text-xs border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]" placeholder="Time" />
+                        <input value={editingBlockData.title} onChange={e => setEditingBlockData({ ...editingBlockData, title: e.target.value })}
+                          className="flex-1 bg-white rounded-lg px-2 py-1 text-xs border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]" placeholder="Title" />
+                      </div>
+                      <input value={editingBlockData.note} onChange={e => setEditingBlockData({ ...editingBlockData, note: e.target.value })}
+                        className="w-full bg-white rounded-lg px-2 py-1 text-xs border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]" placeholder="Note (optional)" />
+                      <div className="flex gap-1.5">
+                        <button onClick={() => saveTimeBlock(block.id)} className="text-xs bg-[#e8917a] text-white rounded-lg px-3 py-1">Save</button>
+                        <button onClick={() => { setEditingBlockId(null); setEditingBlockData(null) }} className="text-xs text-[#b8958a]">Cancel</button>
+                        <button onClick={() => { deleteTimeBlock(block.id); setEditingBlockId(null) }} className="text-xs text-red-400 ml-auto">Delete block</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-center gap-2">
+                        {isEditing && (
+                          <div className="flex gap-0.5">
+                            <button onClick={() => moveBlockUp(planBlocks, blockIdx)} className="text-[10px] text-[#b8958a] hover:text-[#3d2c2c]">▲</button>
+                            <button onClick={() => moveBlockUp(planBlocks, blockIdx + 1)} className="text-[10px] text-[#b8958a] hover:text-[#3d2c2c]">▼</button>
+                          </div>
+                        )}
+                        <span className="text-xs font-semibold text-[#e8917a]">{block.time}</span>
+                        <span className="text-xs font-medium text-[#3d2c2c]">{block.title}</span>
+                        {isEditing && (
+                          <button onClick={() => { setEditingBlockId(block.id); setEditingBlockData({ time: block.time, title: block.title, note: block.note ?? '' }) }}
+                            className="text-[10px] text-[#b8958a] hover:text-[#e8917a] ml-auto">✏</button>
+                        )}
+                      </div>
+                      {block.note && <div className="text-[11px] text-[#7a5c5c] mt-0.5 italic">{block.note}</div>}
+                      {options.length > 0 && (
+                        <div className="mt-1 space-y-0.5 pl-2">
+                          {options.map((opt, optIdx) => (
+                            <div key={opt.id} className="flex items-center gap-1 group">
+                              {isEditing && (
+                                <div className="flex gap-0.5">
+                                  <button onClick={() => moveOptionUp(options, optIdx)} className="text-[9px] text-[#b8958a] hover:text-[#3d2c2c]">▲</button>
+                                  <button onClick={() => moveOptionUp(options, optIdx + 1)} className="text-[9px] text-[#b8958a] hover:text-[#3d2c2c]">▼</button>
+                                </div>
+                              )}
+                              <span className="text-[#b8958a] text-[10px] shrink-0">·</span>
+                              {editingOptionId === opt.id ? (
+                                <input autoFocus value={editingOptionLabel}
+                                  onChange={e => setEditingOptionLabel(e.target.value)}
+                                  onBlur={() => saveOption(opt.id, editingOptionLabel)}
+                                  onKeyDown={e => { if (e.key === 'Enter') saveOption(opt.id, editingOptionLabel); if (e.key === 'Escape') setEditingOptionId(null) }}
+                                  className="flex-1 bg-[#fdf0ec] rounded px-1.5 py-0.5 text-xs border border-[#e8917a] text-[#3d2c2c] outline-none" />
+                              ) : (
+                                <span className="text-[11px] text-[#7a5c5c] flex-1">{opt.label}</span>
+                              )}
+                              {isEditing && (
+                                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={() => { setEditingOptionId(opt.id); setEditingOptionLabel(opt.label) }} className="text-[9px] text-[#b8958a] hover:text-[#e8917a]">✏</button>
+                                  <button onClick={() => deleteOption(opt.id)} className="text-[9px] text-[#b8958a] hover:text-red-400">✕</button>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                          {isEditing && (
+                            addingOptionForBlock === block.id ? (
+                              <div className="flex gap-1 items-center pl-4 mt-1">
+                                <input autoFocus value={newOptionLabel} onChange={e => setNewOptionLabel(e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Enter') addBlockOption(block.id); if (e.key === 'Escape') setAddingOptionForBlock(null) }}
+                                  className="flex-1 bg-[#fdf0ec] rounded px-2 py-0.5 text-xs border border-[#f0d9d0] outline-none focus:border-[#e8917a] text-[#3d2c2c]" placeholder="Option..." />
+                                <button onClick={() => addBlockOption(block.id)} className="text-[10px] bg-[#e8917a] text-white rounded px-2 py-0.5">Add</button>
+                                <button onClick={() => setAddingOptionForBlock(null)} className="text-[10px] text-[#b8958a]">✕</button>
+                              </div>
+                            ) : (
+                              <button onClick={() => { setAddingOptionForBlock(block.id); setNewOptionLabel('') }}
+                                className="text-[10px] text-[#e8917a] hover:text-[#d4745d] pl-4 mt-0.5">+ option</button>
+                            )
+                          )}
+                        </div>
+                      )}
+                      {isEditing && options.length === 0 && (
+                        addingOptionForBlock === block.id ? (
+                          <div className="flex gap-1 items-center pl-2 mt-1">
+                            <input autoFocus value={newOptionLabel} onChange={e => setNewOptionLabel(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') addBlockOption(block.id); if (e.key === 'Escape') setAddingOptionForBlock(null) }}
+                              className="flex-1 bg-[#fdf0ec] rounded px-2 py-0.5 text-xs border border-[#f0d9d0] outline-none focus:border-[#e8917a] text-[#3d2c2c]" placeholder="Option..." />
+                            <button onClick={() => addBlockOption(block.id)} className="text-[10px] bg-[#e8917a] text-white rounded px-2 py-0.5">Add</button>
+                            <button onClick={() => setAddingOptionForBlock(null)} className="text-[10px] text-[#b8958a]">✕</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => { setAddingOptionForBlock(block.id); setNewOptionLabel('') }}
+                            className="text-[10px] text-[#e8917a] hover:text-[#d4745d] pl-2 mt-0.5">+ option</button>
+                        )
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+            {isEditing && (
+              addingBlockForPlan === plan.id ? (
+                <div className="bg-[#fdf0ec] rounded-xl p-3 space-y-2">
+                  <div className="flex gap-2">
+                    <input value={newBlockTime} onChange={e => setNewBlockTime(e.target.value)}
+                      className="w-16 bg-white rounded-lg px-2 py-1.5 text-xs border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]" placeholder="Time" />
+                    <input value={newBlockTitle} onChange={e => setNewBlockTitle(e.target.value)}
+                      className="flex-1 bg-white rounded-lg px-2 py-1.5 text-xs border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]" placeholder="Title" />
+                  </div>
+                  <input value={newBlockNote} onChange={e => setNewBlockNote(e.target.value)}
+                    className="w-full bg-white rounded-lg px-2 py-1.5 text-xs border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]" placeholder="Note (optional)" />
+                  <div className="flex gap-2">
+                    <button onClick={() => addTimeBlock(plan.id)} className="text-xs bg-[#e8917a] text-white rounded-lg px-3 py-1.5">Add Block</button>
+                    <button onClick={() => setAddingBlockForPlan(null)} className="text-xs text-[#b8958a]">Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => { setAddingBlockForPlan(plan.id); setNewBlockTime(''); setNewBlockTitle(''); setNewBlockNote('') }}
+                  className="text-xs text-[#e8917a] hover:text-[#d4745d] transition-colors py-1">+ Add time block</button>
+              )
+            )}
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-4 pb-24 md:pb-6">
+        {/* Hydration tracker */}
+        <div className="bg-[#fffdf9] rounded-3xl p-4 border border-[#f0d9d0]">
+          <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-3">Hydration Today</div>
+          <div className="flex flex-wrap gap-4 items-start">
+            <div className="flex-1 min-w-[140px]">
+              <div className="text-[10px] text-[#b8958a] uppercase mb-1">Day type</div>
+              <div className="flex flex-wrap gap-1.5">
+                {dayPlans.sort((a, b) => a.sort_order - b.sort_order).map(p => (
+                  <button key={p.id} onClick={() => setActiveDayPlanId(activeDayPlanId === p.id ? null : p.id)}
+                    className={`text-xs px-2.5 py-1 rounded-xl border transition-colors ${activeDayPlanId === p.id ? 'bg-[#e8917a] text-white border-[#e8917a]' : 'bg-white border-[#f0d9d0] text-[#7a5c5c] hover:bg-[#fdf0ec]'}`}>
+                    {p.emoji} {p.label.split('/')[0].trim()}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-6">
+              <div className="text-center">
+                <div className="text-[10px] text-[#b8958a] uppercase mb-1">💧 Bottles</div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => adjustHydration('bottles_count', -1)} className="w-7 h-7 rounded-full bg-[#fdf0ec] text-[#e8917a] font-bold text-sm hover:bg-[#fce4dc] transition-colors">−</button>
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-[#3d2c2c]">{hydrationLog?.bottles_count ?? 0}</div>
+                    {activeDayTarget && <div className="text-[10px] text-[#b8958a]">of {activeDayTarget.bottles_target}</div>}
+                  </div>
+                  <button onClick={() => adjustHydration('bottles_count', 1)} className="w-7 h-7 rounded-full bg-[#fdf0ec] text-[#e8917a] font-bold text-sm hover:bg-[#fce4dc] transition-colors">+</button>
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-[10px] text-[#b8958a] uppercase mb-1">⚡ Packets</div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => adjustHydration('packets_count', -1)} className="w-7 h-7 rounded-full bg-[#fdf0ec] text-[#e8917a] font-bold text-sm hover:bg-[#fce4dc] transition-colors">−</button>
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-[#3d2c2c]">{hydrationLog?.packets_count ?? 0}</div>
+                    {activeDayTarget && <div className="text-[10px] text-[#b8958a]">of {activeDayTarget.packets_target} max</div>}
+                  </div>
+                  <button onClick={() => adjustHydration('packets_count', 1)} className="w-7 h-7 rounded-full bg-[#fdf0ec] text-[#e8917a] font-bold text-sm hover:bg-[#fce4dc] transition-colors">+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Day cards — 3 side by side on desktop */}
+        <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a]">Day Plans</div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {dayPlans.sort((a, b) => a.sort_order - b.sort_order).map(plan => renderDayCard(plan))}
+        </div>
+
+        {/* Shopping lists */}
+        <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] pt-2">Shopping Lists</div>
+        <div className="grid gap-4 md:grid-cols-2">
+          {renderShoppingList('costco')}
+          {renderShoppingList('publix')}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <main className="min-h-screen p-3 md:p-6 max-w-[1400px] mx-auto">
       {/* Header */}
@@ -6291,7 +6833,7 @@ export default function Home() {
       {/* Desktop top nav — hidden on mobile */}
       <div className="hidden md:block bg-[#fffdf9] rounded-3xl p-4 mb-4 border border-[#f0d9d0]">
         <div className="flex flex-wrap gap-2">
-          {[{ id: 'today', label: 'Today' }, { id: 'week', label: 'This Week' }, { id: 'roadmap', label: 'Road Map' }, { id: 'life-admin', label: 'Life Admin' }, { id: 'parking-lot', label: 'Parking Lot' }, { id: 'calendar', label: 'Calendar' }, { id: 'thumb-equity', label: 'Thumb Equity' }].map(section => (
+          {[{ id: 'today', label: 'Today' }, { id: 'week', label: 'This Week' }, { id: 'roadmap', label: 'Road Map' }, { id: 'life-admin', label: 'Life Admin' }, { id: 'parking-lot', label: 'Parking Lot' }, { id: 'calendar', label: 'Calendar' }, { id: 'thumb-equity', label: 'Thumb Equity' }, { id: 'nutrition', label: 'Nutrition' }].map(section => (
             <button key={section.id} onClick={() => setActiveTab(section.id as any)}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${activeTab === section.id ? 'bg-[#e8917a] text-white' : 'text-[#7a5c5c] hover:text-[#3d2c2c] hover:bg-[#fdf0ec]'}`}>
               {section.label}
@@ -6309,6 +6851,7 @@ export default function Home() {
         {activeTab === 'parking-lot' && renderParkingLotView()}
         {activeTab === 'calendar' && renderCalendarView()}
         {activeTab === 'thumb-equity' && renderThumbEquity()}
+        {activeTab === 'nutrition' && renderNutritionView()}
       </div>
 
       {/* Mobile bottom tab bar */}
@@ -6321,7 +6864,8 @@ export default function Home() {
             { id: 'life-admin', label: 'Admin', icon: '☑' },
             { id: 'parking-lot', label: 'Ideas', icon: '◆' },
             { id: 'calendar', label: 'Calendar', icon: '◻' },
-            { id: 'thumb-equity', label: 'Thumb', icon: '♡' }
+            { id: 'thumb-equity', label: 'Thumb', icon: '♡' },
+            { id: 'nutrition', label: 'Nutrition', icon: '🥗' }
           ].map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
               className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-2xl transition-all shrink-0 min-w-[60px] ${activeTab === tab.id ? 'bg-[#fdf0ec] text-[#e8917a]' : 'text-[#b8958a]'}`}>

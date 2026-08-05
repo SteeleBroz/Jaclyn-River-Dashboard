@@ -211,3 +211,64 @@ export type PromptCard = {
   created_at: string
   updated_at: string
 }
+
+export type DayPlan = {
+  id: string
+  label: string
+  emoji: string
+  days: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export type TimeBlock = {
+  id: string
+  day_plan_id: string
+  time: string
+  title: string
+  note: string | null
+  variant: string | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export type BlockOption = {
+  id: string
+  time_block_id: string
+  label: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export type DayTarget = {
+  id: string
+  day_plan_id: string
+  bottles_target: string
+  packets_target: number
+  protein_g: number | null
+  cal_floor: number | null
+}
+
+export type ShoppingItem = {
+  id: string
+  store: 'costco' | 'publix'
+  category: string
+  category_sort_order: number
+  name: string
+  note: string | null
+  checked: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export type HydrationLog = {
+  id: string
+  log_date: string
+  day_plan_id: string | null
+  bottles_count: number
+  packets_count: number
+}
