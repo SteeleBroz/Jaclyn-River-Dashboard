@@ -4938,7 +4938,7 @@ export default function Home() {
                 {cards.length === 0 && !isAdding && <div className="text-xs text-[#b8958a] italic py-2">Nothing here yet</div>}
                 {cards.map((card, ci) => {
                   const cardKey = `life-admin-${card.id}`
-                  const isExpanded = expandedCardItems[cardKey]
+                  const isExpanded = expandedCardItems[cardKey] !== false
                   const thisItems = cardItems.filter(i => i.card_id === card.id && i.card_tab === 'life-admin').sort((a, b) => a.sort_order - b.sort_order)
                   return (
                   <div key={card.id}
@@ -4981,7 +4981,7 @@ export default function Home() {
                         {/* Checklist toggle */}
                         <button onClick={() => setExpandedCardItems(prev => ({ ...prev, [cardKey]: !isExpanded }))}
                           className="text-[10px] text-[#b8958a] hover:text-[#e8917a] mt-1 transition-colors">
-                          {isExpanded ? '▴ checklist' : `▾ checklist${thisItems.length > 0 ? ` (${thisItems.filter(i=>i.completed).length}/${thisItems.length})` : ''}`}
+                          {isExpanded ? `▴ checklist${thisItems.length > 0 ? ` (${thisItems.filter(i=>i.completed).length}/${thisItems.length})` : ''}` : '▾ checklist'}
                         </button>
                       </div>
                       <span className="text-[#f0d9d0] group-hover:text-[#e8917a] text-sm transition-colors shrink-0 cursor-pointer" onClick={() => setEditingLifeCard(card)}>✎</span>
@@ -5231,7 +5231,7 @@ export default function Home() {
                 {cards.length === 0 && !isAdding && <div className="text-xs text-[#b8958a] italic py-2">Nothing parked here yet</div>}
                 {cards.map((card, ci) => {
                   const pCardKey = `parking-lot-${card.id}`
-                  const pIsExpanded = expandedCardItems[pCardKey]
+                  const pIsExpanded = expandedCardItems[pCardKey] !== false
                   const pItems = cardItems.filter(i => i.card_id === card.id && i.card_tab === 'parking-lot').sort((a, b) => a.sort_order - b.sort_order)
                   return (
                   <div key={card.id}
@@ -5271,7 +5271,7 @@ export default function Home() {
                         {card.description && <div className="text-xs text-[#7a5c5c] mt-0.5">{card.description}</div>}
                         <button onClick={() => setExpandedCardItems(prev => ({ ...prev, [pCardKey]: !pIsExpanded }))}
                           className="text-[10px] text-[#b8958a] hover:text-[#e8917a] mt-1 transition-colors">
-                          {pIsExpanded ? '▴ checklist' : `▾ checklist${pItems.length > 0 ? ` (${pItems.filter(i=>i.completed).length}/${pItems.length})` : ''}`}
+                          {pIsExpanded ? `▴ checklist${pItems.length > 0 ? ` (${pItems.filter(i=>i.completed).length}/${pItems.length})` : ''}` : '▾ checklist'}
                         </button>
                       </div>
                       <span className="text-[#f0d9d0] group-hover:text-[#e8917a] text-sm transition-colors shrink-0 cursor-pointer" onClick={() => setEditingParkingCard(card)}>✎</span>
