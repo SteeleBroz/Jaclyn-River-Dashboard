@@ -68,7 +68,7 @@ export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [weeklyNotes, setWeeklyNotes] = useState<WeeklyNote[]>([])
-  const [activeTab, setActiveTab] = useState<'today' | 'week' | 'roadmap' | 'life-admin' | 'parking-lot' | 'calendar' | 'thumb-equity' | 'nutrition' | 'library'>('today')
+  const [activeTab, setActiveTab] = useState<'today' | 'week' | 'roadmap' | 'life-admin' | 'parking-lot' | 'calendar' | 'thumb-equity' | 'nutrition' | 'library'>('life-admin')
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day' | 'year'>('month')
   const [calendarDate, setCalendarDate] = useState(new Date())
