@@ -7447,7 +7447,7 @@ export default function Home() {
       {/* Desktop top nav — hidden on mobile */}
       <div className="hidden md:block bg-[#fffdf9] rounded-3xl p-4 mb-4 border border-[#f0d9d0]">
         <div className="flex flex-wrap gap-2 items-center">
-          {[{ id: 'today', label: 'Today' }, { id: 'week', label: 'This Week' }, { id: 'roadmap', label: 'Road Map' }, { id: 'life-admin', label: 'Life Admin' }, { id: 'parking-lot', label: 'Parking Lot' }, { id: 'calendar', label: 'Calendar' }, { id: 'thumb-equity', label: 'Thumb Equity' }, { id: 'nutrition', label: 'Nutrition' }, { id: 'library', label: 'Library' }]
+          {[{ id: 'today', label: 'Today' }, { id: 'week', label: 'This Week' }, { id: 'life-admin', label: 'Life Admin' }, { id: 'parking-lot', label: 'Parking Lot' }, { id: 'roadmap', label: 'Road Map' }, { id: 'library', label: 'Library' }, { id: 'calendar', label: 'Calendar' }, { id: 'thumb-equity', label: 'Thumb Equity' }, { id: 'nutrition', label: 'Nutrition' }]
             .filter(section => !hiddenTabs.includes(section.id))
             .map(section => (
             <button key={section.id} onClick={() => setActiveTab(section.id as any)}
@@ -7481,13 +7481,13 @@ export default function Home() {
           {[
             { id: 'today', label: 'Today', icon: '⌂' },
             { id: 'week', label: 'Week', icon: '◎' },
-            { id: 'roadmap', label: 'Road Map', icon: '▲' },
             { id: 'life-admin', label: 'Admin', icon: '☑' },
             { id: 'parking-lot', label: 'Ideas', icon: '◆' },
+            { id: 'roadmap', label: 'Road Map', icon: '▲' },
+            { id: 'library', label: 'Library', icon: '📚' },
             { id: 'calendar', label: 'Calendar', icon: '◻' },
             { id: 'thumb-equity', label: 'Thumb', icon: '♡' },
-            { id: 'nutrition', label: 'Nutrition', icon: '🥗' },
-            { id: 'library', label: 'Library', icon: '📚' }
+            { id: 'nutrition', label: 'Nutrition', icon: '🥗' }
           ].filter(tab => !hiddenTabs.includes(tab.id)).map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
               className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-2xl transition-all shrink-0 min-w-[60px] ${activeTab === tab.id ? 'bg-[#fdf0ec] text-[#e8917a]' : 'text-[#b8958a]'}`}>
@@ -7518,13 +7518,13 @@ export default function Home() {
                 {[
                   { id: 'today', label: 'Today' },
                   { id: 'week', label: 'This Week' },
-                  { id: 'thumb-equity', label: 'Thumb Equity' },
-                  { id: 'roadmap', label: 'Road Map' },
                   { id: 'life-admin', label: 'Life Admin' },
                   { id: 'parking-lot', label: 'Parking Lot' },
+                  { id: 'roadmap', label: 'Road Map' },
+                  { id: 'library', label: 'Library' },
                   { id: 'calendar', label: 'Calendar' },
-                  { id: 'nutrition', label: 'Nutrition' },
-                  { id: 'library', label: 'Library' }
+                  { id: 'thumb-equity', label: 'Thumb Equity' },
+                  { id: 'nutrition', label: 'Nutrition' }
                 ].map(tab => {
                   const isHidden = hiddenTabs.includes(tab.id)
                   return (
@@ -7536,7 +7536,7 @@ export default function Home() {
                         await supabase.from('user_prefs').upsert({ key: 'hiddenTabs', value: next, updated_at: new Date().toISOString() })
                         // If hiding the active tab, switch to first visible tab
                         if (!isHidden && activeTab === tab.id) {
-                          const allTabs = ['today','week','roadmap','life-admin','parking-lot','calendar','thumb-equity','nutrition','library']
+                          const allTabs = ['today','week','life-admin','parking-lot','roadmap','library','calendar','thumb-equity','nutrition']
                           const firstVisible = allTabs.find(t => t !== tab.id && !next.includes(t))
                           if (firstVisible) setActiveTab(firstVisible as any)
                         }
