@@ -286,3 +286,23 @@ export type HydrationLog = {
   bottles_count: number
   packets_count: number
 }
+
+export type LibraryCard = {
+  id: string
+  category: string
+  title: string
+  body: string | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export type LibraryFile = {
+  id: string
+  card_id: string
+  file_name: string
+  file_type: string
+  storage_path: string
+  sort_order: number
+  created_at: string
+}

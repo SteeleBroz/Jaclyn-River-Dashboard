@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, LifeAdminCard, ParkingLotCard, CardItem, RoadmapTask, WeeklyMission, BillNote, RoadmapPhase, RoadmapMilestone, PromptCard, DayPlan, TimeBlock, BlockOption, DayTarget, ShoppingItem, HydrationLog, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
+import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, LifeAdminCard, ParkingLotCard, CardItem, RoadmapTask, WeeklyMission, BillNote, RoadmapPhase, RoadmapMilestone, PromptCard, DayPlan, TimeBlock, BlockOption, DayTarget, ShoppingItem, HydrationLog, LibraryCard, LibraryFile, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday','overflow'] as const
 const DAY_LABELS: Record<string, string> = {
@@ -68,7 +68,7 @@ export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [weeklyNotes, setWeeklyNotes] = useState<WeeklyNote[]>([])
-  const [activeTab, setActiveTab] = useState<'today' | 'week' | 'roadmap' | 'life-admin' | 'parking-lot' | 'calendar' | 'thumb-equity' | 'nutrition'>('today')
+  const [activeTab, setActiveTab] = useState<'today' | 'week' | 'roadmap' | 'life-admin' | 'parking-lot' | 'calendar' | 'thumb-equity' | 'nutrition' | 'library'>('today')
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day' | 'year'>('month')
   const [calendarDate, setCalendarDate] = useState(new Date())
@@ -323,6 +323,23 @@ export default function Home() {
   const [newRoadmapTaskTitle, setNewRoadmapTaskTitle] = useState('')
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
   const [dragOverBucket, setDragOverBucket] = useState<string | null>(null)
+  // Drag state for life-admin and parking-lot cards
+  const [draggingLifeCardId, setDraggingLifeCardId] = useState<number | null>(null)
+  const [dragOverLifeCardId, setDragOverLifeCardId] = useState<number | null>(null)
+  const [draggingParkingCardId, setDraggingParkingCardId] = useState<number | null>(null)
+  const [dragOverParkingCardId, setDragOverParkingCardId] = useState<number | null>(null)
+  // Library state
+  const [libraryCards, setLibraryCards] = useState<LibraryCard[]>([])
+  const [libraryFiles, setLibraryFiles] = useState<LibraryFile[]>([])
+  const [libraryLoaded, setLibraryLoaded] = useState(false)
+  const [libraryActiveCategory, setLibraryActiveCategory] = useState<string>('Medical')
+  const [addingLibraryCard, setAddingLibraryCard] = useState(false)
+  const [newLibCardTitle, setNewLibCardTitle] = useState('')
+  const [newLibCardBody, setNewLibCardBody] = useState('')
+  const [editingLibraryCard, setEditingLibraryCard] = useState<LibraryCard | null>(null)
+  const [viewingLibraryFile, setViewingLibraryFile] = useState<LibraryFile | null>(null)
+  const [uploadingForCard, setUploadingForCard] = useState<string | null>(null)
+  const [libraryUploadError, setLibraryUploadError] = useState<string | null>(null)
   // Timer state
   const [activeTimers, setActiveTimers] = useState<Record<string, {seconds: number; running: boolean; preset: number; startTime?: number}>>({})
   const timerIntervalRef = useRef<Record<string, NodeJS.Timeout>>({})
@@ -673,6 +690,22 @@ export default function Home() {
       console.warn('Nutrition fetch error:', e)
     }
   }, [nutritionLoaded])
+
+  // Library fetch (lazy — only on tab activation)
+  const fetchLibraryData = useCallback(async () => {
+    if (libraryLoaded) return
+    try {
+      const [cardsRes, filesRes] = await Promise.all([
+        supabase.from('library_cards').select('*').order('sort_order').order('created_at'),
+        supabase.from('library_files').select('*').order('sort_order')
+      ])
+      if (cardsRes.data) setLibraryCards(cardsRes.data)
+      if (filesRes.data) setLibraryFiles(filesRes.data)
+      setLibraryLoaded(true)
+    } catch (e) {
+      console.warn('Library fetch error:', e)
+    }
+  }, [libraryLoaded])
 
   // Admin Mode functions
   const handleHeaderWordsClick = () => {
@@ -1331,7 +1364,10 @@ export default function Home() {
     if (activeTab === 'nutrition') {
       fetchNutritionData()
     }
-  }, [activeTab, fetchThumbEquity, fetchNutritionData])
+    if (activeTab === 'library') {
+      fetchLibraryData()
+    }
+  }, [activeTab, fetchThumbEquity, fetchNutritionData, fetchLibraryData])
 
   const toggleComplete = async (task: Task) => {
     const updated = !task.completed
@@ -4859,7 +4895,22 @@ export default function Home() {
           const cards = lifeAdminCards.filter(c => c.column_key === col.key).sort((a, b) => a.sort_order - b.sort_order)
           const isAdding = addingLifeCard?.column === col.key
           return (
-            <div key={col.key} className="rounded-3xl p-4 border" style={{ backgroundColor: col.color, borderColor: col.border }}>
+            <div key={col.key} className="rounded-3xl p-4 border transition-all" style={{ backgroundColor: col.color, borderColor: dragOverLifeCardId === null && draggingLifeCardId !== null && dragOverColumn === col.key ? '#e8917a' : col.border }}
+              onDragOver={e => { e.preventDefault(); setDragOverColumn(col.key) }}
+              onDragLeave={() => setDragOverColumn(null)}
+              onDrop={async e => {
+                e.preventDefault()
+                setDragOverColumn(null)
+                if (draggingLifeCardId === null) return
+                // Dropped onto column background (not a card) — move to end of column
+                const colCards = lifeAdminCards.filter(c => c.column_key === col.key).sort((a,b) => a.sort_order - b.sort_order)
+                const dragCard = lifeAdminCards.find(c => c.id === draggingLifeCardId)
+                if (!dragCard || dragCard.column_key === col.key) return
+                const newOrder = colCards.length
+                setLifeAdminCards(prev => prev.map(c => c.id === draggingLifeCardId ? {...c, column_key: col.key, sort_order: newOrder} : c))
+                await supabase.from('life_admin_cards').update({column_key: col.key, sort_order: newOrder}).eq('id', draggingLifeCardId)
+                setDraggingLifeCardId(null)
+              }}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-semibold text-[#3d2c2c]">{col.label}</h3>
@@ -4890,7 +4941,32 @@ export default function Home() {
                   const isExpanded = expandedCardItems[cardKey]
                   const thisItems = cardItems.filter(i => i.card_id === card.id && i.card_tab === 'life-admin').sort((a, b) => a.sort_order - b.sort_order)
                   return (
-                  <div key={card.id} className="bg-white rounded-2xl px-3 py-3 border border-[#f0d9d0] hover:border-[#e8917a] transition-all group">
+                  <div key={card.id}
+                    draggable
+                    onDragStart={() => { setDraggingLifeCardId(card.id); setDragOverLifeCardId(null) }}
+                    onDragEnd={() => { setDraggingLifeCardId(null); setDragOverLifeCardId(null); setDragOverColumn(null) }}
+                    onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOverLifeCardId(card.id) }}
+                    onDragLeave={() => setDragOverLifeCardId(null)}
+                    onDrop={async e => {
+                      e.preventDefault(); e.stopPropagation()
+                      setDragOverLifeCardId(null)
+                      if (draggingLifeCardId === null || draggingLifeCardId === card.id) return
+                      const dragCard = lifeAdminCards.find(c => c.id === draggingLifeCardId)
+                      if (!dragCard) return
+                      const colCards = lifeAdminCards.filter(c => c.column_key === col.key).sort((a,b) => a.sort_order - b.sort_order)
+                      // Remove drag card from its current position in the column if same column
+                      const withoutDrag = colCards.filter(c => c.id !== draggingLifeCardId)
+                      const targetIdx = withoutDrag.findIndex(c => c.id === card.id)
+                      withoutDrag.splice(targetIdx, 0, {...dragCard, column_key: col.key})
+                      const updates = withoutDrag.map((c, i) => ({...c, sort_order: i}))
+                      setLifeAdminCards(prev => {
+                        const others = prev.filter(c => c.column_key !== col.key && c.id !== draggingLifeCardId)
+                        return [...others, ...updates]
+                      })
+                      await Promise.all(updates.map(c => supabase.from('life_admin_cards').update({column_key: col.key, sort_order: c.sort_order}).eq('id', c.id)))
+                      setDraggingLifeCardId(null)
+                    }}
+                    className={`bg-white rounded-2xl px-3 py-3 border transition-all group cursor-grab active:cursor-grabbing ${dragOverLifeCardId === card.id ? 'border-[#e8917a] shadow-lg scale-[1.01]' : draggingLifeCardId === card.id ? 'opacity-40 border-[#e8917a]' : 'border-[#f0d9d0] hover:border-[#e8917a]'}`}>
                     <div className="flex items-start gap-2">
                       {/* Up/down arrows */}
                       <div className="flex flex-col gap-0.5 pt-0.5 shrink-0">
@@ -5110,7 +5186,21 @@ export default function Home() {
           const cards = parkingLotDBCards.filter(c => c.bucket === bucket.title).sort((a, b) => a.sort_order - b.sort_order)
           const isAdding = addingParkingCard?.bucket === bucket.title
           return (
-            <div key={bucket.title} className="rounded-3xl p-4 border" style={{ backgroundColor: bucket.color, borderColor: bucket.border }}>
+            <div key={bucket.title} className="rounded-3xl p-4 border transition-all" style={{ backgroundColor: bucket.color, borderColor: dragOverParkingCardId === null && draggingParkingCardId !== null && dragOverBucket === bucket.title ? '#e8917a' : bucket.border }}
+              onDragOver={e => { e.preventDefault(); setDragOverBucket(bucket.title) }}
+              onDragLeave={() => setDragOverBucket(null)}
+              onDrop={async e => {
+                e.preventDefault()
+                setDragOverBucket(null)
+                if (draggingParkingCardId === null) return
+                const dragCard = parkingLotDBCards.find(c => c.id === draggingParkingCardId)
+                if (!dragCard || dragCard.bucket === bucket.title) return
+                const colCards = parkingLotDBCards.filter(c => c.bucket === bucket.title).sort((a,b) => a.sort_order - b.sort_order)
+                const newOrder = colCards.length
+                setParkingLotDBCards(prev => prev.map(c => c.id === draggingParkingCardId ? {...c, bucket: bucket.title, sort_order: newOrder} : c))
+                await supabase.from('parking_lot_cards').update({bucket: bucket.title, sort_order: newOrder}).eq('id', draggingParkingCardId)
+                setDraggingParkingCardId(null)
+              }}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-semibold text-[#3d2c2c]">{bucket.title}</h3>
@@ -5144,7 +5234,31 @@ export default function Home() {
                   const pIsExpanded = expandedCardItems[pCardKey]
                   const pItems = cardItems.filter(i => i.card_id === card.id && i.card_tab === 'parking-lot').sort((a, b) => a.sort_order - b.sort_order)
                   return (
-                  <div key={card.id} className="bg-white rounded-2xl px-3 py-3 border border-white hover:border-[#e8917a] transition-all group">
+                  <div key={card.id}
+                    draggable
+                    onDragStart={() => { setDraggingParkingCardId(card.id); setDragOverParkingCardId(null) }}
+                    onDragEnd={() => { setDraggingParkingCardId(null); setDragOverParkingCardId(null); setDragOverBucket(null) }}
+                    onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOverParkingCardId(card.id) }}
+                    onDragLeave={() => setDragOverParkingCardId(null)}
+                    onDrop={async e => {
+                      e.preventDefault(); e.stopPropagation()
+                      setDragOverParkingCardId(null)
+                      if (draggingParkingCardId === null || draggingParkingCardId === card.id) return
+                      const dragCard = parkingLotDBCards.find(c => c.id === draggingParkingCardId)
+                      if (!dragCard) return
+                      const colCards = parkingLotDBCards.filter(c => c.bucket === bucket.title).sort((a,b) => a.sort_order - b.sort_order)
+                      const withoutDrag = colCards.filter(c => c.id !== draggingParkingCardId)
+                      const targetIdx = withoutDrag.findIndex(c => c.id === card.id)
+                      withoutDrag.splice(targetIdx, 0, {...dragCard, bucket: bucket.title})
+                      const updates = withoutDrag.map((c, i) => ({...c, sort_order: i}))
+                      setParkingLotDBCards(prev => {
+                        const others = prev.filter(c => c.bucket !== bucket.title && c.id !== draggingParkingCardId)
+                        return [...others, ...updates]
+                      })
+                      await Promise.all(updates.map(c => supabase.from('parking_lot_cards').update({bucket: bucket.title, sort_order: c.sort_order}).eq('id', c.id)))
+                      setDraggingParkingCardId(null)
+                    }}
+                    className={`bg-white rounded-2xl px-3 py-3 border transition-all group cursor-grab active:cursor-grabbing ${dragOverParkingCardId === card.id ? 'border-[#e8917a] shadow-lg scale-[1.01]' : draggingParkingCardId === card.id ? 'opacity-40 border-[#e8917a]' : 'border-white hover:border-[#e8917a]'}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex flex-col gap-0.5 pt-0.5 shrink-0">
                         <button onClick={() => moveParkingCardUp(cards, ci)} disabled={ci === 0}
@@ -6583,6 +6697,276 @@ export default function Home() {
 
 
   // ─── NUTRITION VIEW ──────────────────────────────────────────────────────────
+
+  // ─── LIBRARY VIEW ────────────────────────────────────────────────────────────
+  const renderLibraryView = () => {
+    const LIBRARY_CATEGORIES = ['Medical', 'SteeleBroz', 'Star', 'Life', 'Boys']
+    const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+
+    const addLibraryCard = async () => {
+      if (!newLibCardTitle.trim()) return
+      const existing = libraryCards.filter(c => c.category === libraryActiveCategory)
+      const { data } = await supabase.from('library_cards').insert({
+        category: libraryActiveCategory,
+        title: newLibCardTitle.trim(),
+        body: newLibCardBody.trim() || null,
+        sort_order: existing.length
+      }).select().single()
+      if (data) setLibraryCards(prev => [...prev, data])
+      setNewLibCardTitle('')
+      setNewLibCardBody('')
+      setAddingLibraryCard(false)
+    }
+
+    const saveLibraryCard = async (card: LibraryCard) => {
+      setLibraryCards(prev => prev.map(c => c.id === card.id ? card : c))
+      await supabase.from('library_cards').update({ title: card.title, body: card.body, category: card.category, updated_at: new Date().toISOString() }).eq('id', card.id)
+      setEditingLibraryCard(null)
+    }
+
+    const deleteLibraryCard = async (id: string) => {
+      const files = libraryFiles.filter(f => f.card_id === id)
+      for (const f of files) {
+        await supabase.storage.from('library-files').remove([f.storage_path])
+      }
+      setLibraryFiles(prev => prev.filter(f => f.card_id !== id))
+      setLibraryCards(prev => prev.filter(c => c.id !== id))
+      await supabase.from('library_cards').delete().eq('id', id)
+    }
+
+    const uploadFile = async (cardId: string, file: File) => {
+      setUploadingForCard(cardId)
+      setLibraryUploadError(null)
+      try {
+        const ext = file.name.split('.').pop()
+        const path = `${cardId}/${Date.now()}.${ext}`
+        const { error } = await supabase.storage.from('library-files').upload(path, file)
+        if (error) throw error
+        const existing = libraryFiles.filter(f => f.card_id === cardId)
+        const { data } = await supabase.from('library_files').insert({
+          card_id: cardId,
+          file_name: file.name,
+          file_type: file.type,
+          storage_path: path,
+          sort_order: existing.length
+        }).select().single()
+        if (data) setLibraryFiles(prev => [...prev, data])
+      } catch (e) {
+        setLibraryUploadError('Upload failed — please try again.')
+        console.warn('Upload error:', e)
+      } finally {
+        setUploadingForCard(null)
+      }
+    }
+
+    const deleteFile = async (file: LibraryFile) => {
+      await supabase.storage.from('library-files').remove([file.storage_path])
+      setLibraryFiles(prev => prev.filter(f => f.id !== file.id))
+      await supabase.from('library_files').delete().eq('id', file.id)
+      if (viewingLibraryFile?.id === file.id) setViewingLibraryFile(null)
+    }
+
+    const getFileUrl = (path: string) =>
+      `${SUPABASE_URL}/storage/v1/object/public/library-files/${path}`
+
+    const formatBody = (text: string) => {
+      return text
+        .split('\n')
+        .map(line => {
+          const isBullet = line.trim().startsWith('- ') || line.trim().startsWith('* ')
+          const content = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          if (isBullet) return `<li class="ml-4 list-disc">${content.replace(/^[\-\*]\s/, '')}</li>`
+          return `<p class="${content.trim() ? '' : 'h-2'}">${content}</p>`
+        })
+        .join('')
+    }
+
+    const activeCards = libraryCards.filter(c => c.category === libraryActiveCategory).sort((a, b) => a.sort_order - b.sort_order)
+
+    return (
+      <div className="space-y-4">
+        {/* Inline file viewer */}
+        {viewingLibraryFile && (
+          <div className="fixed inset-0 bg-black/80 z-50 flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 bg-[#fffdf9] border-b border-[#f0d9d0]">
+              <span className="text-sm font-medium text-[#3d2c2c] truncate max-w-[70vw]">{viewingLibraryFile.file_name}</span>
+              <button onClick={() => setViewingLibraryFile(null)} className="text-[#b8958a] hover:text-[#3d2c2c] text-2xl px-2">×</button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              {viewingLibraryFile.file_type === 'application/pdf' || viewingLibraryFile.file_name.endsWith('.pdf') ? (
+                <iframe src={getFileUrl(viewingLibraryFile.storage_path)} className="w-full h-full border-0" title={viewingLibraryFile.file_name} />
+              ) : viewingLibraryFile.file_type.startsWith('image/') ? (
+                <div className="flex items-center justify-center h-full p-4">
+                  <img src={getFileUrl(viewingLibraryFile.storage_path)} alt={viewingLibraryFile.file_name} className="max-w-full max-h-full object-contain rounded-xl" />
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <div className="text-4xl mb-3">📄</div>
+                    <p className="text-[#fffdf9] mb-4 text-sm">{viewingLibraryFile.file_name}</p>
+                    <a href={getFileUrl(viewingLibraryFile.storage_path)} download={viewingLibraryFile.file_name}
+                      className="bg-[#e8917a] text-white px-4 py-2 rounded-xl text-sm">Download</a>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Header */}
+        <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0]">
+          <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-1">Library</div>
+          <h2 className="text-xl font-semibold text-[#3d2c2c]">Your Reference Library</h2>
+          <p className="text-sm text-[#7a5c5c] mt-1">Cards, notes, and files organized by category. Tap any file to open it in the app.</p>
+        </div>
+
+        {/* Category tabs */}
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+          {LIBRARY_CATEGORIES.map(cat => (
+            <button key={cat} onClick={() => setLibraryActiveCategory(cat)}
+              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all shrink-0 ${
+                libraryActiveCategory === cat ? 'bg-[#e8917a] text-white' : 'bg-[#fdf0ec] text-[#7a5c5c] hover:bg-[#f0d9d0]'
+              }`}>
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {/* Edit card modal */}
+        {editingLibraryCard && (
+          <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-4" onClick={() => setEditingLibraryCard(null)}>
+            <div className="bg-[#fffdf9] rounded-2xl p-5 w-full max-w-lg space-y-3 shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <h3 className="text-base font-semibold text-[#3d2c2c]">Edit Card</h3>
+              <input value={editingLibraryCard.title} onChange={e => setEditingLibraryCard({ ...editingLibraryCard, title: e.target.value })}
+                className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]" placeholder="Title" />
+              <textarea value={editingLibraryCard.body || ''} onChange={e => setEditingLibraryCard({ ...editingLibraryCard, body: e.target.value })}
+                className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a] resize-none font-mono" rows={8}
+                placeholder="Notes... Use **bold** for bold text, - for bullet points" />
+              <div>
+                <div className="text-xs text-[#b8958a] mb-1">Move to category</div>
+                <div className="flex flex-wrap gap-2">
+                  {LIBRARY_CATEGORIES.map(cat => (
+                    <button key={cat} onClick={() => setEditingLibraryCard({ ...editingLibraryCard, category: cat })}
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                        editingLibraryCard.category === cat ? 'bg-[#e8917a] text-white border-[#e8917a]' : 'bg-white border-[#f0d9d0] text-[#3d2c2c] hover:bg-[#fdf0ec]'
+                      }`}>{cat}</button>
+                  ))}
+                </div>
+              </div>
+              {(() => {
+                const files = libraryFiles.filter(f => f.card_id === editingLibraryCard.id)
+                return files.length > 0 && (
+                  <div>
+                    <div className="text-xs text-[#b8958a] mb-1">Attached files</div>
+                    <div className="space-y-1">
+                      {files.map(f => (
+                        <div key={f.id} className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 border border-[#f0d9d0]">
+                          <span className="text-sm flex-1 truncate text-[#3d2c2c]">{f.file_name}</span>
+                          <button onClick={() => setViewingLibraryFile(f)} className="text-xs text-[#e8917a] hover:text-[#d4745d]">Open</button>
+                          <button onClick={() => deleteFile(f)} className="text-xs text-red-400 hover:text-red-600">×</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
+              <div>
+                <label className="block">
+                  <span className="text-xs text-[#b8958a]">Attach file (PDF, image, doc)</span>
+                  <input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp" onChange={async e => {
+                    const file = e.target.files?.[0]
+                    if (file && editingLibraryCard) {
+                      await uploadFile(editingLibraryCard.id, file)
+                      e.target.value = ''
+                    }
+                  }} className="block mt-1 text-xs text-[#3d2c2c] w-full" />
+                </label>
+                {uploadingForCard === editingLibraryCard.id && <div className="text-xs text-[#e8917a] mt-1">Uploading...</div>}
+                {libraryUploadError && <div className="text-xs text-red-400 mt-1">{libraryUploadError}</div>}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => saveLibraryCard(editingLibraryCard)} className="flex-1 bg-[#e8917a] text-white text-sm rounded-xl py-2 hover:bg-[#d4745d] transition-colors">Save</button>
+                <button onClick={() => { if (window.confirm('Delete this card and all its files?')) deleteLibraryCard(editingLibraryCard.id) }} className="text-xs bg-white text-red-400 border border-red-200 rounded-xl px-3 py-2">Delete</button>
+                <button onClick={() => setEditingLibraryCard(null)} className="text-xs text-[#b8958a] px-2">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Cards grid */}
+        <div className="grid gap-4 md:grid-cols-2">
+          {!libraryLoaded ? (
+            <div className="col-span-2 text-sm text-[#b8958a] italic py-4 text-center">Loading library...</div>
+          ) : activeCards.length === 0 && !addingLibraryCard ? (
+            <div className="col-span-2 text-sm text-[#b8958a] italic py-4 text-center">No cards in {libraryActiveCategory} yet.</div>
+          ) : null}
+
+          {activeCards.map(card => {
+            const files = libraryFiles.filter(f => f.card_id === card.id)
+            return (
+              <div key={card.id} className="bg-[#fffdf9] rounded-2xl p-4 border border-[#f0d9d0] hover:border-[#e8917a] transition-all group">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <h4 className="text-sm font-semibold text-[#3d2c2c] flex-1">{card.title}</h4>
+                  <button onClick={() => setEditingLibraryCard(card)} className="text-[#f0d9d0] group-hover:text-[#e8917a] text-sm transition-colors shrink-0">✎</button>
+                </div>
+                {card.body && (
+                  <div className="text-xs text-[#7a5c5c] leading-relaxed mb-3 prose-sm"
+                    dangerouslySetInnerHTML={{ __html: formatBody(card.body) }} />
+                )}
+                {files.length > 0 && (
+                  <div className="space-y-1 mt-2">
+                    {files.map(f => (
+                      <button key={f.id} onClick={() => setViewingLibraryFile(f)}
+                        className="flex items-center gap-2 w-full bg-[#fdf0ec] hover:bg-[#f0d9d0] rounded-xl px-3 py-1.5 transition-colors text-left">
+                        <span className="text-sm">{f.file_type === 'application/pdf' || f.file_name.endsWith('.pdf') ? '📎' : f.file_type.startsWith('image/') ? '🖼️' : '📄'}</span>
+                        <span className="text-xs text-[#3d2c2c] truncate flex-1">{f.file_name}</span>
+                        <span className="text-xs text-[#e8917a]">Open</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <label className="mt-2 block cursor-pointer">
+                  <span className="text-[10px] text-[#b8958a] hover:text-[#e8917a] transition-colors">+ attach file</span>
+                  <input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp" className="hidden" onChange={async e => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      await uploadFile(card.id, file)
+                      e.target.value = ''
+                    }
+                  }} />
+                </label>
+                {uploadingForCard === card.id && <div className="text-[10px] text-[#e8917a] mt-1">Uploading...</div>}
+              </div>
+            )
+          })}
+
+          {addingLibraryCard && (
+            <div className="bg-[#fffdf9] rounded-2xl p-4 border border-[#e8917a] space-y-2">
+              <input value={newLibCardTitle} onChange={e => setNewLibCardTitle(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') addLibraryCard(); if (e.key === 'Escape') setAddingLibraryCard(false) }}
+                placeholder="Card title" autoFocus
+                className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
+              <textarea value={newLibCardBody} onChange={e => setNewLibCardBody(e.target.value)}
+                placeholder="Notes... Use **bold** for bold, - for bullets" rows={4}
+                className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a] resize-none" />
+              <div className="flex gap-2">
+                <button onClick={addLibraryCard} className="flex-1 bg-[#e8917a] text-white text-sm rounded-xl py-2 hover:bg-[#d4745d] transition-colors">Add Card</button>
+                <button onClick={() => { setAddingLibraryCard(false); setNewLibCardTitle(''); setNewLibCardBody('') }} className="flex-1 bg-white text-[#7a5c5c] text-sm rounded-xl py-2 border border-[#f0d9d0]">Cancel</button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {!addingLibraryCard && (
+          <button onClick={() => { setAddingLibraryCard(true); setNewLibCardTitle(''); setNewLibCardBody('') }}
+            className="w-full bg-[#fdf0ec] hover:bg-[#f0d9d0] border border-dashed border-[#f0d9d0] text-[#e8917a] text-sm rounded-2xl py-3 transition-colors">
+            + Add card to {libraryActiveCategory}
+          </button>
+        )}
+      </div>
+    )
+  }
+
   const renderNutritionView = () => {
     const todayNY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
 
@@ -7063,7 +7447,7 @@ export default function Home() {
       {/* Desktop top nav — hidden on mobile */}
       <div className="hidden md:block bg-[#fffdf9] rounded-3xl p-4 mb-4 border border-[#f0d9d0]">
         <div className="flex flex-wrap gap-2 items-center">
-          {[{ id: 'today', label: 'Today' }, { id: 'week', label: 'This Week' }, { id: 'roadmap', label: 'Road Map' }, { id: 'life-admin', label: 'Life Admin' }, { id: 'parking-lot', label: 'Parking Lot' }, { id: 'calendar', label: 'Calendar' }, { id: 'thumb-equity', label: 'Thumb Equity' }, { id: 'nutrition', label: 'Nutrition' }]
+          {[{ id: 'today', label: 'Today' }, { id: 'week', label: 'This Week' }, { id: 'roadmap', label: 'Road Map' }, { id: 'life-admin', label: 'Life Admin' }, { id: 'parking-lot', label: 'Parking Lot' }, { id: 'calendar', label: 'Calendar' }, { id: 'thumb-equity', label: 'Thumb Equity' }, { id: 'nutrition', label: 'Nutrition' }, { id: 'library', label: 'Library' }]
             .filter(section => !hiddenTabs.includes(section.id))
             .map(section => (
             <button key={section.id} onClick={() => setActiveTab(section.id as any)}
@@ -7088,6 +7472,7 @@ export default function Home() {
         {activeTab === 'calendar' && renderCalendarView()}
         {activeTab === 'thumb-equity' && renderThumbEquity()}
         {activeTab === 'nutrition' && renderNutritionView()}
+        {activeTab === 'library' && renderLibraryView()}
       </div>
 
       {/* Mobile bottom tab bar */}
@@ -7101,7 +7486,8 @@ export default function Home() {
             { id: 'parking-lot', label: 'Ideas', icon: '◆' },
             { id: 'calendar', label: 'Calendar', icon: '◻' },
             { id: 'thumb-equity', label: 'Thumb', icon: '♡' },
-            { id: 'nutrition', label: 'Nutrition', icon: '🥗' }
+            { id: 'nutrition', label: 'Nutrition', icon: '🥗' },
+            { id: 'library', label: 'Library', icon: '📚' }
           ].filter(tab => !hiddenTabs.includes(tab.id)).map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
               className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-2xl transition-all shrink-0 min-w-[60px] ${activeTab === tab.id ? 'bg-[#fdf0ec] text-[#e8917a]' : 'text-[#b8958a]'}`}>
@@ -7137,7 +7523,8 @@ export default function Home() {
                   { id: 'life-admin', label: 'Life Admin' },
                   { id: 'parking-lot', label: 'Parking Lot' },
                   { id: 'calendar', label: 'Calendar' },
-                  { id: 'nutrition', label: 'Nutrition' }
+                  { id: 'nutrition', label: 'Nutrition' },
+                  { id: 'library', label: 'Library' }
                 ].map(tab => {
                   const isHidden = hiddenTabs.includes(tab.id)
                   return (
@@ -7149,7 +7536,7 @@ export default function Home() {
                         await supabase.from('user_prefs').upsert({ key: 'hiddenTabs', value: next, updated_at: new Date().toISOString() })
                         // If hiding the active tab, switch to first visible tab
                         if (!isHidden && activeTab === tab.id) {
-                          const allTabs = ['today','week','roadmap','life-admin','parking-lot','calendar','thumb-equity','nutrition']
+                          const allTabs = ['today','week','roadmap','life-admin','parking-lot','calendar','thumb-equity','nutrition','library']
                           const firstVisible = allTabs.find(t => t !== tab.id && !next.includes(t))
                           if (firstVisible) setActiveTab(firstVisible as any)
                         }
