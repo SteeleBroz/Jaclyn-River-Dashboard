@@ -4661,7 +4661,7 @@ export default function Home() {
   const moveLifeCardToParkingLot = async (card: LifeAdminCard, bucket: ParkingLotCard['bucket']) => {
     const existing = parkingLotDBCards.filter(c => c.bucket === bucket)
     const { data } = await supabase.from('parking_lot_cards').insert({
-      title: card.title, description: null, notes: card.notes, bucket, tag: 'Moved', sort_order: existing.length, tab_source: 'parking-lot'
+      title: card.title, description: card.notes || null, notes: card.notes || null, bucket, tag: 'Moved', sort_order: existing.length, tab_source: 'parking-lot'
     }).select().single()
     if (data) {
       setParkingLotDBCards(prev => [...prev, data])
