@@ -4938,8 +4938,8 @@ export default function Home() {
                 {cards.length === 0 && !isAdding && <div className="text-xs text-[#b8958a] italic py-2">Nothing here yet</div>}
                 {cards.map((card, ci) => {
                   const cardKey = `life-admin-${card.id}`
-                  const isExpanded = expandedCardItems[cardKey] !== false
                   const thisItems = cardItems.filter(i => i.card_id === card.id && i.card_tab === 'life-admin').sort((a, b) => a.sort_order - b.sort_order)
+                  const isExpanded = cardKey in expandedCardItems ? expandedCardItems[cardKey] !== false : thisItems.length > 0
                   return (
                   <div key={card.id}
                     draggable
@@ -5231,8 +5231,8 @@ export default function Home() {
                 {cards.length === 0 && !isAdding && <div className="text-xs text-[#b8958a] italic py-2">Nothing parked here yet</div>}
                 {cards.map((card, ci) => {
                   const pCardKey = `parking-lot-${card.id}`
-                  const pIsExpanded = expandedCardItems[pCardKey] !== false
                   const pItems = cardItems.filter(i => i.card_id === card.id && i.card_tab === 'parking-lot').sort((a, b) => a.sort_order - b.sort_order)
+                  const pIsExpanded = pCardKey in expandedCardItems ? expandedCardItems[pCardKey] !== false : pItems.length > 0
                   return (
                   <div key={card.id}
                     draggable
