@@ -167,6 +167,7 @@ export type RoadmapTask = {
   id: number
   phase_index: number
   milestone_index: number
+  milestone_id: number | null  // stable FK — null for legacy tasks
   title: string
   sort_order: number
   completed: boolean

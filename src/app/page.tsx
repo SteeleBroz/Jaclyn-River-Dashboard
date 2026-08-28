@@ -4060,14 +4060,17 @@ export default function Home() {
     roadmapMilestones.filter(m => m.phase_id === phaseId).sort((a, b) => a.sort_order - b.sort_order)
 
   const getTasksForMilestone = (phaseId: number, milestoneId: number) => {
+    // Primary: use stable milestone_id FK (set on all new tasks)
+    const byStableId = roadmapTasks.filter(t => t.milestone_id === milestoneId)
+    if (byStableId.length > 0) return byStableId.sort((a, b) => a.sort_order - b.sort_order)
+    // Legacy fallback: tasks without milestone_id use positional phase_index/milestone_index
     const sortedPhases = [...roadmapPhases].sort((a, b) => a.sort_order - b.sort_order)
     const phaseIdx = sortedPhases.findIndex(p => p.id === phaseId)
     const milestonesForPhase = roadmapMilestones.filter(m => m.phase_id === phaseId).sort((a, b) => a.sort_order - b.sort_order)
     const milestoneIdx = milestonesForPhase.findIndex(m => m.id === milestoneId)
     if (phaseIdx === -1 || milestoneIdx === -1) return []
-    // Look up by stable positional index (matches how tasks were originally saved)
     return roadmapTasks.filter(t =>
-      t.phase_index === phaseIdx && t.milestone_index === milestoneIdx
+      t.milestone_id === null && t.phase_index === phaseIdx && t.milestone_index === milestoneIdx
     ).sort((a, b) => a.sort_order - b.sort_order)
   }
 
@@ -4145,13 +4148,21 @@ export default function Home() {
     await supabase.from('roadmap_tasks').update({ completed: updated, updated_at: new Date().toISOString() }).eq('id', task.id)
   }
 
-  const addRoadmapTask = async (phaseOrderIndex: number, milestoneOrderIndex: number) => {
+  const addRoadmapTask = async (phaseOrderIndex: number, milestoneOrderIndex: number, milestoneId: number) => {
     if (!newRoadmapTaskTitle.trim()) return
-    const existing = roadmapTasks.filter(t => t.phase_index === phaseOrderIndex && t.milestone_index === milestoneOrderIndex)
+    // Use stable milestone_id; keep phase_index/milestone_index for legacy compat
+    const existing = getTasksForMilestone(
+      roadmapPhases.find(p => [...roadmapPhases].sort((a,b)=>a.sort_order-b.sort_order)[phaseOrderIndex]?.id === p.id)?.id ?? 0,
+      milestoneId
+    )
     const sortOrder = existing.length
     const { data } = await supabase.from('roadmap_tasks').insert({
-      phase_index: phaseOrderIndex, milestone_index: milestoneOrderIndex,
-      title: newRoadmapTaskTitle.trim(), sort_order: sortOrder, completed: false
+      phase_index: phaseOrderIndex,
+      milestone_index: milestoneOrderIndex,
+      milestone_id: milestoneId,
+      title: newRoadmapTaskTitle.trim(),
+      sort_order: sortOrder,
+      completed: false
     }).select().single()
     if (data) setRoadmapTasks(prev => [...prev, data])
     setNewRoadmapTaskTitle('')
@@ -4263,20 +4274,25 @@ export default function Home() {
                     const prev = sorted[phaseOrderIndex - 1]
                     const prevIdx = phaseOrderIndex - 1
                     const curIdx = phaseOrderIndex
-                    // Swap sort_orders between this phase and the one above
+                    // Swap sort_orders on phases only — new tasks use milestone_id (stable)
                     setRoadmapPhases(ps => ps.map(p => p.id === phase.id ? {...p, sort_order: prev.sort_order} : p.id === prev.id ? {...p, sort_order: phase.sort_order} : p))
-                    // Update tasks: swap phase_index for tasks belonging to each phase
+                    // For legacy tasks (milestone_id IS NULL): update phase_index using task IDs to avoid race
+                    const curPhaseLegacyIds = roadmapTasks.filter(t => t.milestone_id === null && t.phase_index === curIdx).map(t => t.id)
+                    const prevPhaseLegacyIds = roadmapTasks.filter(t => t.milestone_id === null && t.phase_index === prevIdx).map(t => t.id)
                     setRoadmapTasks(ts => ts.map(t => {
+                      if (t.milestone_id !== null) return t
                       if (t.phase_index === curIdx) return {...t, phase_index: prevIdx}
                       if (t.phase_index === prevIdx) return {...t, phase_index: curIdx}
                       return t
                     }))
-                    await Promise.all([
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const dbOps: any[] = [
                       supabase.from('roadmap_phases').update({sort_order: prev.sort_order}).eq('id', phase.id),
                       supabase.from('roadmap_phases').update({sort_order: phase.sort_order}).eq('id', prev.id),
-                      supabase.from('roadmap_tasks').update({phase_index: prevIdx}).eq('phase_index', curIdx),
-                      supabase.from('roadmap_tasks').update({phase_index: curIdx}).eq('phase_index', prevIdx),
-                    ])
+                    ]
+                    if (curPhaseLegacyIds.length > 0) dbOps.push(supabase.from('roadmap_tasks').update({phase_index: prevIdx}).in('id', curPhaseLegacyIds))
+                    if (prevPhaseLegacyIds.length > 0) dbOps.push(supabase.from('roadmap_tasks').update({phase_index: curIdx}).in('id', prevPhaseLegacyIds))
+                    await Promise.all(dbOps)
                   }} disabled={phaseOrderIndex === 0} className="text-[10px] text-[#b8958a] hover:text-[#e8917a] disabled:opacity-20 transition-colors leading-none">▲</button>
                   <button onClick={async () => {
                     const sorted = [...roadmapPhases].sort((a,b) => a.sort_order - b.sort_order)
@@ -4284,20 +4300,23 @@ export default function Home() {
                     const next = sorted[phaseOrderIndex + 1]
                     const nextIdx = phaseOrderIndex + 1
                     const curIdx = phaseOrderIndex
-                    // Swap sort_orders between this phase and the one below
                     setRoadmapPhases(ps => ps.map(p => p.id === phase.id ? {...p, sort_order: next.sort_order} : p.id === next.id ? {...p, sort_order: phase.sort_order} : p))
-                    // Update tasks: swap phase_index for tasks belonging to each phase
+                    const curPhaseLegacyIds = roadmapTasks.filter(t => t.milestone_id === null && t.phase_index === curIdx).map(t => t.id)
+                    const nextPhaseLegacyIds = roadmapTasks.filter(t => t.milestone_id === null && t.phase_index === nextIdx).map(t => t.id)
                     setRoadmapTasks(ts => ts.map(t => {
+                      if (t.milestone_id !== null) return t
                       if (t.phase_index === curIdx) return {...t, phase_index: nextIdx}
                       if (t.phase_index === nextIdx) return {...t, phase_index: curIdx}
                       return t
                     }))
-                    await Promise.all([
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const dbOps2: any[] = [
                       supabase.from('roadmap_phases').update({sort_order: next.sort_order}).eq('id', phase.id),
                       supabase.from('roadmap_phases').update({sort_order: phase.sort_order}).eq('id', next.id),
-                      supabase.from('roadmap_tasks').update({phase_index: nextIdx}).eq('phase_index', curIdx),
-                      supabase.from('roadmap_tasks').update({phase_index: curIdx}).eq('phase_index', nextIdx),
-                    ])
+                    ]
+                    if (curPhaseLegacyIds.length > 0) dbOps2.push(supabase.from('roadmap_tasks').update({phase_index: nextIdx}).in('id', curPhaseLegacyIds))
+                    if (nextPhaseLegacyIds.length > 0) dbOps2.push(supabase.from('roadmap_tasks').update({phase_index: curIdx}).in('id', nextPhaseLegacyIds))
+                    await Promise.all(dbOps2)
                   }} disabled={phaseOrderIndex === roadmapPhases.length - 1} className="text-[10px] text-[#b8958a] hover:text-[#e8917a] disabled:opacity-20 transition-colors leading-none">▼</button>
                 </div>
                 <div className="flex-1 min-w-0">
@@ -4464,10 +4483,10 @@ export default function Home() {
                           {isAddingHere ? (
                             <div className="flex gap-2">
                               <input value={newRoadmapTaskTitle} onChange={e => setNewRoadmapTaskTitle(e.target.value)}
-                                onKeyDown={e => { if (e.key === 'Enter') addRoadmapTask(phaseOrderIndex, milestoneOrderIndex); if (e.key === 'Escape') setAddingRoadmapTask(null) }}
+                                onKeyDown={e => { if (e.key === 'Enter') addRoadmapTask(phaseOrderIndex, milestoneOrderIndex, milestone.id); if (e.key === 'Escape') setAddingRoadmapTask(null) }}
                                 placeholder="Add action step..." autoFocus
                                 className="flex-1 bg-white rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
-                              <button onClick={() => addRoadmapTask(phaseOrderIndex, milestoneOrderIndex)} className="bg-[#e8917a] text-white text-sm rounded-xl px-3 py-2 hover:bg-[#d4745d] transition-colors">Add</button>
+                              <button onClick={() => addRoadmapTask(phaseOrderIndex, milestoneOrderIndex, milestone.id)} className="bg-[#e8917a] text-white text-sm rounded-xl px-3 py-2 hover:bg-[#d4745d] transition-colors">Add</button>
                               <button onClick={() => setAddingRoadmapTask(null)} className="text-[#b8958a] text-sm px-2">✕</button>
                             </div>
                           ) : (
