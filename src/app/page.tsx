@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, LifeAdminCard, ParkingLotCard, RoadmapTask, WeeklyMission, BillNote, RoadmapPhase, RoadmapMilestone, PromptCard, DayPlan, TimeBlock, BlockOption, DayTarget, ShoppingItem, HydrationLog, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
+import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, LifeAdminCard, ParkingLotCard, CardItem, RoadmapTask, WeeklyMission, BillNote, RoadmapPhase, RoadmapMilestone, PromptCard, DayPlan, TimeBlock, BlockOption, DayTarget, ShoppingItem, HydrationLog, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday','overflow'] as const
 const DAY_LABELS: Record<string, string> = {
@@ -192,6 +192,10 @@ export default function Home() {
   const [recurrenceEndDate, setRecurrenceEndDate] = useState<string>('')
   const [recurrenceCount, setRecurrenceCount] = useState<number>(10)
   
+  // Settings panel state
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [hiddenTabs, setHiddenTabs] = useState<string[]>([]) // Loaded from user_prefs
+
   // Admin Mode state
   const [adminMode, setAdminMode] = useState<boolean>(false)
   const [dashboardSettings, setDashboardSettings] = useState<DashboardSettings | null>(null)
@@ -226,7 +230,7 @@ export default function Home() {
   const weekendAudioRef = useRef<HTMLAudioElement | null>(null)
   const [weekendAudioPlaying, setWeekendAudioPlaying] = useState(false)
   const [phaseProgress, setPhaseProgress] = useState<Record<string, boolean>>({})
-  const [parkingLotCards, setParkingLotCards] = useState<{id: string; bucket: 'Home'|'Personal'|'Kids'|'SteeleBroz'; title: string; description: string; notes: string; tag: string; created_at: string}[]>(() => {
+  const [parkingLotCards, setParkingLotCards] = useState<{id: string; bucket: 'Vacations'|'Family Fun Ideas'|'Movies'|'Shows'|'Medical'|'Unsorted'; title: string; description: string; notes: string; tag: string; created_at: string}[]>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('parkingLotCards')
       return stored ? JSON.parse(stored) : []
@@ -304,6 +308,13 @@ export default function Home() {
   const [showDoneColumn, setShowDoneColumn] = useState(false)
   const [editingLifeCard, setEditingLifeCard] = useState<LifeAdminCard | null>(null)
   const [editingParkingCard, setEditingParkingCard] = useState<ParkingLotCard | null>(null)
+  // Card checklist items (shared across both tabs)
+  const [cardItems, setCardItems] = useState<CardItem[]>([])
+  const [expandedCardItems, setExpandedCardItems] = useState<Record<string, boolean>>({})
+  const [addingItemForCard, setAddingItemForCard] = useState<string | null>(null) // key: `${tab}-${id}`
+  const [newItemLabel, setNewItemLabel] = useState('')
+  const [editingItemId, setEditingItemId] = useState<string | null>(null)
+  const [editingItemLabel, setEditingItemLabel] = useState('')
   const [editingRoadmapTask, setEditingRoadmapTask] = useState<RoadmapTask | null>(null)
   const [addingLifeCard, setAddingLifeCard] = useState<{column: string} | null>(null)
   const [newLifeCardTitle, setNewLifeCardTitle] = useState('')
@@ -544,14 +555,16 @@ export default function Home() {
 
   const fetchV21Data = useCallback(async () => {
     try {
-      const [lifeRes, parkRes, roadRes] = await Promise.all([
+      const [lifeRes, parkRes, roadRes, cardItemsRes] = await Promise.all([
         supabase.from('life_admin_cards').select('*').order('sort_order').order('created_at', { ascending: false }),
         supabase.from('parking_lot_cards').select('*').order('sort_order').order('created_at', { ascending: false }),
-        supabase.from('roadmap_tasks').select('*').order('phase_index').order('milestone_index').order('sort_order')
+        supabase.from('roadmap_tasks').select('*').order('phase_index').order('milestone_index').order('sort_order'),
+        supabase.from('card_items').select('*').order('sort_order')
       ])
       if (lifeRes.data) setLifeAdminCards(lifeRes.data)
       if (parkRes.data) setParkingLotDBCards(parkRes.data)
       if (roadRes.data) setRoadmapTasks(roadRes.data)
+      if (cardItemsRes.data) setCardItems(cardItemsRes.data)
     } catch (e) {
       console.warn('v2.1 data fetch error:', e)
     }
@@ -597,6 +610,7 @@ export default function Home() {
           }
           if (row.key === 'fridayReviewChecked') setFridayReviewChecked(row.value as Record<string, boolean>)
           if (row.key === 'phaseProgress') setPhaseProgress(row.value as Record<string, boolean>)
+          if (row.key === 'hiddenTabs' && Array.isArray(row.value)) setHiddenTabs(row.value as string[])
         })
         // Restore any running timers from Supabase
         const timerRows = (prefsRes.data || []).filter((r: {key: string; value: unknown}) => r.key.startsWith('timer_start_'))
@@ -3229,7 +3243,7 @@ export default function Home() {
   }
   // Computed values used across multiple render functions
   const nextRoadmapTask = roadmapTasks.find(t => !t.completed)
-  const nextLifeAdminItem = lifeAdminCards.find(c => c.column_key === 'top-priority' && !c.completed)
+  const nextLifeAdminItem = lifeAdminCards.find(c => c.column_key === 'priority' && !c.completed)
 
   // v2.1 Timer helpers
   const startTimer = (key: string, preset: number) => {
@@ -3890,7 +3904,7 @@ export default function Home() {
     const ws = getCurrentWeekStart()
     const currentMissions = getCurrentWeekMissions()
     const completedCount = currentMissions.filter(m => m.completed).length
-    const topPriorityAdminItems = lifeAdminCards.filter(c => c.column_key === 'top-priority' && !c.completed)
+    const topPriorityAdminItems = lifeAdminCards.filter(c => c.column_key === 'priority' && !c.completed)
 
     // Week events Mon-Sun
     const isSaturday = new Date().toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/New_York' }) === 'Saturday'
@@ -3989,9 +4003,9 @@ export default function Home() {
                 <div key={card.id} className={`flex items-center gap-3 rounded-2xl px-4 py-3 border transition-all ${card.completed ? 'bg-[#edf7f0] border-[#a8d5b5] opacity-60' : 'bg-[#fdf0ec] border-[#f0d9d0]'}`}>
                   <input type="checkbox" checked={card.completed}
                     onChange={async () => {
-                      const updated = { ...card, completed: !card.completed, column_key: !card.completed ? 'done' as const : 'top-priority' as const, updated_at: new Date().toISOString() }
+                      const updated = { ...card, completed: !card.completed, column_key: !card.completed ? 'done' as const : 'priority' as const, updated_at: new Date().toISOString() }
                       setLifeAdminCards(prev => prev.map(c => c.id === card.id ? updated : c))
-                      await supabase.from('life_admin_cards').update({ completed: !card.completed, column_key: !card.completed ? 'done' : 'top-priority', updated_at: new Date().toISOString() }).eq('id', card.id)
+                      await supabase.from('life_admin_cards').update({ completed: !card.completed, column_key: !card.completed ? 'done' : 'priority', updated_at: new Date().toISOString() }).eq('id', card.id)
                     }}
                     className="w-4 h-4 rounded border-[#f0d9d0] bg-white shrink-0 accent-[#4caf7d]" />
                   <div className="flex-1 min-w-0">
@@ -4588,13 +4602,95 @@ export default function Home() {
     </div>
   )
 }
-  const renderLifeAdminView = () => {
+  // Move Life Admin card to a Parking Lot bucket (cross-tab)
+  const moveLifeCardToParkingLot = async (card: LifeAdminCard, bucket: ParkingLotCard['bucket']) => {
+    const existing = parkingLotDBCards.filter(c => c.bucket === bucket)
+    const { data } = await supabase.from('parking_lot_cards').insert({
+      title: card.title, description: null, notes: card.notes, bucket, tag: 'Moved', sort_order: existing.length, tab_source: 'parking-lot'
+    }).select().single()
+    if (data) {
+      setParkingLotDBCards(prev => [...prev, data])
+      const items = cardItems.filter(i => i.card_id === card.id && i.card_tab === 'life-admin')
+      if (items.length > 0) {
+        await Promise.all(items.map(i => supabase.from('card_items').update({ card_id: data.id, card_tab: 'parking-lot' }).eq('id', i.id)))
+        setCardItems(prev => prev.map(i => i.card_id === card.id && i.card_tab === 'life-admin' ? { ...i, card_id: data.id, card_tab: 'parking-lot' as const } : i))
+      }
+      await supabase.from('life_admin_cards').delete().eq('id', card.id)
+      setLifeAdminCards(prev => prev.filter(c => c.id !== card.id))
+    }
+    setEditingLifeCard(null)
+  }
+
+  // Move Parking Lot card to a Life Admin column (cross-tab)
+  const moveParkingCardToLifeAdmin = async (card: ParkingLotCard, columnKey: LifeAdminCard['column_key']) => {
+    const existing = lifeAdminCards.filter(c => c.column_key === columnKey)
+    const { data } = await supabase.from('life_admin_cards').insert({
+      title: card.title, notes: card.notes || card.description, column_key: columnKey, sort_order: existing.length, completed: columnKey === 'done', tab_source: 'life-admin'
+    }).select().single()
+    if (data) {
+      setLifeAdminCards(prev => [...prev, data])
+      const items = cardItems.filter(i => i.card_id === card.id && i.card_tab === 'parking-lot')
+      if (items.length > 0) {
+        await Promise.all(items.map(i => supabase.from('card_items').update({ card_id: data.id, card_tab: 'life-admin' }).eq('id', i.id)))
+        setCardItems(prev => prev.map(i => i.card_id === card.id && i.card_tab === 'parking-lot' ? { ...i, card_id: data.id, card_tab: 'life-admin' as const } : i))
+      }
+      await supabase.from('parking_lot_cards').delete().eq('id', card.id)
+      setParkingLotDBCards(prev => prev.filter(c => c.id !== card.id))
+    }
+    setEditingParkingCard(null)
+  }
+
+  // Card item CRUD (shared)
+  const addCardItem = async (cardId: number, cardTab: 'life-admin' | 'parking-lot') => {
+    if (!newItemLabel.trim()) return
+    const existing = cardItems.filter(i => i.card_id === cardId && i.card_tab === cardTab)
+    const { data } = await supabase.from('card_items').insert({ card_id: cardId, card_tab: cardTab, label: newItemLabel.trim(), completed: false, sort_order: existing.length }).select().single()
+    if (data) setCardItems(prev => [...prev, data])
+    setNewItemLabel('')
+    setAddingItemForCard(null)
+  }
+
+  const toggleCardItem = async (item: CardItem) => {
+    const updated = { ...item, completed: !item.completed }
+    setCardItems(prev => prev.map(i => i.id === item.id ? updated : i))
+    await supabase.from('card_items').update({ completed: !item.completed, updated_at: new Date().toISOString() }).eq('id', item.id)
+  }
+
+  const saveCardItemLabel = async (id: string, label: string) => {
+    setCardItems(prev => prev.map(i => i.id === id ? { ...i, label } : i))
+    await supabase.from('card_items').update({ label, updated_at: new Date().toISOString() }).eq('id', id)
+    setEditingItemId(null)
+  }
+
+  const deleteCardItem = async (id: string) => {
+    setCardItems(prev => prev.filter(i => i.id !== id))
+    await supabase.from('card_items').delete().eq('id', id)
+  }
+
+  const moveCardItemUp = async (items: CardItem[], index: number) => {
+    if (index === 0) return
+    const a = items[index], b = items[index - 1]
+    setCardItems(prev => prev.map(i => i.id === a.id ? { ...i, sort_order: b.sort_order } : i.id === b.id ? { ...i, sort_order: a.sort_order } : i))
+    await Promise.all([supabase.from('card_items').update({ sort_order: b.sort_order }).eq('id', a.id), supabase.from('card_items').update({ sort_order: a.sort_order }).eq('id', b.id)])
+  }
+
+  // Hoisted so both renderLifeAdminView and renderParkingLotView edit modals can use them
   const COLUMNS = [
-    { key: 'top-priority' as const, label: 'Top Priority', color: '#fdf0ec', border: '#f0d9d0', badge: 'bg-[#e8917a] text-white' },
-    { key: 'can-wait' as const, label: 'Can Wait', color: '#fffdf9', border: '#f0d9d0', badge: 'bg-[#f0d9d0] text-[#7a5c5c]' },
-    { key: 'waiting-scheduled' as const, label: 'Waiting / Scheduled', color: '#f0f0ff', border: '#d8d8f8', badge: 'bg-[#d8d8f8] text-[#4a4a9a]' },
+    { key: 'priority' as const, label: 'Priority', color: '#fdf0ec', border: '#f0d9d0', badge: 'bg-[#e8917a] text-white' },
+    { key: 'life-improvement' as const, label: 'Life Improvement', color: '#fffdf9', border: '#f0d9d0', badge: 'bg-[#f0d9d0] text-[#7a5c5c]' },
+    { key: 'ideas-business' as const, label: 'Ideas for Business', color: '#f0f0ff', border: '#d8d8f8', badge: 'bg-[#d8d8f8] text-[#4a4a9a]' },
     { key: 'done' as const, label: 'Done', color: '#edf7f0', border: '#a8d5b5', badge: 'bg-[#a8d5b5] text-[#2d6a4f]' }
   ]
+  const BUCKETS: {title: 'Vacations'|'Family Fun Ideas'|'Movies'|'Shows'|'Medical'|'Unsorted'; color: string; border: string}[] = [
+    { title: 'Vacations', color: '#f0f0ff', border: '#d8d8f8' },
+    { title: 'Family Fun Ideas', color: '#edf7f0', border: '#a8d5b5' },
+    { title: 'Movies', color: '#fff8ec', border: '#f0d9d0' },
+    { title: 'Shows', color: '#fdf0ec', border: '#f0d9d0' },
+    { title: 'Medical', color: '#f5f0ff', border: '#d8c8f8' },
+    { title: 'Unsorted', color: '#f8f8f8', border: '#e0e0e0' }
+  ]
+
+  const renderLifeAdminView = () => {
 
   const addLifeCard = async (columnKey: string) => {
     if (!newLifeCardTitle.trim()) return
@@ -4699,19 +4795,32 @@ export default function Home() {
       {/* Edit modal */}
       {editingLifeCard && (
         <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-4" onClick={() => setEditingLifeCard(null)}>
-          <div className="bg-[#fffdf9] rounded-2xl p-5 w-full max-w-md space-y-3 shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-[#fffdf9] rounded-2xl p-5 w-full max-w-md space-y-3 shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <h3 className="text-base font-semibold text-[#3d2c2c]">Edit Card</h3>
             <input value={editingLifeCard.title} onChange={e => setEditingLifeCard({ ...editingLifeCard, title: e.target.value })}
               className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]" placeholder="Title" />
             <textarea value={editingLifeCard.notes || ''} onChange={e => setEditingLifeCard({ ...editingLifeCard, notes: e.target.value })}
               className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a] resize-none" rows={3} placeholder="Notes (optional)" />
+            {/* Move within Life Admin */}
             <div>
-              <div className="text-xs text-[#b8958a] mb-1">Move to column</div>
+              <div className="text-xs text-[#b8958a] mb-1">Life Admin column</div>
               <div className="grid grid-cols-2 gap-2">
                 {COLUMNS.map(col => (
                   <button key={col.key} onClick={() => { moveLifeCard(editingLifeCard, col.key); setEditingLifeCard(null) }}
                     className={`text-xs py-2 rounded-xl border transition-all ${editingLifeCard.column_key === col.key ? 'bg-[#e8917a] text-white border-[#e8917a]' : 'bg-white border-[#f0d9d0] text-[#3d2c2c] hover:bg-[#fdf0ec]'}`}>
                     {col.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Move to Parking Lot */}
+            <div>
+              <div className="text-xs text-[#b8958a] mb-1">Move to Parking Lot</div>
+              <div className="grid grid-cols-2 gap-2">
+                {BUCKETS.map(b => (
+                  <button key={b.title} onClick={() => moveLifeCardToParkingLot(editingLifeCard, b.title)}
+                    className="text-xs py-2 rounded-xl border bg-white border-[#f0d9d0] text-[#3d2c2c] hover:bg-[#fdf0ec] transition-all">
+                    {b.title}
                   </button>
                 ))}
               </div>
@@ -4757,7 +4866,11 @@ export default function Home() {
               )}
               <div className="space-y-2">
                 {cards.length === 0 && !isAdding && <div className="text-xs text-[#b8958a] italic py-2">Nothing here yet</div>}
-                {cards.map((card, ci) => (
+                {cards.map((card, ci) => {
+                  const cardKey = `life-admin-${card.id}`
+                  const isExpanded = expandedCardItems[cardKey]
+                  const thisItems = cardItems.filter(i => i.card_id === card.id && i.card_tab === 'life-admin').sort((a, b) => a.sort_order - b.sort_order)
+                  return (
                   <div key={card.id} className="bg-white rounded-2xl px-3 py-3 border border-[#f0d9d0] hover:border-[#e8917a] transition-all group">
                     <div className="flex items-start gap-2">
                       {/* Up/down arrows */}
@@ -4767,14 +4880,59 @@ export default function Home() {
                         <button onClick={() => moveLifeCardDown(cards, ci)} disabled={ci === cards.length - 1}
                           className="text-[10px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 leading-none">▼</button>
                       </div>
-                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setEditingLifeCard(card)}>
-                        <div className={`text-sm font-medium ${card.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{card.title}</div>
-                        {card.notes && <div className="text-xs text-[#7a5c5c] mt-0.5 truncate">{card.notes}</div>}
+                      <div className="flex-1 min-w-0">
+                        <div className={`text-sm font-medium cursor-pointer ${card.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`} onClick={() => setEditingLifeCard(card)}>{card.title}</div>
+                        {card.notes && <div className="text-xs text-[#7a5c5c] mt-0.5">{card.notes}</div>}
+                        {/* Checklist toggle */}
+                        <button onClick={() => setExpandedCardItems(prev => ({ ...prev, [cardKey]: !isExpanded }))}
+                          className="text-[10px] text-[#b8958a] hover:text-[#e8917a] mt-1 transition-colors">
+                          {isExpanded ? '▴ checklist' : `▾ checklist${thisItems.length > 0 ? ` (${thisItems.filter(i=>i.completed).length}/${thisItems.length})` : ''}`}
+                        </button>
                       </div>
                       <span className="text-[#f0d9d0] group-hover:text-[#e8917a] text-sm transition-colors shrink-0 cursor-pointer" onClick={() => setEditingLifeCard(card)}>✎</span>
                     </div>
+                    {/* Expandable checklist */}
+                    {isExpanded && (
+                      <div className="mt-2 pl-6 space-y-1">
+                        {thisItems.map((item, ii) => (
+                          <div key={item.id} className="flex items-center gap-2 group/item">
+                            <button onClick={() => toggleCardItem(item)}
+                              className={`w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-all ${item.completed ? 'bg-[#4caf7d] border-[#4caf7d]' : 'border-[#f0d9d0] bg-white'}`}>
+                              {item.completed && <span className="text-white text-[8px] font-bold">✓</span>}
+                            </button>
+                            {editingItemId === item.id ? (
+                              <input value={editingItemLabel} onChange={e => setEditingItemLabel(e.target.value)}
+                                onBlur={() => saveCardItemLabel(item.id, editingItemLabel)}
+                                onKeyDown={e => { if (e.key === 'Enter') saveCardItemLabel(item.id, editingItemLabel); if (e.key === 'Escape') setEditingItemId(null) }}
+                                autoFocus className="flex-1 text-xs bg-[#fdf0ec] rounded px-1 border border-[#e8917a] outline-none text-[#3d2c2c]" />
+                            ) : (
+                              <span onClick={() => { setEditingItemId(item.id); setEditingItemLabel(item.label) }}
+                                className={`flex-1 text-xs cursor-text ${item.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{item.label}</span>
+                            )}
+                            <div className="flex gap-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                              <button onClick={() => moveCardItemUp(thisItems, ii)} disabled={ii === 0} className="text-[8px] text-[#b8958a] disabled:opacity-20">▲</button>
+                              <button onClick={() => deleteCardItem(item.id)} className="text-[8px] text-red-400 hover:text-red-600">✕</button>
+                            </div>
+                          </div>
+                        ))}
+                        {addingItemForCard === cardKey ? (
+                          <div className="flex gap-1 mt-1">
+                            <input value={newItemLabel} onChange={e => setNewItemLabel(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') addCardItem(card.id, 'life-admin'); if (e.key === 'Escape') { setAddingItemForCard(null); setNewItemLabel('') } }}
+                              placeholder="Checklist item..." autoFocus
+                              className="flex-1 text-xs bg-[#fdf0ec] rounded px-2 py-1 border border-[#f0d9d0] outline-none focus:border-[#e8917a] text-[#3d2c2c] placeholder-[#b8958a]" />
+                            <button onClick={() => addCardItem(card.id, 'life-admin')} className="text-xs bg-[#e8917a] text-white rounded px-2 py-1">Add</button>
+                            <button onClick={() => { setAddingItemForCard(null); setNewItemLabel('') }} className="text-xs text-[#b8958a]">✕</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => { setAddingItemForCard(cardKey); setNewItemLabel('') }}
+                            className="text-[10px] text-[#b8958a] hover:text-[#e8917a] mt-1 transition-colors">+ add item</button>
+                        )}
+                      </div>
+                    )}
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )
@@ -4808,12 +4966,6 @@ export default function Home() {
   )
 }
   const renderParkingLotView = () => {
-  const BUCKETS: {title: 'Home'|'Personal'|'Kids'|'SteeleBroz'; color: string; border: string}[] = [
-    { title: 'Home', color: '#f0f0ff', border: '#d8d8f8' },
-    { title: 'Personal', color: '#edf7f0', border: '#a8d5b5' },
-    { title: 'Kids', color: '#fff8ec', border: '#f0d9d0' },
-    { title: 'SteeleBroz', color: '#fdf0ec', border: '#f0d9d0' }
-  ]
   const TAGS = ['New Idea', 'Need to Add to Calendar', 'Future Lab', 'Maybe Later', 'Needs Review']
   const TAG_COLORS: Record<string, string> = {
     'New Idea': 'bg-blue-100 text-blue-700',
@@ -4823,7 +4975,7 @@ export default function Home() {
     'Needs Review': 'bg-orange-100 text-orange-700'
   }
 
-  const addParkingCard = async (bucket: 'Home'|'Personal'|'Kids'|'SteeleBroz') => {
+  const addParkingCard = async (bucket: 'Vacations'|'Family Fun Ideas'|'Movies'|'Shows'|'Medical'|'Unsorted') => {
     if (!newCardTitle.trim()) return
     const existing = parkingLotDBCards.filter(c => c.bucket === bucket)
     const { data } = await supabase.from('parking_lot_cards').insert({
@@ -4890,7 +5042,7 @@ export default function Home() {
       {/* Edit modal */}
       {editingParkingCard && (
         <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-4" onClick={() => setEditingParkingCard(null)}>
-          <div className="bg-[#fffdf9] rounded-2xl p-5 w-full max-w-md space-y-3 shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-[#fffdf9] rounded-2xl p-5 w-full max-w-md space-y-3 shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <h3 className="text-base font-semibold text-[#3d2c2c]">Edit Card</h3>
             <input value={editingParkingCard.title} onChange={e => setEditingParkingCard({ ...editingParkingCard, title: e.target.value })}
               className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]" placeholder="Title" />
@@ -4900,13 +5052,26 @@ export default function Home() {
               className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]">
               {TAGS.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
+            {/* Move within Parking Lot */}
             <div>
-              <div className="text-xs text-[#b8958a] mb-1">Move to bucket</div>
+              <div className="text-xs text-[#b8958a] mb-1">Parking Lot bucket</div>
               <div className="grid grid-cols-2 gap-2">
                 {BUCKETS.map(b => (
                   <button key={b.title} onClick={() => setEditingParkingCard({ ...editingParkingCard, bucket: b.title })}
                     className={`text-xs py-2 rounded-xl border transition-all ${editingParkingCard.bucket === b.title ? 'bg-[#e8917a] text-white border-[#e8917a]' : 'bg-white border-[#f0d9d0] text-[#3d2c2c] hover:bg-[#fdf0ec]'}`}>
                     {b.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Move to Life Admin */}
+            <div>
+              <div className="text-xs text-[#b8958a] mb-1">Move to Life Admin</div>
+              <div className="grid grid-cols-2 gap-2">
+                {COLUMNS.map(col => (
+                  <button key={col.key} onClick={() => moveParkingCardToLifeAdmin(editingParkingCard, col.key)}
+                    className="text-xs py-2 rounded-xl border bg-white border-[#f0d9d0] text-[#3d2c2c] hover:bg-[#fdf0ec] transition-all">
+                    {col.label}
                   </button>
                 ))}
               </div>
@@ -4955,27 +5120,73 @@ export default function Home() {
               )}
               <div className="space-y-2">
                 {cards.length === 0 && !isAdding && <div className="text-xs text-[#b8958a] italic py-2">Nothing parked here yet</div>}
-                {cards.map((card, ci) => (
+                {cards.map((card, ci) => {
+                  const pCardKey = `parking-lot-${card.id}`
+                  const pIsExpanded = expandedCardItems[pCardKey]
+                  const pItems = cardItems.filter(i => i.card_id === card.id && i.card_tab === 'parking-lot').sort((a, b) => a.sort_order - b.sort_order)
+                  return (
                   <div key={card.id} className="bg-white rounded-2xl px-3 py-3 border border-white hover:border-[#e8917a] transition-all group">
                     <div className="flex items-start justify-between gap-2">
-                      {/* Up/down arrows */}
                       <div className="flex flex-col gap-0.5 pt-0.5 shrink-0">
                         <button onClick={() => moveParkingCardUp(cards, ci)} disabled={ci === 0}
                           className="text-[10px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 leading-none">▲</button>
                         <button onClick={() => moveParkingCardDown(cards, ci)} disabled={ci === cards.length - 1}
                           className="text-[10px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 leading-none">▼</button>
                       </div>
-                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setEditingParkingCard(card)}>
-                        <div className="text-sm font-medium text-[#3d2c2c]">{card.title}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-[#3d2c2c] cursor-pointer" onClick={() => setEditingParkingCard(card)}>{card.title}</div>
                         {card.description && <div className="text-xs text-[#7a5c5c] mt-0.5">{card.description}</div>}
+                        <button onClick={() => setExpandedCardItems(prev => ({ ...prev, [pCardKey]: !pIsExpanded }))}
+                          className="text-[10px] text-[#b8958a] hover:text-[#e8917a] mt-1 transition-colors">
+                          {pIsExpanded ? '▴ checklist' : `▾ checklist${pItems.length > 0 ? ` (${pItems.filter(i=>i.completed).length}/${pItems.length})` : ''}`}
+                        </button>
                       </div>
                       <span className="text-[#f0d9d0] group-hover:text-[#e8917a] text-sm transition-colors shrink-0 cursor-pointer" onClick={() => setEditingParkingCard(card)}>✎</span>
                     </div>
+                    {pIsExpanded && (
+                      <div className="mt-2 pl-6 space-y-1">
+                        {pItems.map((item, ii) => (
+                          <div key={item.id} className="flex items-center gap-2 group/item">
+                            <button onClick={() => toggleCardItem(item)}
+                              className={`w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-all ${item.completed ? 'bg-[#4caf7d] border-[#4caf7d]' : 'border-[#f0d9d0] bg-white'}`}>
+                              {item.completed && <span className="text-white text-[8px] font-bold">✓</span>}
+                            </button>
+                            {editingItemId === item.id ? (
+                              <input value={editingItemLabel} onChange={e => setEditingItemLabel(e.target.value)}
+                                onBlur={() => saveCardItemLabel(item.id, editingItemLabel)}
+                                onKeyDown={e => { if (e.key === 'Enter') saveCardItemLabel(item.id, editingItemLabel); if (e.key === 'Escape') setEditingItemId(null) }}
+                                autoFocus className="flex-1 text-xs bg-[#fdf0ec] rounded px-1 border border-[#e8917a] outline-none text-[#3d2c2c]" />
+                            ) : (
+                              <span onClick={() => { setEditingItemId(item.id); setEditingItemLabel(item.label) }}
+                                className={`flex-1 text-xs cursor-text ${item.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{item.label}</span>
+                            )}
+                            <div className="flex gap-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                              <button onClick={() => moveCardItemUp(pItems, ii)} disabled={ii === 0} className="text-[8px] text-[#b8958a] disabled:opacity-20">▲</button>
+                              <button onClick={() => deleteCardItem(item.id)} className="text-[8px] text-red-400 hover:text-red-600">✕</button>
+                            </div>
+                          </div>
+                        ))}
+                        {addingItemForCard === pCardKey ? (
+                          <div className="flex gap-1 mt-1">
+                            <input value={newItemLabel} onChange={e => setNewItemLabel(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') addCardItem(card.id, 'parking-lot'); if (e.key === 'Escape') { setAddingItemForCard(null); setNewItemLabel('') } }}
+                              placeholder="Checklist item..." autoFocus
+                              className="flex-1 text-xs bg-[#fdf0ec] rounded px-2 py-1 border border-[#f0d9d0] outline-none focus:border-[#e8917a] text-[#3d2c2c] placeholder-[#b8958a]" />
+                            <button onClick={() => addCardItem(card.id, 'parking-lot')} className="text-xs bg-[#e8917a] text-white rounded px-2 py-1">Add</button>
+                            <button onClick={() => { setAddingItemForCard(null); setNewItemLabel('') }} className="text-xs text-[#b8958a]">✕</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => { setAddingItemForCard(pCardKey); setNewItemLabel('') }}
+                            className="text-[10px] text-[#b8958a] hover:text-[#e8917a] mt-1 transition-colors">+ add item</button>
+                        )}
+                      </div>
+                    )}
                     <div className="mt-2">
                       <span className={`inline-flex text-xs px-2 py-0.5 rounded-full font-medium ${TAG_COLORS[card.tag] || 'bg-[#f0d9d0] text-[#7a5c5c]'}`}>{card.tag}</span>
                     </div>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )
@@ -6832,13 +7043,19 @@ export default function Home() {
 
       {/* Desktop top nav — hidden on mobile */}
       <div className="hidden md:block bg-[#fffdf9] rounded-3xl p-4 mb-4 border border-[#f0d9d0]">
-        <div className="flex flex-wrap gap-2">
-          {[{ id: 'today', label: 'Today' }, { id: 'week', label: 'This Week' }, { id: 'roadmap', label: 'Road Map' }, { id: 'life-admin', label: 'Life Admin' }, { id: 'parking-lot', label: 'Parking Lot' }, { id: 'calendar', label: 'Calendar' }, { id: 'thumb-equity', label: 'Thumb Equity' }, { id: 'nutrition', label: 'Nutrition' }].map(section => (
+        <div className="flex flex-wrap gap-2 items-center">
+          {[{ id: 'today', label: 'Today' }, { id: 'week', label: 'This Week' }, { id: 'roadmap', label: 'Road Map' }, { id: 'life-admin', label: 'Life Admin' }, { id: 'parking-lot', label: 'Parking Lot' }, { id: 'calendar', label: 'Calendar' }, { id: 'thumb-equity', label: 'Thumb Equity' }, { id: 'nutrition', label: 'Nutrition' }]
+            .filter(section => !hiddenTabs.includes(section.id))
+            .map(section => (
             <button key={section.id} onClick={() => setActiveTab(section.id as any)}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${activeTab === section.id ? 'bg-[#e8917a] text-white' : 'text-[#7a5c5c] hover:text-[#3d2c2c] hover:bg-[#fdf0ec]'}`}>
               {section.label}
             </button>
           ))}
+          <button onClick={() => setSettingsOpen(true)}
+            className="ml-auto text-[#b8958a] hover:text-[#3d2c2c] transition-colors p-1.5 rounded-full hover:bg-[#fdf0ec]" title="Settings">
+            <span className="text-lg">⚙️</span>
+          </button>
         </div>
       </div>
 
@@ -6866,15 +7083,70 @@ export default function Home() {
             { id: 'calendar', label: 'Calendar', icon: '◻' },
             { id: 'thumb-equity', label: 'Thumb', icon: '♡' },
             { id: 'nutrition', label: 'Nutrition', icon: '🥗' }
-          ].map(tab => (
+          ].filter(tab => !hiddenTabs.includes(tab.id)).map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
               className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-2xl transition-all shrink-0 min-w-[60px] ${activeTab === tab.id ? 'bg-[#fdf0ec] text-[#e8917a]' : 'text-[#b8958a]'}`}>
               <span className="text-2xl leading-none">{tab.icon}</span>
               <span className={`text-[10px] leading-tight font-medium ${activeTab === tab.id ? 'text-[#e8917a]' : 'text-[#b8958a]'}`}>{tab.label}</span>
             </button>
           ))}
+          {/* Gear icon always visible at end of mobile bar */}
+          <button onClick={() => setSettingsOpen(true)}
+            className="flex flex-col items-center gap-0.5 px-3 py-2 rounded-2xl transition-all shrink-0 min-w-[60px] text-[#b8958a] hover:text-[#3d2c2c]">
+            <span className="text-2xl leading-none">⚙️</span>
+            <span className="text-[10px] leading-tight font-medium text-[#b8958a]">More</span>
+          </button>
         </div>
       </div>
+
+      {/* Settings Panel */}
+      {settingsOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-4" onClick={() => setSettingsOpen(false)}>
+          <div className="bg-[#fffdf9] rounded-2xl p-5 w-full max-w-sm space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold text-[#3d2c2c]">⚙️ Settings</h3>
+              <button onClick={() => setSettingsOpen(false)} className="text-[#b8958a] hover:text-[#3d2c2c] text-lg">×</button>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-widest text-[#b8958a] mb-2">Visible Tabs</div>
+              <div className="space-y-2">
+                {[
+                  { id: 'today', label: 'Today' },
+                  { id: 'week', label: 'This Week' },
+                  { id: 'thumb-equity', label: 'Thumb Equity' },
+                  { id: 'roadmap', label: 'Road Map' },
+                  { id: 'life-admin', label: 'Life Admin' },
+                  { id: 'parking-lot', label: 'Parking Lot' },
+                  { id: 'calendar', label: 'Calendar' },
+                  { id: 'nutrition', label: 'Nutrition' }
+                ].map(tab => {
+                  const isHidden = hiddenTabs.includes(tab.id)
+                  return (
+                    <div key={tab.id} className="flex items-center justify-between">
+                      <span className="text-sm text-[#3d2c2c]">{tab.label}</span>
+                      <button onClick={async () => {
+                        const next = isHidden ? hiddenTabs.filter(t => t !== tab.id) : [...hiddenTabs, tab.id]
+                        setHiddenTabs(next)
+                        await supabase.from('user_prefs').upsert({ key: 'hiddenTabs', value: next, updated_at: new Date().toISOString() })
+                        // If hiding the active tab, switch to first visible tab
+                        if (!isHidden && activeTab === tab.id) {
+                          const allTabs = ['today','week','roadmap','life-admin','parking-lot','calendar','thumb-equity','nutrition']
+                          const firstVisible = allTabs.find(t => t !== tab.id && !next.includes(t))
+                          if (firstVisible) setActiveTab(firstVisible as any)
+                        }
+                      }}
+                        className={`w-11 h-6 rounded-full transition-colors relative ${isHidden ? 'bg-[#f0d9d0]' : 'bg-[#e8917a]'}`}>
+                        <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${isHidden ? 'left-1' : 'left-6'}`} />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            <p className="text-xs text-[#b8958a]">Hidden tabs are still running in the background — all data is preserved.</p>
+          </div>
+        </div>
+      )}
 
       {/* Full Calendar View */}
       {renderFullCalendar()}

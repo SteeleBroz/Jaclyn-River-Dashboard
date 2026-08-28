@@ -129,11 +129,12 @@ export type LifeAdminCard = {
   id: number
   title: string
   notes: string | null
-  column_key: 'top-priority' | 'can-wait' | 'waiting-scheduled' | 'done'
+  column_key: 'priority' | 'life-improvement' | 'ideas-business' | 'done'
   priority: string | null
   category: string | null
   sort_order: number
   completed: boolean
+  tab_source: string
   created_at: string
   updated_at: string
 }
@@ -143,8 +144,20 @@ export type ParkingLotCard = {
   title: string
   description: string | null
   notes: string | null
-  bucket: 'Home' | 'Personal' | 'Kids' | 'SteeleBroz'
+  bucket: 'Vacations' | 'Family Fun Ideas' | 'Movies' | 'Shows' | 'Medical' | 'Unsorted'
   tag: string
+  sort_order: number
+  tab_source: string
+  created_at: string
+  updated_at: string
+}
+
+export type CardItem = {
+  id: string
+  card_id: number
+  card_tab: 'life-admin' | 'parking-lot'
+  label: string
+  completed: boolean
   sort_order: number
   created_at: string
   updated_at: string
