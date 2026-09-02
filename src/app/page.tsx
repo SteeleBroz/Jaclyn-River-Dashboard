@@ -334,8 +334,7 @@ export default function Home() {
   const [libraryCards, setLibraryCards] = useState<LibraryCard[]>([])
   const [libraryFiles, setLibraryFiles] = useState<LibraryFile[]>([])
   const [libraryLoaded, setLibraryLoaded] = useState(false)
-  const [libraryActiveCategory, setLibraryActiveCategory] = useState<string>('Medical')
-  const [addingLibraryCard, setAddingLibraryCard] = useState(false)
+  const [addingLibraryCard, setAddingLibraryCard] = useState<string | null>(null)
   const [newLibCardTitle, setNewLibCardTitle] = useState('')
   const [newLibCardBody, setNewLibCardBody] = useState('')
   const [editingLibraryCard, setEditingLibraryCard] = useState<LibraryCard | null>(null)
@@ -7125,23 +7124,10 @@ export default function Home() {
 
   // ─── LIBRARY VIEW ────────────────────────────────────────────────────────────
   const renderLibraryView = () => {
-    const LIBRARY_CATEGORIES = ['Medical', 'SteeleBroz', 'Star', 'Life', 'Boys']
+    const ROW1_CATS = ['Life', 'Boys', 'SteeleBroz']
+    const ROW2_CATS = ['Medical', 'Star']
+    const ALL_LIB_CATS = [...ROW1_CATS, ...ROW2_CATS]
     const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-
-    const addLibraryCard = async () => {
-      if (!newLibCardTitle.trim()) return
-      const existing = libraryCards.filter(c => c.category === libraryActiveCategory)
-      const { data } = await supabase.from('library_cards').insert({
-        category: libraryActiveCategory,
-        title: newLibCardTitle.trim(),
-        body: newLibCardBody.trim() || null,
-        sort_order: existing.length
-      }).select().single()
-      if (data) setLibraryCards(prev => [...prev, data])
-      setNewLibCardTitle('')
-      setNewLibCardBody('')
-      setAddingLibraryCard(false)
-    }
 
     const saveLibraryCard = async (card: LibraryCard) => {
       setLibraryCards(prev => prev.map(c => c.id === card.id ? card : c))
@@ -7169,11 +7155,7 @@ export default function Home() {
         if (error) throw error
         const existing = libraryFiles.filter(f => f.card_id === cardId)
         const { data } = await supabase.from('library_files').insert({
-          card_id: cardId,
-          file_name: file.name,
-          file_type: file.type,
-          storage_path: path,
-          sort_order: existing.length
+          card_id: cardId, file_name: file.name, file_type: file.type, storage_path: path, sort_order: existing.length
         }).select().single()
         if (data) setLibraryFiles(prev => [...prev, data])
       } catch (e) {
@@ -7194,19 +7176,127 @@ export default function Home() {
     const getFileUrl = (path: string) =>
       `${SUPABASE_URL}/storage/v1/object/public/library-files/${path}`
 
-    const formatBody = (text: string) => {
-      return text
-        .split('\n')
-        .map(line => {
-          const isBullet = line.trim().startsWith('- ') || line.trim().startsWith('* ')
-          const content = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-          if (isBullet) return `<li class="ml-4 list-disc">${content.replace(/^[\-\*]\s/, '')}</li>`
-          return `<p class="${content.trim() ? '' : 'h-2'}">${content}</p>`
-        })
-        .join('')
+    const formatBody = (text: string) =>
+      text.split('\n').map(line => {
+        const isBullet = line.trim().startsWith('- ') || line.trim().startsWith('* ')
+        const html = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        return isBullet
+          ? `<li class="ml-4 list-disc">${html.replace(/^[\-\*]\s/, '')}</li>`
+          : `<p class="${html.trim() ? '' : 'h-2'}">${html}</p>`
+      }).join('')
+
+    const moveLibCardUp = async (cards: LibraryCard[], ci: number) => {
+      if (ci === 0) return
+      const a = cards[ci - 1], b = cards[ci]
+      const updates = [{...a, sort_order: b.sort_order}, {...b, sort_order: a.sort_order}]
+      setLibraryCards(prev => prev.map(c => updates.find(u => u.id === c.id) || c))
+      await Promise.all(updates.map(u => supabase.from('library_cards').update({ sort_order: u.sort_order }).eq('id', u.id)))
     }
 
-    const activeCards = libraryCards.filter(c => c.category === libraryActiveCategory).sort((a, b) => a.sort_order - b.sort_order)
+    const moveLibCardDown = async (cards: LibraryCard[], ci: number) => {
+      if (ci === cards.length - 1) return
+      const a = cards[ci], b = cards[ci + 1]
+      const updates = [{...a, sort_order: b.sort_order}, {...b, sort_order: a.sort_order}]
+      setLibraryCards(prev => prev.map(c => updates.find(u => u.id === c.id) || c))
+      await Promise.all(updates.map(u => supabase.from('library_cards').update({ sort_order: u.sort_order }).eq('id', u.id)))
+    }
+
+    const renderLibCol = (cat: string) => {
+      const cards = libraryCards.filter(c => c.category === cat).sort((a, b) => a.sort_order - b.sort_order)
+      const isAdding = addingLibraryCard === cat
+
+      return (
+        <div key={cat} className="bg-[#fffdf9] rounded-2xl p-3 border border-[#f0d9d0] flex flex-col min-w-0">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-[#3d2c2c] uppercase tracking-wider">{cat}</span>
+            <button onClick={() => { setAddingLibraryCard(isAdding ? null : cat); setNewLibCardTitle(''); setNewLibCardBody('') }}
+              className="w-6 h-6 rounded-full bg-[#fdf0ec] hover:bg-[#f0d9d0] text-[#e8917a] flex items-center justify-center text-sm font-medium transition-colors border border-[#f0d9d0]">+</button>
+          </div>
+
+          {/* Add form */}
+          {isAdding && (
+            <div className="mb-2 bg-white rounded-xl p-2.5 border border-[#f0d9d0] space-y-2">
+              <input value={newLibCardTitle} onChange={e => setNewLibCardTitle(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Escape') setAddingLibraryCard(null) }}
+                placeholder="Title" autoFocus
+                className="w-full bg-[#fdf0ec] rounded-lg px-2.5 py-1.5 text-xs border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
+              <textarea value={newLibCardBody} onChange={e => setNewLibCardBody(e.target.value)}
+                placeholder="Notes... **bold**, - bullets" rows={3}
+                className="w-full bg-[#fdf0ec] rounded-lg px-2.5 py-1.5 text-xs border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a] resize-none" />
+              <div className="flex gap-1.5">
+                <button onClick={async () => {
+                  if (!newLibCardTitle.trim()) return
+                  const existing = libraryCards.filter(c => c.category === cat)
+                  const { data } = await supabase.from('library_cards').insert({
+                    category: cat, title: newLibCardTitle.trim(), body: newLibCardBody.trim() || null, sort_order: existing.length
+                  }).select().single()
+                  if (data) setLibraryCards(prev => [...prev, data])
+                  setNewLibCardTitle(''); setNewLibCardBody(''); setAddingLibraryCard(null)
+                }} className="flex-1 bg-[#e8917a] text-white text-xs rounded-lg py-1.5 hover:bg-[#d4745d] transition-colors">Add</button>
+                <button onClick={() => setAddingLibraryCard(null)} className="flex-1 bg-white text-[#7a5c5c] text-xs rounded-lg py-1.5 border border-[#f0d9d0]">Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {/* Cards */}
+          <div className="space-y-2 flex-1">
+            {cards.length === 0 && !isAdding && (
+              <div className="text-[10px] text-[#b8958a] italic py-1">Empty</div>
+            )}
+            {cards.map((card, ci) => {
+              const files = libraryFiles.filter(f => f.card_id === card.id)
+              const ck = `library-${card.id}`
+              const thisItems = cardItems.filter(i => i.card_id === parseInt(card.id) && i.card_tab === 'financial').length  // library uses separate files
+              void thisItems
+              return (
+                <div key={card.id} className="bg-white rounded-xl px-2.5 py-2.5 border border-[#f0d9d0] hover:border-[#e8917a] transition-all group">
+                  <div className="flex items-start gap-1.5">
+                    <div className="flex flex-col gap-0.5 pt-0.5 shrink-0">
+                      <button onClick={() => moveLibCardUp(cards, ci)} disabled={ci === 0}
+                        className="text-[9px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 leading-none">▲</button>
+                      <button onClick={() => moveLibCardDown(cards, ci)} disabled={ci === cards.length - 1}
+                        className="text-[9px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 leading-none">▼</button>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-[#3d2c2c] cursor-pointer leading-snug mb-1"
+                        onClick={() => setEditingLibraryCard(card)}>{card.title}</div>
+                      {card.body && (
+                        <div className="text-[10px] text-[#7a5c5c] leading-relaxed mb-1.5"
+                          dangerouslySetInnerHTML={{ __html: formatBody(card.body) }} />
+                      )}
+                      {/* Files */}
+                      {files.length > 0 && (
+                        <div className="space-y-1 mb-1">
+                          {files.map(f => (
+                            <button key={f.id} onClick={() => setViewingLibraryFile(f)}
+                              className="flex items-center gap-1.5 w-full bg-[#fdf0ec] hover:bg-[#f0d9d0] rounded-lg px-2 py-1 transition-colors text-left">
+                              <span className="text-xs">{f.file_type === 'application/pdf' || f.file_name.endsWith('.pdf') ? '📎' : f.file_type.startsWith('image/') ? '🖼️' : '📄'}</span>
+                              <span className="text-[10px] text-[#3d2c2c] truncate flex-1">{f.file_name}</span>
+                              <span className="text-[10px] text-[#e8917a]">Open</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <label className="block cursor-pointer">
+                        <span className="text-[9px] text-[#b8958a] hover:text-[#e8917a] transition-colors">+ attach file</span>
+                        <input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp" className="hidden" onChange={async e => {
+                          const file = e.target.files?.[0]
+                          if (file) { await uploadFile(card.id, file); e.target.value = '' }
+                        }} />
+                      </label>
+                      {uploadingForCard === card.id && <div className="text-[9px] text-[#e8917a] mt-0.5">Uploading...</div>}
+                    </div>
+                    <button onClick={() => setEditingLibraryCard(card)}
+                      className="text-[#f0d9d0] group-hover:text-[#e8917a] text-xs transition-colors shrink-0 pt-0.5">✎</button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )
+    }
 
     return (
       <div className="space-y-4">
@@ -7238,25 +7328,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Header */}
-        <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0]">
-          <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-1">Library</div>
-          <h2 className="text-xl font-semibold text-[#3d2c2c]">Your Reference Library</h2>
-          <p className="text-sm text-[#7a5c5c] mt-1">Cards, notes, and files organized by category. Tap any file to open it in the app.</p>
-        </div>
-
-        {/* Category tabs */}
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
-          {LIBRARY_CATEGORIES.map(cat => (
-            <button key={cat} onClick={() => setLibraryActiveCategory(cat)}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all shrink-0 ${
-                libraryActiveCategory === cat ? 'bg-[#e8917a] text-white' : 'bg-[#fdf0ec] text-[#7a5c5c] hover:bg-[#f0d9d0]'
-              }`}>
-              {cat}
-            </button>
-          ))}
-        </div>
-
         {/* Edit card modal */}
         {editingLibraryCard && (
           <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-4" onClick={() => setEditingLibraryCard(null)}>
@@ -7265,16 +7336,16 @@ export default function Home() {
               <input value={editingLibraryCard.title} onChange={e => setEditingLibraryCard({ ...editingLibraryCard, title: e.target.value })}
                 className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]" placeholder="Title" />
               <textarea value={editingLibraryCard.body || ''} onChange={e => setEditingLibraryCard({ ...editingLibraryCard, body: e.target.value })}
-                className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a] resize-none font-mono" rows={8}
-                placeholder="Notes... Use **bold** for bold text, - for bullet points" />
+                className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a] resize-none font-mono" rows={6}
+                placeholder="Notes... Use **bold** for bold, - for bullets" />
               <div>
                 <div className="text-xs text-[#b8958a] mb-1">Move to category</div>
                 <div className="flex flex-wrap gap-2">
-                  {LIBRARY_CATEGORIES.map(cat => (
+                  {ALL_LIB_CATS.map(cat => (
                     <button key={cat} onClick={() => setEditingLibraryCard({ ...editingLibraryCard, category: cat })}
-                      className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                        editingLibraryCard.category === cat ? 'bg-[#e8917a] text-white border-[#e8917a]' : 'bg-white border-[#f0d9d0] text-[#3d2c2c] hover:bg-[#fdf0ec]'
-                      }`}>{cat}</button>
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-all ${editingLibraryCard.category === cat ? 'bg-[#e8917a] text-white border-[#e8917a]' : 'bg-white border-[#f0d9d0] text-[#3d2c2c] hover:bg-[#fdf0ec]'}`}>
+                      {cat}
+                    </button>
                   ))}
                 </div>
               </div>
@@ -7300,10 +7371,7 @@ export default function Home() {
                   <span className="text-xs text-[#b8958a]">Attach file (PDF, image, doc)</span>
                   <input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp" onChange={async e => {
                     const file = e.target.files?.[0]
-                    if (file && editingLibraryCard) {
-                      await uploadFile(editingLibraryCard.id, file)
-                      e.target.value = ''
-                    }
+                    if (file && editingLibraryCard) { await uploadFile(editingLibraryCard.id, file); e.target.value = '' }
                   }} className="block mt-1 text-xs text-[#3d2c2c] w-full" />
                 </label>
                 {uploadingForCard === editingLibraryCard.id && <div className="text-xs text-[#e8917a] mt-1">Uploading...</div>}
@@ -7318,76 +7386,26 @@ export default function Home() {
           </div>
         )}
 
-        {/* Cards grid */}
-        <div className="grid gap-4 md:grid-cols-2">
-          {!libraryLoaded ? (
-            <div className="col-span-2 text-sm text-[#b8958a] italic py-4 text-center">Loading library...</div>
-          ) : activeCards.length === 0 && !addingLibraryCard ? (
-            <div className="col-span-2 text-sm text-[#b8958a] italic py-4 text-center">No cards in {libraryActiveCategory} yet.</div>
-          ) : null}
-
-          {activeCards.map(card => {
-            const files = libraryFiles.filter(f => f.card_id === card.id)
-            return (
-              <div key={card.id} className="bg-[#fffdf9] rounded-2xl p-4 border border-[#f0d9d0] hover:border-[#e8917a] transition-all group">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <h4 className="text-sm font-semibold text-[#3d2c2c] flex-1">{card.title}</h4>
-                  <button onClick={() => setEditingLibraryCard(card)} className="text-[#f0d9d0] group-hover:text-[#e8917a] text-sm transition-colors shrink-0">✎</button>
-                </div>
-                {card.body && (
-                  <div className="text-xs text-[#7a5c5c] leading-relaxed mb-3 prose-sm"
-                    dangerouslySetInnerHTML={{ __html: formatBody(card.body) }} />
-                )}
-                {files.length > 0 && (
-                  <div className="space-y-1 mt-2">
-                    {files.map(f => (
-                      <button key={f.id} onClick={() => setViewingLibraryFile(f)}
-                        className="flex items-center gap-2 w-full bg-[#fdf0ec] hover:bg-[#f0d9d0] rounded-xl px-3 py-1.5 transition-colors text-left">
-                        <span className="text-sm">{f.file_type === 'application/pdf' || f.file_name.endsWith('.pdf') ? '📎' : f.file_type.startsWith('image/') ? '🖼️' : '📄'}</span>
-                        <span className="text-xs text-[#3d2c2c] truncate flex-1">{f.file_name}</span>
-                        <span className="text-xs text-[#e8917a]">Open</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <label className="mt-2 block cursor-pointer">
-                  <span className="text-[10px] text-[#b8958a] hover:text-[#e8917a] transition-colors">+ attach file</span>
-                  <input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp" className="hidden" onChange={async e => {
-                    const file = e.target.files?.[0]
-                    if (file) {
-                      await uploadFile(card.id, file)
-                      e.target.value = ''
-                    }
-                  }} />
-                </label>
-                {uploadingForCard === card.id && <div className="text-[10px] text-[#e8917a] mt-1">Uploading...</div>}
-              </div>
-            )
-          })}
-
-          {addingLibraryCard && (
-            <div className="bg-[#fffdf9] rounded-2xl p-4 border border-[#e8917a] space-y-2">
-              <input value={newLibCardTitle} onChange={e => setNewLibCardTitle(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') addLibraryCard(); if (e.key === 'Escape') setAddingLibraryCard(false) }}
-                placeholder="Card title" autoFocus
-                className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
-              <textarea value={newLibCardBody} onChange={e => setNewLibCardBody(e.target.value)}
-                placeholder="Notes... Use **bold** for bold, - for bullets" rows={4}
-                className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a] resize-none" />
-              <div className="flex gap-2">
-                <button onClick={addLibraryCard} className="flex-1 bg-[#e8917a] text-white text-sm rounded-xl py-2 hover:bg-[#d4745d] transition-colors">Add Card</button>
-                <button onClick={() => { setAddingLibraryCard(false); setNewLibCardTitle(''); setNewLibCardBody('') }} className="flex-1 bg-white text-[#7a5c5c] text-sm rounded-xl py-2 border border-[#f0d9d0]">Cancel</button>
-              </div>
-            </div>
-          )}
+        {/* Header */}
+        <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0]">
+          <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-1">Library</div>
+          <h2 className="text-xl font-semibold text-[#3d2c2c]">Your Reference Library</h2>
+          <p className="text-sm text-[#7a5c5c] mt-1">Tap any file to open it in the app. Use **bold** and - bullets in notes.</p>
         </div>
 
-        {!addingLibraryCard && (
-          <button onClick={() => { setAddingLibraryCard(true); setNewLibCardTitle(''); setNewLibCardBody('') }}
-            className="w-full bg-[#fdf0ec] hover:bg-[#f0d9d0] border border-dashed border-[#f0d9d0] text-[#e8917a] text-sm rounded-2xl py-3 transition-colors">
-            + Add card to {libraryActiveCategory}
-          </button>
+        {!libraryLoaded && (
+          <div className="text-sm text-[#b8958a] italic text-center py-4">Loading library...</div>
         )}
+
+        {/* Row 1: Life · Boys · SteeleBroz */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {ROW1_CATS.map(cat => renderLibCol(cat))}
+        </div>
+
+        {/* Row 2: Medical · Star */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {ROW2_CATS.map(cat => renderLibCol(cat))}
+        </div>
       </div>
     )
   }
