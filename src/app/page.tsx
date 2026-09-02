@@ -6973,7 +6973,7 @@ export default function Home() {
         <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0] flex items-center justify-between">
           <div>
             <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-1">Financial</div>
-            <h2 className="text-xl font-semibold text-[#3d2c2c]">Financial Overview</h2>
+            <h2 className="text-xl font-semibold text-[#3d2c2c]">Forever Financial Freedom</h2>
           </div>
           <button onClick={() => setFinancialLocked(true)} className="text-xs text-[#b8958a] hover:text-[#3d2c2c] border border-[#f0d9d0] rounded-xl px-3 py-1.5 transition-colors">🔒 Lock</button>
         </div>
