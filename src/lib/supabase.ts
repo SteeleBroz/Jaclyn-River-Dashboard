@@ -155,7 +155,7 @@ export type ParkingLotCard = {
 export type CardItem = {
   id: string
   card_id: number
-  card_tab: 'life-admin' | 'parking-lot'
+  card_tab: 'life-admin' | 'parking-lot' | 'financial'
   label: string
   completed: boolean
   sort_order: number
@@ -305,4 +305,15 @@ export type LibraryFile = {
   storage_path: string
   sort_order: number
   created_at: string
+}
+
+export type FinancialCard = {
+  id: number
+  category: string
+  title: string
+  notes: string | null
+  sort_order: number
+  completed: boolean
+  created_at: string
+  updated_at: string
 }

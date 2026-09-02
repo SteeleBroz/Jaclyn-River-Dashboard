@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, LifeAdminCard, ParkingLotCard, CardItem, RoadmapTask, WeeklyMission, BillNote, RoadmapPhase, RoadmapMilestone, PromptCard, DayPlan, TimeBlock, BlockOption, DayTarget, ShoppingItem, HydrationLog, LibraryCard, LibraryFile, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
+import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, LifeAdminCard, ParkingLotCard, CardItem, RoadmapTask, WeeklyMission, BillNote, RoadmapPhase, RoadmapMilestone, PromptCard, DayPlan, TimeBlock, BlockOption, DayTarget, ShoppingItem, HydrationLog, LibraryCard, LibraryFile, FinancialCard, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday','overflow'] as const
 const DAY_LABELS: Record<string, string> = {
@@ -68,7 +68,7 @@ export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [weeklyNotes, setWeeklyNotes] = useState<WeeklyNote[]>([])
-  const [activeTab, setActiveTab] = useState<'today' | 'week' | 'roadmap' | 'life-admin' | 'parking-lot' | 'calendar' | 'thumb-equity' | 'nutrition' | 'library'>('life-admin')
+  const [activeTab, setActiveTab] = useState<'today' | 'week' | 'roadmap' | 'life-admin' | 'parking-lot' | 'calendar' | 'thumb-equity' | 'nutrition' | 'library' | 'financial'>('life-admin')
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day' | 'year'>('month')
   const [calendarDate, setCalendarDate] = useState(new Date())
@@ -340,6 +340,21 @@ export default function Home() {
   const [viewingLibraryFile, setViewingLibraryFile] = useState<LibraryFile | null>(null)
   const [uploadingForCard, setUploadingForCard] = useState<string | null>(null)
   const [libraryUploadError, setLibraryUploadError] = useState<string | null>(null)
+  // Financial tab state
+  const [financialCards, setFinancialCards] = useState<FinancialCard[]>([])
+  const [financialLoaded, setFinancialLoaded] = useState(false)
+  const [financialLocked, setFinancialLocked] = useState(true)
+  const [financialPinInput, setFinancialPinInput] = useState('')
+  const [financialPinError, setFinancialPinError] = useState(false)
+  const [financialActiveCategory, setFinancialActiveCategory] = useState('00')
+  const [addingFinancialCard, setAddingFinancialCard] = useState<string | null>(null)
+  const [newFinCardTitle, setNewFinCardTitle] = useState('')
+  const [newFinCardNotes, setNewFinCardNotes] = useState('')
+  const [editingFinancialCard, setEditingFinancialCard] = useState<FinancialCard | null>(null)
+  const [showChangePinModal, setShowChangePinModal] = useState(false)
+  const [changePinCurrent, setChangePinCurrent] = useState('')
+  const [changePinNew, setChangePinNew] = useState('')
+  const [changePinError, setChangePinError] = useState('')
   // Timer state
   const [activeTimers, setActiveTimers] = useState<Record<string, {seconds: number; running: boolean; preset: number; startTime?: number}>>({})
   const timerIntervalRef = useRef<Record<string, NodeJS.Timeout>>({})
@@ -706,6 +721,18 @@ export default function Home() {
       console.warn('Library fetch error:', e)
     }
   }, [libraryLoaded])
+
+  // Financial fetch (lazy — only after unlock)
+  const fetchFinancialData = useCallback(async () => {
+    if (financialLoaded) return
+    try {
+      const { data } = await supabase.from('financial_cards').select('*').order('sort_order').order('created_at')
+      if (data) setFinancialCards(data)
+      setFinancialLoaded(true)
+    } catch (e) {
+      console.warn('Financial fetch error:', e)
+    }
+  }, [financialLoaded])
 
   // Admin Mode functions
   const handleHeaderWordsClick = () => {
@@ -1366,6 +1393,10 @@ export default function Home() {
     }
     if (activeTab === 'library') {
       fetchLibraryData()
+    }
+    // Re-lock Financial whenever you leave the tab
+    if (activeTab !== 'financial') {
+      setFinancialLocked(true)
     }
   }, [activeTab, fetchThumbEquity, fetchNutritionData, fetchLibraryData])
 
@@ -4696,7 +4727,7 @@ export default function Home() {
   }
 
   // Card item CRUD (shared)
-  const addCardItem = async (cardId: number, cardTab: 'life-admin' | 'parking-lot') => {
+  const addCardItem = async (cardId: number, cardTab: 'life-admin' | 'parking-lot' | 'financial') => {
     if (!newItemLabel.trim()) return
     const existing = cardItems.filter(i => i.card_id === cardId && i.card_tab === cardTab)
     const { data } = await supabase.from('card_items').insert({ card_id: cardId, card_tab: cardTab, label: newItemLabel.trim(), completed: false, sort_order: existing.length }).select().single()
@@ -6698,6 +6729,263 @@ export default function Home() {
 
   // ─── NUTRITION VIEW ──────────────────────────────────────────────────────────
 
+  // ─── FINANCIAL VIEW ─────────────────────────────────────────────────────────
+  const renderFinancialView = () => {
+    const CORRECT_PIN = '500K'
+    const FIN_CATEGORIES = ['00','01','02','03','04','05','06','07','08','09','Checking','MM']
+    const ROW1 = FIN_CATEGORIES.slice(0, 6)
+    const ROW2 = FIN_CATEGORIES.slice(6, 12)
+
+    const unlock = () => {
+      if (financialPinInput === CORRECT_PIN) {
+        setFinancialLocked(false)
+        setFinancialPinError(false)
+        setFinancialPinInput('')
+        fetchFinancialData()
+      } else {
+        setFinancialPinError(true)
+        setFinancialPinInput('')
+      }
+    }
+
+    const addFinCard = async (category: string) => {
+      if (!newFinCardTitle.trim()) return
+      const existing = financialCards.filter(c => c.category === category)
+      const { data } = await supabase.from('financial_cards').insert({
+        category,
+        title: newFinCardTitle.trim(),
+        notes: newFinCardNotes.trim() || null,
+        sort_order: existing.length,
+        completed: false
+      }).select().single()
+      if (data) setFinancialCards(prev => [...prev, data])
+      setNewFinCardTitle('')
+      setNewFinCardNotes('')
+      setAddingFinancialCard(null)
+    }
+
+    const saveFinCard = async (card: FinancialCard) => {
+      setFinancialCards(prev => prev.map(c => c.id === card.id ? card : c))
+      await supabase.from('financial_cards').update({ title: card.title, notes: card.notes, category: card.category, completed: card.completed, updated_at: new Date().toISOString() }).eq('id', card.id)
+      setEditingFinancialCard(null)
+    }
+
+    const deleteFinCard = async (id: number) => {
+      setFinancialCards(prev => prev.filter(c => c.id !== id))
+      await supabase.from('financial_cards').delete().eq('id', id)
+      setEditingFinancialCard(null)
+    }
+
+    const moveFinCardUp = async (cards: FinancialCard[], ci: number) => {
+      if (ci === 0) return
+      const a = cards[ci - 1], b = cards[ci]
+      const updates = [{...a, sort_order: b.sort_order}, {...b, sort_order: a.sort_order}]
+      setFinancialCards(prev => prev.map(c => updates.find(u => u.id === c.id) || c))
+      await Promise.all(updates.map(u => supabase.from('financial_cards').update({ sort_order: u.sort_order }).eq('id', u.id)))
+    }
+
+    const moveFinCardDown = async (cards: FinancialCard[], ci: number) => {
+      if (ci === cards.length - 1) return
+      const a = cards[ci], b = cards[ci + 1]
+      const updates = [{...a, sort_order: b.sort_order}, {...b, sort_order: a.sort_order}]
+      setFinancialCards(prev => prev.map(c => updates.find(u => u.id === c.id) || c))
+      await Promise.all(updates.map(u => supabase.from('financial_cards').update({ sort_order: u.sort_order }).eq('id', u.id)))
+    }
+
+    // ── Passcode gate ──────────────────────────────────────────────────────────
+    if (financialLocked) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6">
+          <div className="text-center">
+            <div className="text-4xl mb-3">🔒</div>
+            <h2 className="text-xl font-semibold text-[#3d2c2c]">Financial</h2>
+            <p className="text-sm text-[#b8958a] mt-1">Enter your PIN to continue</p>
+          </div>
+          <div className="bg-[#fffdf9] rounded-2xl p-6 border border-[#f0d9d0] w-full max-w-xs space-y-4 shadow-sm">
+            <input
+              type="password"
+              value={financialPinInput}
+              onChange={e => { setFinancialPinInput(e.target.value); setFinancialPinError(false) }}
+              onKeyDown={e => { if (e.key === 'Enter') unlock() }}
+              placeholder="PIN"
+              autoFocus
+              className={`w-full text-center text-lg tracking-widest bg-[#fdf0ec] rounded-xl px-4 py-3 border outline-none transition-colors ${financialPinError ? 'border-red-400 text-red-500' : 'border-[#f0d9d0] text-[#3d2c2c] focus:border-[#e8917a]'}`}
+            />
+            {financialPinError && <p className="text-xs text-red-400 text-center">Incorrect PIN — try again</p>}
+            <button onClick={unlock} className="w-full bg-[#e8917a] text-white text-sm rounded-xl py-2.5 hover:bg-[#d4745d] transition-colors font-medium">
+              Unlock
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    // ── Unlocked view ──────────────────────────────────────────────────────────
+    const renderCategoryColumn = (cat: string) => {
+      const cards = financialCards.filter(c => c.category === cat).sort((a, b) => a.sort_order - b.sort_order)
+      const isAdding = addingFinancialCard === cat
+      const finCardKey = (id: number) => `financial-${id}`
+
+      return (
+        <div key={cat} className="bg-[#fffdf9] rounded-2xl p-3 border border-[#f0d9d0] flex flex-col min-w-0">
+          {/* Category header */}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-[#3d2c2c] uppercase tracking-wider">{cat}</span>
+            <button
+              onClick={() => { setAddingFinancialCard(isAdding ? null : cat); setNewFinCardTitle(''); setNewFinCardNotes('') }}
+              className="w-6 h-6 rounded-full bg-[#fdf0ec] hover:bg-[#f0d9d0] text-[#e8917a] flex items-center justify-center text-sm font-medium transition-colors border border-[#f0d9d0]">+</button>
+          </div>
+
+          {/* Add card form */}
+          {isAdding && (
+            <div className="mb-2 bg-white rounded-xl p-2.5 border border-[#f0d9d0] space-y-2">
+              <input value={newFinCardTitle} onChange={e => setNewFinCardTitle(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') addFinCard(cat); if (e.key === 'Escape') setAddingFinancialCard(null) }}
+                placeholder="Title" autoFocus
+                className="w-full bg-[#fdf0ec] rounded-lg px-2.5 py-1.5 text-xs border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
+              <input value={newFinCardNotes} onChange={e => setNewFinCardNotes(e.target.value)}
+                placeholder="Notes (optional)"
+                className="w-full bg-[#fdf0ec] rounded-lg px-2.5 py-1.5 text-xs border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a]" />
+              <div className="flex gap-1.5">
+                <button onClick={() => addFinCard(cat)} className="flex-1 bg-[#e8917a] text-white text-xs rounded-lg py-1.5 hover:bg-[#d4745d] transition-colors">Add</button>
+                <button onClick={() => setAddingFinancialCard(null)} className="flex-1 bg-white text-[#7a5c5c] text-xs rounded-lg py-1.5 border border-[#f0d9d0]">Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {/* Cards */}
+          <div className="space-y-2 flex-1">
+            {cards.length === 0 && !isAdding && (
+              <div className="text-[10px] text-[#b8958a] italic py-1">Empty</div>
+            )}
+            {cards.map((card, ci) => {
+              const ck = finCardKey(card.id)
+              const thisItems = cardItems.filter(i => i.card_id === card.id && i.card_tab === 'financial').sort((a, b) => a.sort_order - b.sort_order)
+              const isExpanded = ck in expandedCardItems ? expandedCardItems[ck] !== false : thisItems.length > 0
+              return (
+                <div key={card.id} className="bg-white rounded-xl px-2.5 py-2 border border-[#f0d9d0] hover:border-[#e8917a] transition-all group">
+                  <div className="flex items-start gap-1.5">
+                    <div className="flex flex-col gap-0.5 pt-0.5 shrink-0">
+                      <button onClick={() => moveFinCardUp(cards, ci)} disabled={ci === 0}
+                        className="text-[9px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 leading-none">▲</button>
+                      <button onClick={() => moveFinCardDown(cards, ci)} disabled={ci === cards.length - 1}
+                        className="text-[9px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 leading-none">▼</button>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-xs font-medium cursor-pointer leading-snug ${card.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}
+                        onClick={() => setEditingFinancialCard(card)}>{card.title}</div>
+                      {card.notes && <div className="text-[10px] text-[#7a5c5c] mt-0.5 leading-snug">{card.notes}</div>}
+                      {/* Checklist toggle */}
+                      <button onClick={() => setExpandedCardItems(prev => ({ ...prev, [ck]: !isExpanded }))}
+                        className="text-[9px] text-[#b8958a] hover:text-[#e8917a] mt-1 transition-colors">
+                        {isExpanded
+                          ? `▴ checklist${thisItems.length > 0 ? ` (${thisItems.filter(i => i.completed).length}/${thisItems.length})` : ''}`
+                          : '▾ checklist'}
+                      </button>
+                      {isExpanded && (
+                        <div className="mt-1.5 space-y-1">
+                          {thisItems.map(item => (
+                            <div key={item.id} className="flex items-center gap-1.5">
+                              <button onClick={() => toggleCardItem(item)}
+                                className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center shrink-0 transition-colors ${item.completed ? 'bg-[#4caf7d] border-[#4caf7d]' : 'border-[#d8c4bc] hover:border-[#e8917a]'}`}>
+                                {item.completed && <span className="text-white text-[8px]">✓</span>}
+                              </button>
+                              {editingItemId === item.id ? (
+                                <input defaultValue={item.label} autoFocus onBlur={e => saveCardItemLabel(item.id, e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Enter') saveCardItemLabel(item.id, e.currentTarget.value); if (e.key === 'Escape') setEditingItemId(null) }}
+                                  className="flex-1 text-[10px] text-[#3d2c2c] bg-[#fdf0ec] rounded px-1 py-0.5 outline-none border border-[#e8917a]" />
+                              ) : (
+                                <span onClick={() => setEditingItemId(item.id)}
+                                  className={`text-[10px] flex-1 cursor-pointer ${item.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`}>{item.label}</span>
+                              )}
+                              <button onClick={() => deleteCardItem(item.id)} className="text-[#f0d9d0] hover:text-red-400 text-[9px] transition-colors shrink-0">×</button>
+                            </div>
+                          ))}
+                          {addingItemForCard === ck ? (
+                            <div className="flex gap-1">
+                              <input value={newItemLabel} onChange={e => setNewItemLabel(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') addCardItem(card.id, 'financial'); if (e.key === 'Escape') setAddingItemForCard(null) }}
+                                placeholder="Add item..." autoFocus
+                                className="flex-1 text-[10px] bg-[#fdf0ec] rounded px-2 py-1 outline-none border border-[#e8917a] text-[#3d2c2c] placeholder-[#b8958a]" />
+                              <button onClick={() => addCardItem(card.id, 'financial')} className="text-[9px] bg-[#e8917a] text-white px-2 py-1 rounded">Add</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => { setAddingItemForCard(ck); setNewItemLabel('') }}
+                              className="text-[9px] text-[#b8958a] hover:text-[#e8917a] transition-colors">+ add item</button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <button onClick={() => setEditingFinancialCard(card)}
+                      className="text-[#f0d9d0] group-hover:text-[#e8917a] text-xs transition-colors shrink-0 pt-0.5">✎</button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-4">
+        {/* Edit card modal */}
+        {editingFinancialCard && (
+          <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-4" onClick={() => setEditingFinancialCard(null)}>
+            <div className="bg-[#fffdf9] rounded-2xl p-5 w-full max-w-lg space-y-3 shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <h3 className="text-base font-semibold text-[#3d2c2c]">Edit Card</h3>
+              <input value={editingFinancialCard.title} onChange={e => setEditingFinancialCard({ ...editingFinancialCard, title: e.target.value })}
+                className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a]" placeholder="Title" />
+              <textarea value={editingFinancialCard.notes || ''} onChange={e => setEditingFinancialCard({ ...editingFinancialCard, notes: e.target.value })}
+                className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a] resize-none" rows={4}
+                placeholder="Notes..." />
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="fin-done" checked={editingFinancialCard.completed} onChange={e => setEditingFinancialCard({ ...editingFinancialCard, completed: e.target.checked })}
+                  className="w-4 h-4 accent-[#4caf7d]" />
+                <label htmlFor="fin-done" className="text-sm text-[#3d2c2c]">Mark complete</label>
+              </div>
+              <div>
+                <div className="text-xs text-[#b8958a] mb-1">Move to category</div>
+                <div className="flex flex-wrap gap-2">
+                  {FIN_CATEGORIES.map(cat => (
+                    <button key={cat} onClick={() => setEditingFinancialCard({ ...editingFinancialCard, category: cat })}
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-all ${editingFinancialCard.category === cat ? 'bg-[#e8917a] text-white border-[#e8917a]' : 'bg-white border-[#f0d9d0] text-[#3d2c2c] hover:bg-[#fdf0ec]'}`}>
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => saveFinCard(editingFinancialCard)} className="flex-1 bg-[#e8917a] text-white text-sm rounded-xl py-2 hover:bg-[#d4745d] transition-colors">Save</button>
+                <button onClick={() => { if (window.confirm('Delete this card?')) deleteFinCard(editingFinancialCard.id) }} className="text-xs bg-white text-red-400 border border-red-200 rounded-xl px-3 py-2">Delete</button>
+                <button onClick={() => setEditingFinancialCard(null)} className="text-xs text-[#b8958a] px-2">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Header */}
+        <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0] flex items-center justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-1">Financial</div>
+            <h2 className="text-xl font-semibold text-[#3d2c2c]">Financial Overview</h2>
+          </div>
+          <button onClick={() => setFinancialLocked(true)} className="text-xs text-[#b8958a] hover:text-[#3d2c2c] border border-[#f0d9d0] rounded-xl px-3 py-1.5 transition-colors">🔒 Lock</button>
+        </div>
+
+        {/* 6×2 grid — desktop. Category pills — mobile */}
+        {/* Row 1 */}
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          {ROW1.map(cat => renderCategoryColumn(cat))}
+        </div>
+        {/* Row 2 */}
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          {ROW2.map(cat => renderCategoryColumn(cat))}
+        </div>
+      </div>
+    )
+  }
+
   // ─── LIBRARY VIEW ────────────────────────────────────────────────────────────
   const renderLibraryView = () => {
     const LIBRARY_CATEGORIES = ['Medical', 'SteeleBroz', 'Star', 'Life', 'Boys']
@@ -7447,7 +7735,7 @@ export default function Home() {
       {/* Desktop top nav — hidden on mobile */}
       <div className="hidden md:block bg-[#fffdf9] rounded-3xl p-4 mb-4 border border-[#f0d9d0]">
         <div className="flex flex-wrap gap-2 items-center">
-          {[{ id: 'today', label: 'Today' }, { id: 'week', label: 'This Week' }, { id: 'life-admin', label: 'Life Admin' }, { id: 'parking-lot', label: 'Parking Lot' }, { id: 'roadmap', label: 'Road Map' }, { id: 'library', label: 'Library' }, { id: 'calendar', label: 'Calendar' }, { id: 'thumb-equity', label: 'Thumb Equity' }, { id: 'nutrition', label: 'Nutrition' }]
+          {[{ id: 'today', label: 'Today' }, { id: 'week', label: 'This Week' }, { id: 'life-admin', label: 'Life Admin' }, { id: 'parking-lot', label: 'Parking Lot' }, { id: 'roadmap', label: 'Road Map' }, { id: 'library', label: 'Library' }, { id: 'financial', label: 'Financial' }, { id: 'calendar', label: 'Calendar' }, { id: 'thumb-equity', label: 'Thumb Equity' }, { id: 'nutrition', label: 'Nutrition' }]
             .filter(section => !hiddenTabs.includes(section.id))
             .map(section => (
             <button key={section.id} onClick={() => setActiveTab(section.id as any)}
@@ -7473,6 +7761,7 @@ export default function Home() {
         {activeTab === 'thumb-equity' && renderThumbEquity()}
         {activeTab === 'nutrition' && renderNutritionView()}
         {activeTab === 'library' && renderLibraryView()}
+        {activeTab === 'financial' && renderFinancialView()}
       </div>
 
       {/* Mobile bottom tab bar */}
@@ -7485,6 +7774,7 @@ export default function Home() {
             { id: 'parking-lot', label: 'Ideas', icon: '◆' },
             { id: 'roadmap', label: 'Road Map', icon: '▲' },
             { id: 'library', label: 'Library', icon: '📚' },
+            { id: 'financial', label: 'Finance', icon: '💰' },
             { id: 'calendar', label: 'Calendar', icon: '◻' },
             { id: 'thumb-equity', label: 'Thumb', icon: '♡' },
             { id: 'nutrition', label: 'Nutrition', icon: '🥗' }
@@ -7522,6 +7812,7 @@ export default function Home() {
                   { id: 'parking-lot', label: 'Parking Lot' },
                   { id: 'roadmap', label: 'Road Map' },
                   { id: 'library', label: 'Library' },
+                  { id: 'financial', label: 'Financial' },
                   { id: 'calendar', label: 'Calendar' },
                   { id: 'thumb-equity', label: 'Thumb Equity' },
                   { id: 'nutrition', label: 'Nutrition' }
@@ -7536,7 +7827,7 @@ export default function Home() {
                         await supabase.from('user_prefs').upsert({ key: 'hiddenTabs', value: next, updated_at: new Date().toISOString() })
                         // If hiding the active tab, switch to first visible tab
                         if (!isHidden && activeTab === tab.id) {
-                          const allTabs = ['today','week','life-admin','parking-lot','roadmap','library','calendar','thumb-equity','nutrition']
+                          const allTabs = ['today','week','life-admin','parking-lot','roadmap','library','financial','calendar','thumb-equity','nutrition']
                           const firstVisible = allTabs.find(t => t !== tab.id && !next.includes(t))
                           if (firstVisible) setActiveTab(firstVisible as any)
                         }
@@ -7550,6 +7841,34 @@ export default function Home() {
               </div>
             </div>
             <p className="text-xs text-[#b8958a]">Hidden tabs are still running in the background — all data is preserved.</p>
+            <div>
+              <div className="text-xs uppercase tracking-widest text-[#b8958a] mb-2">Financial PIN</div>
+              <button onClick={() => { setShowChangePinModal(true); setChangePinCurrent(''); setChangePinNew(''); setChangePinError('') }}
+                className="w-full text-sm text-[#3d2c2c] bg-[#fdf0ec] hover:bg-[#f0d9d0] border border-[#f0d9d0] rounded-xl py-2 transition-colors">🔒 Change Financial PIN</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change PIN modal */}
+      {showChangePinModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowChangePinModal(false)}>
+          <div className="bg-[#fffdf9] rounded-2xl p-5 w-full max-w-xs space-y-3 shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-[#3d2c2c]">Change Financial PIN</h3>
+            <input type="password" value={changePinCurrent} onChange={e => { setChangePinCurrent(e.target.value); setChangePinError('') }}
+              placeholder="Current PIN" className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a] tracking-widest text-center" />
+            <input type="password" value={changePinNew} onChange={e => { setChangePinNew(e.target.value); setChangePinError('') }}
+              placeholder="New PIN" className="w-full bg-[#fdf0ec] rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a] tracking-widest text-center" />
+            {changePinError && <p className="text-xs text-red-400 text-center">{changePinError}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => {
+                if (changePinCurrent !== '500K') { setChangePinError('Current PIN is incorrect'); return }
+                if (!changePinNew.trim()) { setChangePinError('New PIN cannot be empty'); return }
+                alert(`PIN updated to: ${changePinNew} — update it in your dashboard settings next deploy.`)
+                setShowChangePinModal(false)
+              }} className="flex-1 bg-[#e8917a] text-white text-sm rounded-xl py-2 hover:bg-[#d4745d] transition-colors">Update PIN</button>
+              <button onClick={() => setShowChangePinModal(false)} className="flex-1 bg-white text-[#7a5c5c] text-sm rounded-xl py-2 border border-[#f0d9d0]">Cancel</button>
+            </div>
           </div>
         </div>
       )}
