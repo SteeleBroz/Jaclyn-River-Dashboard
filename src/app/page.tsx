@@ -195,6 +195,8 @@ export default function Home() {
   // Settings panel state
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [hiddenTabs, setHiddenTabs] = useState<string[]>([]) // Loaded from user_prefs
+  const DEFAULT_TAB_ORDER = ['today','week','life-admin','parking-lot','roadmap','library','financial','calendar','thumb-equity','nutrition']
+  const [tabOrder, setTabOrder] = useState<string[]>(DEFAULT_TAB_ORDER)
 
   // Admin Mode state
   const [adminMode, setAdminMode] = useState<boolean>(false)
@@ -645,6 +647,7 @@ export default function Home() {
           if (row.key === 'fridayReviewChecked') setFridayReviewChecked(row.value as Record<string, boolean>)
           if (row.key === 'phaseProgress') setPhaseProgress(row.value as Record<string, boolean>)
           if (row.key === 'hiddenTabs' && Array.isArray(row.value)) setHiddenTabs(row.value as string[])
+          if (row.key === 'tabOrder' && Array.isArray(row.value)) setTabOrder(row.value as string[])
           if (row.key === 'freedom_tracker_value' && typeof row.value === 'number') setFreedomValue(row.value)
         })
         // Restore any running timers from Supabase
@@ -7856,6 +7859,20 @@ export default function Home() {
     )
   }
 
+  const TAB_META: Record<string, { label: string; shortLabel: string; icon: string }> = {
+    'today':       { label: 'Today',       shortLabel: 'Today',    icon: '⌂' },
+    'week':        { label: 'This Week',   shortLabel: 'Week',     icon: '◎' },
+    'life-admin':  { label: 'Life Admin',  shortLabel: 'Admin',    icon: '☑' },
+    'parking-lot': { label: 'Parking Lot', shortLabel: 'Ideas',    icon: '◆' },
+    'roadmap':     { label: 'Road Map',    shortLabel: 'Road Map', icon: '▲' },
+    'library':     { label: 'Library',     shortLabel: 'Library',  icon: '📚' },
+    'financial':   { label: 'Financial',   shortLabel: 'Finance',  icon: '💰' },
+    'calendar':    { label: 'Calendar',    shortLabel: 'Calendar', icon: '◻' },
+    'thumb-equity':{ label: 'Thumb Equity',shortLabel: 'Thumb',    icon: '♡' },
+    'nutrition':   { label: 'Nutrition',   shortLabel: 'Nutrition',icon: '🥗' },
+  }
+  const orderedVisibleTabs = tabOrder.filter(id => !hiddenTabs.includes(id) && TAB_META[id])
+
   return (
     <main className="min-h-screen p-3 md:p-6 max-w-[1400px] mx-auto">
       {/* Header */}
@@ -7866,15 +7883,14 @@ export default function Home() {
         {adminMode && (<div className="absolute top-0 right-0 flex items-center gap-2"><span className="text-xs bg-[#e8917a] text-white px-2 py-1 rounded-full">ADMIN</span><button onClick={() => setEditingHeader(true)} className="text-[#7a5c5c] hover:text-[#3d2c2c] transition-colors p-1" title="Edit header words">⚙️</button></div>)}
       </div>
 
+
       {/* Desktop top nav — hidden on mobile */}
       <div className="hidden md:block bg-[#fffdf9] rounded-3xl p-4 mb-4 border border-[#f0d9d0]">
         <div className="flex flex-wrap gap-2 items-center">
-          {[{ id: 'today', label: 'Today' }, { id: 'week', label: 'This Week' }, { id: 'life-admin', label: 'Life Admin' }, { id: 'parking-lot', label: 'Parking Lot' }, { id: 'roadmap', label: 'Road Map' }, { id: 'library', label: 'Library' }, { id: 'financial', label: 'Financial' }, { id: 'calendar', label: 'Calendar' }, { id: 'thumb-equity', label: 'Thumb Equity' }, { id: 'nutrition', label: 'Nutrition' }]
-            .filter(section => !hiddenTabs.includes(section.id))
-            .map(section => (
-            <button key={section.id} onClick={() => setActiveTab(section.id as any)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${activeTab === section.id ? 'bg-[#e8917a] text-white' : 'text-[#7a5c5c] hover:text-[#3d2c2c] hover:bg-[#fdf0ec]'}`}>
-              {section.label}
+          {orderedVisibleTabs.map(id => (
+            <button key={id} onClick={() => setActiveTab(id as any)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${activeTab === id ? 'bg-[#e8917a] text-white' : 'text-[#7a5c5c] hover:text-[#3d2c2c] hover:bg-[#fdf0ec]'}`}>
+              {TAB_META[id]?.label}
             </button>
           ))}
           <button onClick={() => setSettingsOpen(true)}
@@ -7901,22 +7917,11 @@ export default function Home() {
       {/* Mobile bottom tab bar */}
       <div className="fixed bottom-0 left-0 right-0 md:hidden bg-[#fffdf9] border-t border-[#f0d9d0] z-40 safe-area-pb">
         <div className="flex items-center overflow-x-auto scrollbar-hide px-2 py-1.5 gap-1">
-          {[
-            { id: 'today', label: 'Today', icon: '⌂' },
-            { id: 'week', label: 'Week', icon: '◎' },
-            { id: 'life-admin', label: 'Admin', icon: '☑' },
-            { id: 'parking-lot', label: 'Ideas', icon: '◆' },
-            { id: 'roadmap', label: 'Road Map', icon: '▲' },
-            { id: 'library', label: 'Library', icon: '📚' },
-            { id: 'financial', label: 'Finance', icon: '💰' },
-            { id: 'calendar', label: 'Calendar', icon: '◻' },
-            { id: 'thumb-equity', label: 'Thumb', icon: '♡' },
-            { id: 'nutrition', label: 'Nutrition', icon: '🥗' }
-          ].filter(tab => !hiddenTabs.includes(tab.id)).map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
-              className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-2xl transition-all shrink-0 min-w-[60px] ${activeTab === tab.id ? 'bg-[#fdf0ec] text-[#e8917a]' : 'text-[#b8958a]'}`}>
-              <span className="text-2xl leading-none">{tab.icon}</span>
-              <span className={`text-[10px] leading-tight font-medium ${activeTab === tab.id ? 'text-[#e8917a]' : 'text-[#b8958a]'}`}>{tab.label}</span>
+          {orderedVisibleTabs.map(id => (
+            <button key={id} onClick={() => setActiveTab(id as any)}
+              className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-2xl transition-all shrink-0 min-w-[60px] ${activeTab === id ? 'bg-[#fdf0ec] text-[#e8917a]' : 'text-[#b8958a]'}`}>
+              <span className="text-2xl leading-none">{TAB_META[id]?.icon}</span>
+              <span className={`text-[10px] leading-tight font-medium ${activeTab === id ? 'text-[#e8917a]' : 'text-[#b8958a]'}`}>{TAB_META[id]?.shortLabel}</span>
             </button>
           ))}
           {/* Gear icon always visible at end of mobile bar */}
@@ -7939,30 +7944,17 @@ export default function Home() {
             <div>
               <div className="text-xs uppercase tracking-widest text-[#b8958a] mb-2">Visible Tabs</div>
               <div className="space-y-2">
-                {[
-                  { id: 'today', label: 'Today' },
-                  { id: 'week', label: 'This Week' },
-                  { id: 'life-admin', label: 'Life Admin' },
-                  { id: 'parking-lot', label: 'Parking Lot' },
-                  { id: 'roadmap', label: 'Road Map' },
-                  { id: 'library', label: 'Library' },
-                  { id: 'financial', label: 'Financial' },
-                  { id: 'calendar', label: 'Calendar' },
-                  { id: 'thumb-equity', label: 'Thumb Equity' },
-                  { id: 'nutrition', label: 'Nutrition' }
-                ].map(tab => {
-                  const isHidden = hiddenTabs.includes(tab.id)
+                {tabOrder.filter(id => TAB_META[id]).map(id => {
+                  const isHidden = hiddenTabs.includes(id)
                   return (
-                    <div key={tab.id} className="flex items-center justify-between">
-                      <span className="text-sm text-[#3d2c2c]">{tab.label}</span>
+                    <div key={id} className="flex items-center justify-between">
+                      <span className="text-sm text-[#3d2c2c]">{TAB_META[id]?.label}</span>
                       <button onClick={async () => {
-                        const next = isHidden ? hiddenTabs.filter(t => t !== tab.id) : [...hiddenTabs, tab.id]
+                        const next = isHidden ? hiddenTabs.filter(t => t !== id) : [...hiddenTabs, id]
                         setHiddenTabs(next)
                         await supabase.from('user_prefs').upsert({ key: 'hiddenTabs', value: next, updated_at: new Date().toISOString() })
-                        // If hiding the active tab, switch to first visible tab
-                        if (!isHidden && activeTab === tab.id) {
-                          const allTabs = ['today','week','life-admin','parking-lot','roadmap','library','financial','calendar','thumb-equity','nutrition']
-                          const firstVisible = allTabs.find(t => t !== tab.id && !next.includes(t))
+                        if (!isHidden && activeTab === id) {
+                          const firstVisible = tabOrder.find(t => t !== id && !next.includes(t))
                           if (firstVisible) setActiveTab(firstVisible as any)
                         }
                       }}
@@ -7975,6 +7967,32 @@ export default function Home() {
               </div>
             </div>
             <p className="text-xs text-[#b8958a]">Hidden tabs are still running in the background — all data is preserved.</p>
+            <div>
+              <div className="text-xs uppercase tracking-widest text-[#b8958a] mb-2">Tab Order</div>
+              <div className="space-y-1">
+                {tabOrder.filter(id => TAB_META[id]).map((id, i, arr) => (
+                  <div key={id} className="flex items-center gap-2 bg-[#fdf0ec] rounded-xl px-3 py-2">
+                    <span className="text-sm text-[#3d2c2c] flex-1">{TAB_META[id]?.label}</span>
+                    <button disabled={i === 0} onClick={async () => {
+                      const next = [...tabOrder]
+                      const ai = next.indexOf(id)
+                      if (ai <= 0) return
+                      ;[next[ai - 1], next[ai]] = [next[ai], next[ai - 1]]
+                      setTabOrder(next)
+                      await supabase.from('user_prefs').upsert({ key: 'tabOrder', value: next, updated_at: new Date().toISOString() })
+                    }} className="text-[11px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 transition-colors px-1">▲</button>
+                    <button disabled={i === arr.length - 1} onClick={async () => {
+                      const next = [...tabOrder]
+                      const ai = next.indexOf(id)
+                      if (ai >= next.length - 1) return
+                      ;[next[ai], next[ai + 1]] = [next[ai + 1], next[ai]]
+                      setTabOrder(next)
+                      await supabase.from('user_prefs').upsert({ key: 'tabOrder', value: next, updated_at: new Date().toISOString() })
+                    }} className="text-[11px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 transition-colors px-1">▼</button>
+                  </div>
+                ))}
+              </div>
+            </div>
             <div>
               <div className="text-xs uppercase tracking-widest text-[#b8958a] mb-2">Financial PIN</div>
               <button onClick={() => { setShowChangePinModal(true); setChangePinCurrent(''); setChangePinNew(''); setChangePinError('') }}
