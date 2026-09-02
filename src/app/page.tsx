@@ -7936,7 +7936,7 @@ export default function Home() {
       {/* Settings Panel */}
       {settingsOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-4" onClick={() => setSettingsOpen(false)}>
-          <div className="bg-[#fffdf9] rounded-2xl p-5 w-full max-w-sm space-y-4 shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-[#fffdf9] rounded-2xl p-5 w-full max-w-sm space-y-4 shadow-xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold text-[#3d2c2c]">⚙️ Settings</h3>
               <button onClick={() => setSettingsOpen(false)} className="text-[#b8958a] hover:text-[#3d2c2c] text-lg">×</button>
