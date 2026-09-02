@@ -355,6 +355,8 @@ export default function Home() {
   const [changePinCurrent, setChangePinCurrent] = useState('')
   const [changePinNew, setChangePinNew] = useState('')
   const [changePinError, setChangePinError] = useState('')
+  const [freedomValue, setFreedomValue] = useState(0) // current position in dollars, snaps to 5K
+  const freedomDragRef = useRef<HTMLDivElement>(null)
   // Timer state
   const [activeTimers, setActiveTimers] = useState<Record<string, {seconds: number; running: boolean; preset: number; startTime?: number}>>({})
   const timerIntervalRef = useRef<Record<string, NodeJS.Timeout>>({})
@@ -643,6 +645,7 @@ export default function Home() {
           if (row.key === 'fridayReviewChecked') setFridayReviewChecked(row.value as Record<string, boolean>)
           if (row.key === 'phaseProgress') setPhaseProgress(row.value as Record<string, boolean>)
           if (row.key === 'hiddenTabs' && Array.isArray(row.value)) setHiddenTabs(row.value as string[])
+          if (row.key === 'freedom_tracker_value' && typeof row.value === 'number') setFreedomValue(row.value)
         })
         // Restore any running timers from Supabase
         const timerRows = (prefsRes.data || []).filter((r: {key: string; value: unknown}) => r.key.startsWith('timer_start_'))
@@ -6982,6 +6985,137 @@ export default function Home() {
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           {ROW2.map(cat => renderCategoryColumn(cat))}
         </div>
+
+        {/* ── Row 3: Yearly, Sports, Dad Payback ─────────────────────────── */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {['Yearly', 'Sports', 'Dad Payback'].map(cat => renderCategoryColumn(cat))}
+        </div>
+
+        {/* ── Reminder Banner ─────────────────────────────────────────────── */}
+        <div className="bg-[#3d2c2c] rounded-2xl px-5 py-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+          {['Pay credit cards in full', 'Fund LIFE for the next two weeks', 'Fund YEARLY LIFE', 'Fund FREEDOM', 'Invest'].map((item, i, arr) => (
+            <React.Fragment key={item}>
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#f0d9d0] whitespace-nowrap">{item}</span>
+              {i < arr.length - 1 && <span className="text-[#e8917a] text-xs font-bold">|</span>}
+            </React.Fragment>
+          ))}
+        </div>
+
+        {/* ── Row 4: Bills 1, Bills 2, Extra Money ────────────────────────── */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {['Bills 1', 'Bills 2', 'Extra Money'].map(cat => renderCategoryColumn(cat))}
+        </div>
+
+        {/* ── Freedom Tracker ──────────────────────────────────────────────── */}
+        {(() => {
+          const GOAL = 100000
+          const STEP = 5000
+          const STEPS = GOAL / STEP // 20 steps
+          const pct = Math.round((freedomValue / GOAL) * 100)
+          const fmt = (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(0)}K` : `$${v}`
+
+          const handleTrackerClick = (e: React.MouseEvent<HTMLDivElement>) => {
+            const rect = e.currentTarget.getBoundingClientRect()
+            const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+            const snapped = Math.round(ratio * STEPS) * STEP
+            setFreedomValue(snapped)
+            supabase.from('user_prefs').upsert({ key: 'freedom_tracker_value', value: snapped, updated_at: new Date().toISOString() }).then(() => {})
+          }
+
+          const handleTrackerDrag = (e: React.MouseEvent<HTMLDivElement>) => {
+            if (e.buttons !== 1) return
+            const rect = e.currentTarget.getBoundingClientRect()
+            const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+            const snapped = Math.round(ratio * STEPS) * STEP
+            if (snapped !== freedomValue) {
+              setFreedomValue(snapped)
+              supabase.from('user_prefs').upsert({ key: 'freedom_tracker_value', value: snapped, updated_at: new Date().toISOString() }).then(() => {})
+            }
+          }
+
+          return (
+            <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0] space-y-4">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a]">Freedom Fund</div>
+                  <div className="text-lg font-semibold text-[#3d2c2c]">{fmt(freedomValue)}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs text-[#b8958a]">Goal</div>
+                  <div className="text-lg font-semibold text-[#e8917a]">$100K</div>
+                </div>
+              </div>
+
+              {/* Progress bar + drag track */}
+              <div className="space-y-1">
+                <div
+                  ref={freedomDragRef}
+                  className="relative h-8 cursor-pointer select-none"
+                  onClick={handleTrackerClick}
+                  onMouseMove={handleTrackerDrag}
+                >
+                  {/* Track */}
+                  <div className="absolute top-1/2 -translate-y-1/2 w-full h-3 bg-[#f0d9d0] rounded-full overflow-hidden">
+                    {/* Fill */}
+                    <div className="h-full bg-[#4caf7d] rounded-full transition-all duration-150"
+                      style={{ width: `${pct}%` }} />
+                  </div>
+                  {/* Tick marks */}
+                  {Array.from({ length: STEPS + 1 }, (_, i) => (
+                    <div key={i} className="absolute top-1/2 -translate-y-1/2 w-0.5 h-4 bg-[#fffdf9] rounded-full"
+                      style={{ left: `${(i / STEPS) * 100}%`, transform: 'translateX(-50%) translateY(-50%)' }} />
+                  ))}
+                  {/* Handle */}
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 w-6 h-6 bg-white border-2 border-[#4caf7d] rounded-full shadow-md transition-all duration-150 flex items-center justify-center"
+                    style={{ left: `${pct}%`, transform: 'translateX(-50%) translateY(-50%)' }}
+                  >
+                    <div className="w-2 h-2 bg-[#4caf7d] rounded-full" />
+                  </div>
+                </div>
+
+                {/* Tick labels */}
+                <div className="flex justify-between text-[9px] text-[#b8958a] px-0">
+                  {[0, 25, 50, 75, 100].map(p => (
+                    <span key={p}>${p}K</span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Stats row */}
+              <div className="flex items-center gap-4">
+                <div className="flex-1 bg-[#fdf0ec] rounded-2xl px-4 py-2 text-center">
+                  <div className="text-xs text-[#b8958a]">Progress</div>
+                  <div className="text-lg font-bold text-[#4caf7d]">{pct}%</div>
+                </div>
+                <div className="flex-1 bg-[#fdf0ec] rounded-2xl px-4 py-2 text-center">
+                  <div className="text-xs text-[#b8958a]">Remaining</div>
+                  <div className="text-lg font-bold text-[#e8917a]">{fmt(GOAL - freedomValue)}</div>
+                </div>
+                <div className="flex-1 bg-[#fdf0ec] rounded-2xl px-4 py-2 text-center">
+                  <div className="text-xs text-[#b8958a]">Step</div>
+                  <div className="flex gap-2 justify-center mt-1">
+                    <button onClick={() => {
+                      const next = Math.max(0, freedomValue - STEP)
+                      setFreedomValue(next)
+                      supabase.from('user_prefs').upsert({ key: 'freedom_tracker_value', value: next, updated_at: new Date().toISOString() }).then(() => {})
+                    }} className="w-6 h-6 bg-white border border-[#f0d9d0] rounded-full text-[#3d2c2c] text-xs hover:bg-[#f0d9d0] transition-colors">−</button>
+                    <button onClick={() => {
+                      const next = Math.min(GOAL, freedomValue + STEP)
+                      setFreedomValue(next)
+                      supabase.from('user_prefs').upsert({ key: 'freedom_tracker_value', value: next, updated_at: new Date().toISOString() }).then(() => {})
+                    }} className="w-6 h-6 bg-white border border-[#f0d9d0] rounded-full text-[#3d2c2c] text-xs hover:bg-[#f0d9d0] transition-colors">+</button>
+                  </div>
+                </div>
+              </div>
+
+              {freedomValue === GOAL && (
+                <div className="text-center text-sm font-semibold text-[#4caf7d] py-1">🎉 Freedom achieved — $100K reached!</div>
+              )}
+            </div>
+          )
+        })()}
       </div>
     )
   }
