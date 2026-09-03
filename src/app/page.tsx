@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, LifeAdminCard, ParkingLotCard, CardItem, RoadmapTask, WeeklyMission, BillNote, RoadmapPhase, RoadmapMilestone, PromptCard, DayPlan, TimeBlock, BlockOption, DayTarget, ShoppingItem, HydrationLog, LibraryCard, LibraryFile, FinancialCard, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
+import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, LifeAdminCard, ParkingLotCard, CardItem, RoadmapTask, WeeklyMission, BillNote, RoadmapPhase, RoadmapMilestone, PromptCard, DayPlan, TimeBlock, BlockOption, DayTarget, ShoppingItem, HydrationLog, LibraryCard, LibraryFile, LibraryChecklistItem, FinancialCard, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday','overflow'] as const
 const DAY_LABELS: Record<string, string> = {
@@ -339,6 +339,10 @@ export default function Home() {
   const [newLibCardBody, setNewLibCardBody] = useState('')
   const [editingLibraryCard, setEditingLibraryCard] = useState<LibraryCard | null>(null)
   const [viewingLibraryFile, setViewingLibraryFile] = useState<LibraryFile | null>(null)
+  const [libChecklist, setLibChecklist] = useState<LibraryChecklistItem[]>([])
+  const [addingLibItemForCard, setAddingLibItemForCard] = useState<string | null>(null)
+  const [newLibItemLabel, setNewLibItemLabel] = useState('')
+  const [editingLibItemId, setEditingLibItemId] = useState<string | null>(null)
   const [uploadingForCard, setUploadingForCard] = useState<string | null>(null)
   const [libraryUploadError, setLibraryUploadError] = useState<string | null>(null)
   // Financial tab state
@@ -715,12 +719,14 @@ export default function Home() {
   const fetchLibraryData = useCallback(async () => {
     if (libraryLoaded) return
     try {
-      const [cardsRes, filesRes] = await Promise.all([
+      const [cardsRes, filesRes, checkRes] = await Promise.all([
         supabase.from('library_cards').select('*').order('sort_order').order('created_at'),
-        supabase.from('library_files').select('*').order('sort_order')
+        supabase.from('library_files').select('*').order('sort_order'),
+        supabase.from('library_checklist').select('*').order('sort_order')
       ])
       if (cardsRes.data) setLibraryCards(cardsRes.data)
       if (filesRes.data) setLibraryFiles(filesRes.data)
+      if (checkRes.data) setLibChecklist(checkRes.data)
       setLibraryLoaded(true)
     } catch (e) {
       console.warn('Library fetch error:', e)
@@ -7265,6 +7271,84 @@ export default function Home() {
                         <div className="text-[10px] text-[#7a5c5c] leading-relaxed mb-1.5"
                           dangerouslySetInnerHTML={{ __html: formatBody(card.body) }} />
                       )}
+                      {/* Checklist */}
+                      {(() => {
+                        const items = libChecklist.filter(i => i.card_id === card.id).sort((a, b) => a.sort_order - b.sort_order)
+                        return (
+                          <div className="mt-1 mb-1">
+                            {items.map(item => (
+                              <div key={item.id} className="flex items-center gap-1.5 py-0.5 group/ci">
+                                <button onClick={async () => {
+                                  const updated = { ...item, completed: !item.completed }
+                                  setLibChecklist(prev => prev.map(i => i.id === item.id ? updated : i))
+                                  await supabase.from('library_checklist').update({ completed: updated.completed }).eq('id', item.id)
+                                }} className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 transition-all ${
+                                  item.completed ? 'bg-[#4caf7d] border-[#4caf7d]' : 'border-[#d4b8b0] bg-white'
+                                }`}>
+                                  {item.completed && <span className="text-white text-[8px] leading-none">✓</span>}
+                                </button>
+                                {editingLibItemId === item.id ? (
+                                  <input autoFocus defaultValue={item.label}
+                                    className="flex-1 text-[10px] bg-[#fdf0ec] rounded px-1.5 py-0.5 border border-[#f0d9d0] outline-none focus:border-[#e8917a] text-[#3d2c2c]"
+                                    onBlur={async e => {
+                                      const val = e.target.value.trim()
+                                      if (val && val !== item.label) {
+                                        const updated = { ...item, label: val }
+                                        setLibChecklist(prev => prev.map(i => i.id === item.id ? updated : i))
+                                        await supabase.from('library_checklist').update({ label: val }).eq('id', item.id)
+                                      }
+                                      setEditingLibItemId(null)
+                                    }}
+                                    onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
+                                  />
+                                ) : (
+                                  <span onClick={() => setEditingLibItemId(item.id)}
+                                    className={`flex-1 text-[10px] cursor-pointer leading-snug ${
+                                      item.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'
+                                    }`}>{item.label}</span>
+                                )}
+                                <button onClick={async () => {
+                                  setLibChecklist(prev => prev.filter(i => i.id !== item.id))
+                                  await supabase.from('library_checklist').delete().eq('id', item.id)
+                                }} className="opacity-0 group-hover/ci:opacity-100 text-[#d4b8b0] hover:text-red-400 text-[10px] leading-none transition-opacity">×</button>
+                              </div>
+                            ))}
+                            {addingLibItemForCard === card.id ? (
+                              <div className="flex items-center gap-1 mt-1">
+                                <input autoFocus value={newLibItemLabel} onChange={e => setNewLibItemLabel(e.target.value)}
+                                  placeholder="Checklist item"
+                                  className="flex-1 text-[10px] bg-[#fdf0ec] rounded px-1.5 py-0.5 border border-[#f0d9d0] outline-none focus:border-[#e8917a] text-[#3d2c2c] placeholder-[#b8958a]"
+                                  onKeyDown={async e => {
+                                    if (e.key === 'Enter' && newLibItemLabel.trim()) {
+                                      const existing = libChecklist.filter(i => i.card_id === card.id)
+                                      const { data } = await supabase.from('library_checklist').insert({
+                                        card_id: card.id, label: newLibItemLabel.trim(), completed: false, sort_order: existing.length
+                                      }).select().single()
+                                      if (data) setLibChecklist(prev => [...prev, data])
+                                      setNewLibItemLabel('')
+                                    }
+                                    if (e.key === 'Escape') { setAddingLibItemForCard(null); setNewLibItemLabel('') }
+                                  }}
+                                />
+                                <button onClick={async () => {
+                                  if (!newLibItemLabel.trim()) return
+                                  const existing = libChecklist.filter(i => i.card_id === card.id)
+                                  const { data } = await supabase.from('library_checklist').insert({
+                                    card_id: card.id, label: newLibItemLabel.trim(), completed: false, sort_order: existing.length
+                                  }).select().single()
+                                  if (data) setLibChecklist(prev => [...prev, data])
+                                  setNewLibItemLabel('')
+                                }} className="text-[9px] bg-[#e8917a] text-white rounded px-1.5 py-0.5">Add</button>
+                                <button onClick={() => { setAddingLibItemForCard(null); setNewLibItemLabel('') }}
+                                  className="text-[9px] text-[#b8958a]">✕</button>
+                              </div>
+                            ) : (
+                              <button onClick={() => { setAddingLibItemForCard(card.id); setNewLibItemLabel('') }}
+                                className="text-[9px] text-[#b8958a] hover:text-[#e8917a] mt-0.5 transition-colors">+ checklist item</button>
+                            )}
+                          </div>
+                        )
+                      })()}
                       {/* Files */}
                       {files.length > 0 && (
                         <div className="space-y-1 mb-1">
