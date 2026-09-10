@@ -350,6 +350,9 @@ export default function Home() {
   const [financialLoaded, setFinancialLoaded] = useState(false)
   const [financialLocked, setFinancialLocked] = useState(true)
   const [financialPinInput, setFinancialPinInput] = useState('')
+  const [finCategoryLabels, setFinCategoryLabels] = useState<Record<string,string>>({})
+  const [editingFinCatLabel, setEditingFinCatLabel] = useState<string | null>(null)
+  const [finCatLabelDraft, setFinCatLabelDraft] = useState('')
   const [financialPinError, setFinancialPinError] = useState(false)
   const [financialActiveCategory, setFinancialActiveCategory] = useState('00')
   const [addingFinancialCard, setAddingFinancialCard] = useState<string | null>(null)
@@ -652,6 +655,7 @@ export default function Home() {
           if (row.key === 'hiddenTabs' && Array.isArray(row.value)) setHiddenTabs(row.value as string[])
           if (row.key === 'tabOrder' && Array.isArray(row.value)) setTabOrder(row.value as string[])
           if (row.key === 'freedom_tracker_value' && typeof row.value === 'number') setFreedomValue(row.value)
+          if (row.key === 'finCategoryLabels' && row.value && typeof row.value === 'object') setFinCategoryLabels(row.value as Record<string,string>)
         })
         // Restore any running timers from Supabase
         const timerRows = (prefsRes.data || []).filter((r: {key: string; value: unknown}) => r.key.startsWith('timer_start_'))
@@ -6841,10 +6845,31 @@ export default function Home() {
         <div key={cat} className="bg-[#fffdf9] rounded-2xl p-3 border border-[#f0d9d0] flex flex-col min-w-0">
           {/* Category header */}
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-[#3d2c2c] uppercase tracking-wider">{cat}</span>
+            {editingFinCatLabel === cat ? (
+              <input
+                autoFocus
+                value={finCatLabelDraft}
+                onChange={e => setFinCatLabelDraft(e.target.value)}
+                onBlur={async () => {
+                  const trimmed = finCatLabelDraft.trim()
+                  const next = { ...finCategoryLabels, [cat]: trimmed || cat }
+                  setFinCategoryLabels(next)
+                  setEditingFinCatLabel(null)
+                  await supabase.from('user_prefs').upsert({ key: 'finCategoryLabels', value: next, updated_at: new Date().toISOString() })
+                }}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
+                className="flex-1 text-xs font-semibold text-[#3d2c2c] uppercase tracking-wider bg-[#fdf0ec] border border-[#e8917a] rounded px-1.5 py-0.5 outline-none min-w-0 mr-1"
+              />
+            ) : (
+              <span
+                onDoubleClick={() => { setEditingFinCatLabel(cat); setFinCatLabelDraft(finCategoryLabels[cat] || cat) }}
+                title="Double-tap to rename"
+                className="text-xs font-semibold text-[#3d2c2c] uppercase tracking-wider cursor-pointer select-none flex-1 truncate mr-1"
+              >{finCategoryLabels[cat] || cat}</span>
+            )}
             <button
               onClick={() => { setAddingFinancialCard(isAdding ? null : cat); setNewFinCardTitle(''); setNewFinCardNotes('') }}
-              className="w-6 h-6 rounded-full bg-[#fdf0ec] hover:bg-[#f0d9d0] text-[#e8917a] flex items-center justify-center text-sm font-medium transition-colors border border-[#f0d9d0]">+</button>
+              className="w-6 h-6 rounded-full bg-[#fdf0ec] hover:bg-[#f0d9d0] text-[#e8917a] flex items-center justify-center text-sm font-medium transition-colors border border-[#f0d9d0] shrink-0">+</button>
           </div>
 
           {/* Add card form */}
