@@ -7060,9 +7060,9 @@ export default function Home() {
           {ROW2.map(cat => renderCategoryColumn(cat))}
         </div>
 
-        {/* ── Row 3: Yearly, Sports, Dad Payback ─────────────────────────── */}
+        {/* ── Row 3: Bills 1, Bills 2, Extra Money ────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {['Yearly', 'Sports', 'Dad Payback'].map(cat => renderCategoryColumn(cat))}
+          {['Bills 1', 'Bills 2', 'Extra Money'].map(cat => renderCategoryColumn(cat))}
         </div>
 
         {/* ── Reminder Banner ─────────────────────────────────────────────── */}
@@ -7075,9 +7075,9 @@ export default function Home() {
           ))}
         </div>
 
-        {/* ── Row 4: Bills 1, Bills 2, Extra Money ────────────────────────── */}
+        {/* ── Row 4: Yearly, Sports, Dad Payback ─────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {['Bills 1', 'Bills 2', 'Extra Money'].map(cat => renderCategoryColumn(cat))}
+          {['Yearly', 'Sports', 'Dad Payback'].map(cat => renderCategoryColumn(cat))}
         </div>
 
         {/* ── Freedom Tracker ──────────────────────────────────────────────── */}
