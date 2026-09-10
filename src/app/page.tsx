@@ -327,6 +327,8 @@ export default function Home() {
   const [dragOverBucket, setDragOverBucket] = useState<string | null>(null)
   // Drag state for life-admin and parking-lot cards
   const [draggingLifeCardId, setDraggingLifeCardId] = useState<number | null>(null)
+  const [draggingFinCardId, setDraggingFinCardId] = useState<number | null>(null)
+  const [dragOverFinCardId, setDragOverFinCardId] = useState<number | null>(null)
   const [dragOverLifeCardId, setDragOverLifeCardId] = useState<number | null>(null)
   const [draggingParkingCardId, setDraggingParkingCardId] = useState<number | null>(null)
   const [dragOverParkingCardId, setDragOverParkingCardId] = useState<number | null>(null)
@@ -6842,7 +6844,20 @@ export default function Home() {
       const finCardKey = (id: number) => `financial-${id}`
 
       return (
-        <div key={cat} className="bg-[#fffdf9] rounded-2xl p-3 border border-[#f0d9d0] flex flex-col min-w-0">
+        <div key={cat} className="bg-[#fffdf9] rounded-2xl p-3 border border-[#f0d9d0] flex flex-col min-w-0"
+          onDragOver={e => { e.preventDefault() }}
+          onDrop={async e => {
+            e.preventDefault()
+            if (draggingFinCardId === null) return
+            const dragCard = financialCards.find(c => c.id === draggingFinCardId)
+            if (!dragCard || dragCard.category === cat) return
+            // Drop on column (not on a card) — append to bottom
+            const catCards = financialCards.filter(c => c.category === cat).sort((a, b) => a.sort_order - b.sort_order)
+            const newOrder = catCards.length
+            setFinancialCards(prev => prev.map(c => c.id === draggingFinCardId ? { ...c, category: cat, sort_order: newOrder } : c))
+            await supabase.from('financial_cards').update({ category: cat, sort_order: newOrder }).eq('id', draggingFinCardId)
+            setDraggingFinCardId(null); setDragOverFinCardId(null)
+          }}>
           {/* Category header */}
           <div className="flex items-center justify-between mb-2">
             {editingFinCatLabel === cat ? (
@@ -6899,7 +6914,33 @@ export default function Home() {
               const thisItems = cardItems.filter(i => i.card_id === card.id && i.card_tab === 'financial').sort((a, b) => a.sort_order - b.sort_order)
               const isExpanded = ck in expandedCardItems ? expandedCardItems[ck] !== false : thisItems.length > 0
               return (
-                <div key={card.id} className="bg-white rounded-xl px-2.5 py-2 border border-[#f0d9d0] hover:border-[#e8917a] transition-all group">
+                <div key={card.id}
+                  draggable
+                  onDragStart={() => { setDraggingFinCardId(card.id); setDragOverFinCardId(null) }}
+                  onDragEnd={() => { setDraggingFinCardId(null); setDragOverFinCardId(null) }}
+                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOverFinCardId(card.id) }}
+                  onDragLeave={() => setDragOverFinCardId(null)}
+                  onDrop={async e => {
+                    e.preventDefault(); e.stopPropagation()
+                    setDragOverFinCardId(null)
+                    if (draggingFinCardId === null || draggingFinCardId === card.id) return
+                    const dragCard = financialCards.find(c => c.id === draggingFinCardId)
+                    if (!dragCard) return
+                    const catCards = financialCards.filter(c => c.category === cat).sort((a, b) => a.sort_order - b.sort_order)
+                    const withoutDrag = catCards.filter(c => c.id !== draggingFinCardId)
+                    const targetIdx = withoutDrag.findIndex(c => c.id === card.id)
+                    withoutDrag.splice(targetIdx, 0, { ...dragCard, category: cat })
+                    const updates = withoutDrag.map((c, i) => ({ ...c, sort_order: i }))
+                    setFinancialCards(prev => {
+                      const others = prev.filter(c => c.category !== cat && c.id !== draggingFinCardId)
+                      return [...others, ...updates]
+                    })
+                    await Promise.all(updates.map(c => supabase.from('financial_cards').update({ category: cat, sort_order: c.sort_order }).eq('id', c.id)))
+                    setDraggingFinCardId(null)
+                  }}
+                  className={`bg-white rounded-xl px-2.5 py-2 border transition-all group cursor-grab active:cursor-grabbing ${
+                    dragOverFinCardId === card.id ? 'border-[#e8917a] shadow-lg scale-[1.01]' : draggingFinCardId === card.id ? 'opacity-40 border-[#e8917a]' : 'border-[#f0d9d0] hover:border-[#e8917a]'
+                  }`}>
                   <div className="flex items-start gap-1.5">
                     <div className="flex flex-col gap-0.5 pt-0.5 shrink-0">
                       <button onClick={() => moveFinCardUp(cards, ci)} disabled={ci === 0}
