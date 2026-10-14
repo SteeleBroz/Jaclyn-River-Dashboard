@@ -330,6 +330,7 @@ export default function Home() {
   const [draggingFinCardId, setDraggingFinCardId] = useState<number | null>(null)
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null)
   const [lifeChecklistCols, setLifeChecklistCols] = useState<Record<string, boolean>>({})
+  const [peekLifeCards, setPeekLifeCards] = useState<Record<string, boolean>>({})
   const [dragOverItemId, setDragOverItemId] = useState<string | null>(null)
   const [dragOverFinCardId, setDragOverFinCardId] = useState<number | null>(null)
   const [dragOverLifeCardId, setDragOverLifeCardId] = useState<number | null>(null)
@@ -5070,17 +5071,24 @@ export default function Home() {
                         <div className={`text-sm font-medium cursor-pointer ${card.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`} onClick={() => setEditingLifeCard(card)}>{card.title}</div>
                         {card.notes && <div className="text-xs text-[#7a5c5c] mt-0.5">{card.notes}</div>}
                         {/* Checklist toggle */}
-                        {(col.key in lifeChecklistCols ? lifeChecklistCols[col.key] : col.key === 'priority') && (
+                        {(col.key in lifeChecklistCols ? lifeChecklistCols[col.key] : col.key === 'priority') ? (
                         <button onClick={() => setExpandedCardItems(prev => ({ ...prev, [cardKey]: !isExpanded }))}
                           className="text-[10px] text-[#b8958a] hover:text-[#e8917a] mt-1 transition-colors">
                           {isExpanded ? `▴ checklist${thisItems.length > 0 ? ` (${thisItems.filter(i=>i.completed).length}/${thisItems.length})` : ''}` : '▾ checklist'}
+                        </button>
+                        ) : (
+                        <button onClick={() => setPeekLifeCards(prev => ({ ...prev, [cardKey]: !prev[cardKey] }))}
+                          className="text-[10px] text-[#b8958a] hover:text-[#e8917a] mt-1 transition-colors">
+                          {peekLifeCards[cardKey]
+                            ? '▴ hide checklist'
+                            : `▾ show checklist${thisItems.length > 0 ? ` (${thisItems.filter(i=>i.completed).length}/${thisItems.length})` : ''}`}
                         </button>
                         )}
                       </div>
                       <span className="text-[#f0d9d0] group-hover:text-[#e8917a] text-sm transition-colors shrink-0 cursor-pointer" onClick={() => setEditingLifeCard(card)}>✎</span>
                     </div>
                     {/* Expandable checklist */}
-                    {(col.key in lifeChecklistCols ? lifeChecklistCols[col.key] : col.key === 'priority') && isExpanded && (
+                    {((col.key in lifeChecklistCols ? lifeChecklistCols[col.key] : col.key === 'priority') ? isExpanded : !!peekLifeCards[cardKey]) && (
                       <div className="mt-2 pl-6 space-y-1">
                         {thisItems.map((item, ii) => (
                           <div key={item.id}
