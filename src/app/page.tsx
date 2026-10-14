@@ -329,7 +329,7 @@ export default function Home() {
   const [draggingLifeCardId, setDraggingLifeCardId] = useState<number | null>(null)
   const [draggingFinCardId, setDraggingFinCardId] = useState<number | null>(null)
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null)
-  const [hideLifeChecklists, setHideLifeChecklists] = useState(false)
+  const [lifeChecklistCols, setLifeChecklistCols] = useState<Record<string, boolean>>({})
   const [dragOverItemId, setDragOverItemId] = useState<string | null>(null)
   const [dragOverFinCardId, setDragOverFinCardId] = useState<number | null>(null)
   const [dragOverLifeCardId, setDragOverLifeCardId] = useState<number | null>(null)
@@ -661,7 +661,7 @@ export default function Home() {
           if (row.key === 'tabOrder' && Array.isArray(row.value)) setTabOrder(row.value as string[])
           if (row.key === 'freedom_tracker_value' && typeof row.value === 'number') setFreedomValue(row.value)
           if (row.key === 'finCategoryLabels' && row.value && typeof row.value === 'object') setFinCategoryLabels(row.value as Record<string,string>)
-          if (row.key === 'lifeAdminHideChecklists' && typeof row.value === 'boolean') setHideLifeChecklists(row.value)
+          if (row.key === 'lifeAdminChecklistCols' && row.value && typeof row.value === 'object') setLifeChecklistCols(row.value as Record<string, boolean>)
         })
         // Restore any running timers from Supabase
         const timerRows = (prefsRes.data || []).filter((r: {key: string; value: unknown}) => r.key.startsWith('timer_start_'))
@@ -4958,23 +4958,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Hide checklists toggle */}
-      <div className="flex items-center justify-end gap-2 mb-3">
-        <span className="text-xs text-[#7a5c5c]">Hide checklists</span>
-        <button
-          role="switch"
-          aria-checked={hideLifeChecklists}
-          aria-label="Hide checklists on all cards"
-          onClick={() => {
-            const next = !hideLifeChecklists
-            setHideLifeChecklists(next)
-            supabase.from('user_prefs').upsert({ key: 'lifeAdminHideChecklists', value: next, updated_at: new Date().toISOString() }).then(() => {})
-          }}
-          className={`relative w-10 h-6 rounded-full transition-colors ${hideLifeChecklists ? 'bg-[#e8917a]' : 'bg-[#f0d9d0]'}`}>
-          <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${hideLifeChecklists ? 'translate-x-4' : ''}`} />
-        </button>
-      </div>
-
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {visibleColumns.map(col => {
           const cards = lifeAdminCards.filter(c => c.column_key === col.key).sort((a, b) => a.sort_order - b.sort_order)
@@ -5001,8 +4984,31 @@ export default function Home() {
                   <h3 className="text-sm font-semibold text-[#3d2c2c]">{col.label}</h3>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${col.badge}`}>{cards.length}</span>
                 </div>
+                <div className="flex items-center gap-2">
+                {(() => {
+                  const on = col.key in lifeChecklistCols ? lifeChecklistCols[col.key] : col.key === 'priority'
+                  return (
+                    <button
+                      role="switch"
+                      aria-checked={on}
+                      aria-label={`Show checklists in ${col.label}`}
+                      title={on ? 'Checklists showing, tap to hide' : 'Checklists hidden, tap to show'}
+                      onClick={() => {
+                        const next = { ...lifeChecklistCols, [col.key]: !on }
+                        setLifeChecklistCols(next)
+                        supabase.from('user_prefs').upsert({ key: 'lifeAdminChecklistCols', value: next, updated_at: new Date().toISOString() }).then(() => {})
+                      }}
+                      className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-[#7a5c5c]">Checklists</span>
+                      <span className={`relative w-8 h-5 rounded-full transition-colors ${on ? 'bg-[#e8917a]' : 'bg-[#e6d3cc]'}`}>
+                        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-3' : ''}`} />
+                      </span>
+                    </button>
+                  )
+                })()}
                 <button onClick={() => { setAddingLifeCard(isAdding ? null : { column: col.key }); setNewLifeCardTitle(''); setNewLifeCardNotes('') }}
                   className="w-7 h-7 rounded-full bg-white/70 hover:bg-white text-[#e8917a] flex items-center justify-center text-base font-medium transition-colors border border-[#f0d9d0]">+</button>
+                </div>
               </div>
               {isAdding && (
                 <div className="mb-3 bg-white rounded-2xl p-3 border border-[#f0d9d0] space-y-2">
@@ -5064,7 +5070,7 @@ export default function Home() {
                         <div className={`text-sm font-medium cursor-pointer ${card.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`} onClick={() => setEditingLifeCard(card)}>{card.title}</div>
                         {card.notes && <div className="text-xs text-[#7a5c5c] mt-0.5">{card.notes}</div>}
                         {/* Checklist toggle */}
-                        {!hideLifeChecklists && (
+                        {(col.key in lifeChecklistCols ? lifeChecklistCols[col.key] : col.key === 'priority') && (
                         <button onClick={() => setExpandedCardItems(prev => ({ ...prev, [cardKey]: !isExpanded }))}
                           className="text-[10px] text-[#b8958a] hover:text-[#e8917a] mt-1 transition-colors">
                           {isExpanded ? `▴ checklist${thisItems.length > 0 ? ` (${thisItems.filter(i=>i.completed).length}/${thisItems.length})` : ''}` : '▾ checklist'}
@@ -5074,7 +5080,7 @@ export default function Home() {
                       <span className="text-[#f0d9d0] group-hover:text-[#e8917a] text-sm transition-colors shrink-0 cursor-pointer" onClick={() => setEditingLifeCard(card)}>✎</span>
                     </div>
                     {/* Expandable checklist */}
-                    {!hideLifeChecklists && isExpanded && (
+                    {(col.key in lifeChecklistCols ? lifeChecklistCols[col.key] : col.key === 'priority') && isExpanded && (
                       <div className="mt-2 pl-6 space-y-1">
                         {thisItems.map((item, ii) => (
                           <div key={item.id}
