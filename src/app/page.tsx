@@ -329,6 +329,7 @@ export default function Home() {
   const [draggingLifeCardId, setDraggingLifeCardId] = useState<number | null>(null)
   const [draggingFinCardId, setDraggingFinCardId] = useState<number | null>(null)
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null)
+  const [hideLifeChecklists, setHideLifeChecklists] = useState(false)
   const [dragOverItemId, setDragOverItemId] = useState<string | null>(null)
   const [dragOverFinCardId, setDragOverFinCardId] = useState<number | null>(null)
   const [dragOverLifeCardId, setDragOverLifeCardId] = useState<number | null>(null)
@@ -660,6 +661,7 @@ export default function Home() {
           if (row.key === 'tabOrder' && Array.isArray(row.value)) setTabOrder(row.value as string[])
           if (row.key === 'freedom_tracker_value' && typeof row.value === 'number') setFreedomValue(row.value)
           if (row.key === 'finCategoryLabels' && row.value && typeof row.value === 'object') setFinCategoryLabels(row.value as Record<string,string>)
+          if (row.key === 'lifeAdminHideChecklists' && typeof row.value === 'boolean') setHideLifeChecklists(row.value)
         })
         // Restore any running timers from Supabase
         const timerRows = (prefsRes.data || []).filter((r: {key: string; value: unknown}) => r.key.startsWith('timer_start_'))
@@ -4956,6 +4958,23 @@ export default function Home() {
         </div>
       )}
 
+      {/* Hide checklists toggle */}
+      <div className="flex items-center justify-end gap-2 mb-3">
+        <span className="text-xs text-[#7a5c5c]">Hide checklists</span>
+        <button
+          role="switch"
+          aria-checked={hideLifeChecklists}
+          aria-label="Hide checklists on all cards"
+          onClick={() => {
+            const next = !hideLifeChecklists
+            setHideLifeChecklists(next)
+            supabase.from('user_prefs').upsert({ key: 'lifeAdminHideChecklists', value: next, updated_at: new Date().toISOString() }).then(() => {})
+          }}
+          className={`relative w-10 h-6 rounded-full transition-colors ${hideLifeChecklists ? 'bg-[#e8917a]' : 'bg-[#f0d9d0]'}`}>
+          <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${hideLifeChecklists ? 'translate-x-4' : ''}`} />
+        </button>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {visibleColumns.map(col => {
           const cards = lifeAdminCards.filter(c => c.column_key === col.key).sort((a, b) => a.sort_order - b.sort_order)
@@ -5045,15 +5064,17 @@ export default function Home() {
                         <div className={`text-sm font-medium cursor-pointer ${card.completed ? 'line-through text-[#b8958a]' : 'text-[#3d2c2c]'}`} onClick={() => setEditingLifeCard(card)}>{card.title}</div>
                         {card.notes && <div className="text-xs text-[#7a5c5c] mt-0.5">{card.notes}</div>}
                         {/* Checklist toggle */}
+                        {!hideLifeChecklists && (
                         <button onClick={() => setExpandedCardItems(prev => ({ ...prev, [cardKey]: !isExpanded }))}
                           className="text-[10px] text-[#b8958a] hover:text-[#e8917a] mt-1 transition-colors">
                           {isExpanded ? `▴ checklist${thisItems.length > 0 ? ` (${thisItems.filter(i=>i.completed).length}/${thisItems.length})` : ''}` : '▾ checklist'}
                         </button>
+                        )}
                       </div>
                       <span className="text-[#f0d9d0] group-hover:text-[#e8917a] text-sm transition-colors shrink-0 cursor-pointer" onClick={() => setEditingLifeCard(card)}>✎</span>
                     </div>
                     {/* Expandable checklist */}
-                    {isExpanded && (
+                    {!hideLifeChecklists && isExpanded && (
                       <div className="mt-2 pl-6 space-y-1">
                         {thisItems.map((item, ii) => (
                           <div key={item.id}
