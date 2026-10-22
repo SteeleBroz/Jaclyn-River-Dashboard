@@ -327,3 +327,16 @@ export type LibraryChecklistItem = {
   created_at: string
   updated_at: string
 }
+
+export type AbundanceEntry = {
+  id: string
+  received_on: string
+  kind: 'cash' | 'item'
+  amount: number | null
+  item_name: string | null
+  est_value: number | null
+  source: string
+  note: string | null
+  created_at: string
+  updated_at: string
+}

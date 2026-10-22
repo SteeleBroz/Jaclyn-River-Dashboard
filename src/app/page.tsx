@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, LifeAdminCard, ParkingLotCard, CardItem, RoadmapTask, WeeklyMission, BillNote, RoadmapPhase, RoadmapMilestone, PromptCard, DayPlan, TimeBlock, BlockOption, DayTarget, ShoppingItem, HydrationLog, LibraryCard, LibraryFile, LibraryChecklistItem, FinancialCard, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
+import { supabase, Folder, Task, CalendarEvent, WeeklyNote, DashboardSettings, GroceryItem, IdeaItem, ThumbEquityItem, LifeAdminCard, ParkingLotCard, CardItem, RoadmapTask, WeeklyMission, BillNote, RoadmapPhase, RoadmapMilestone, PromptCard, DayPlan, TimeBlock, BlockOption, DayTarget, ShoppingItem, HydrationLog, LibraryCard, LibraryFile, LibraryChecklistItem, FinancialCard, AbundanceEntry, FOLDERS_TABLE, TASKS_TABLE } from '@/lib/supabase'
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday','overflow'] as const
 const DAY_LABELS: Record<string, string> = {
@@ -331,6 +331,24 @@ export default function Home() {
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null)
   const [lifeChecklistCols, setLifeChecklistCols] = useState<Record<string, boolean>>({})
   const [peekLifeCards, setPeekLifeCards] = useState<Record<string, boolean>>({})
+  // Abundance tracker
+  const DEFAULT_ABUNDANCE_SOURCES = ['Work/Paycheck', 'Business (SteeleBroz)', 'Gift', 'Freebie', 'Tips', 'Winnings', 'Refund/Cashback', 'Other']
+  const [abundance, setAbundance] = useState<AbundanceEntry[]>([])
+  const [abundanceSources, setAbundanceSources] = useState<string[]>(DEFAULT_ABUNDANCE_SOURCES)
+  const [abKind, setAbKind] = useState<'cash' | 'item'>('cash')
+  const [abAmount, setAbAmount] = useState('')
+  const [abItem, setAbItem] = useState('')
+  const [abEst, setAbEst] = useState('')
+  const [abSource, setAbSource] = useState('Work/Paycheck')
+  const [abDate, setAbDate] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }))
+  const [abNote, setAbNote] = useState('')
+  const [abSaving, setAbSaving] = useState(false)
+  const [abFlash, setAbFlash] = useState(false)
+  const [abRange, setAbRange] = useState<'month' | 'year' | 'all'>('month')
+  const [abIncludePaychecks, setAbIncludePaychecks] = useState(true)
+  const [editingAbId, setEditingAbId] = useState<string | null>(null)
+  const [abEditDraft, setAbEditDraft] = useState<AbundanceEntry | null>(null)
+  const [newAbSource, setNewAbSource] = useState('')
   const [dragOverItemId, setDragOverItemId] = useState<string | null>(null)
   const [dragOverFinCardId, setDragOverFinCardId] = useState<number | null>(null)
   const [dragOverLifeCardId, setDragOverLifeCardId] = useState<number | null>(null)
@@ -663,6 +681,8 @@ export default function Home() {
           if (row.key === 'freedom_tracker_value' && typeof row.value === 'number') setFreedomValue(row.value)
           if (row.key === 'finCategoryLabels' && row.value && typeof row.value === 'object') setFinCategoryLabels(row.value as Record<string,string>)
           if (row.key === 'lifeAdminChecklistCols' && row.value && typeof row.value === 'object') setLifeChecklistCols(row.value as Record<string, boolean>)
+          if (row.key === 'abundanceSources' && Array.isArray(row.value) && row.value.length > 0) setAbundanceSources(row.value as string[])
+          if (row.key === 'abundanceIncludePaychecks' && typeof row.value === 'boolean') setAbIncludePaychecks(row.value)
         })
         // Restore any running timers from Supabase
         const timerRows = (prefsRes.data || []).filter((r: {key: string; value: unknown}) => r.key.startsWith('timer_start_'))
@@ -745,6 +765,17 @@ export default function Home() {
   }, [libraryLoaded])
 
   // Financial fetch (lazy — only after unlock)
+  useEffect(() => {
+    if (abundanceSources.length && !abundanceSources.includes(abSource)) setAbSource(abundanceSources[0])
+  }, [abundanceSources, abSource])
+
+  // Abundance log (needed on Life Admin and Financial)
+  useEffect(() => {
+    supabase.from('abundance_log').select('*').order('received_on').order('created_at').then(({ data }) => {
+      if (data) setAbundance(data as AbundanceEntry[])
+    })
+  }, [])
+
   const fetchFinancialData = useCallback(async () => {
     if (financialLoaded) return
     try {
@@ -4890,6 +4921,8 @@ export default function Home() {
   return (
     <div className="space-y-4 pb-24 md:pb-6">
 
+      {renderAbundanceQuickAdd(false)}
+
       {/* Nutrition shortcut */}
       <button onClick={() => setActiveTab('nutrition')} className="w-full bg-[#fffdf9] rounded-3xl p-4 border border-[#f0d9d0] flex items-center justify-between hover:bg-[#fdf0ec] transition-colors group">
         <div className="flex items-center gap-3">
@@ -7257,6 +7290,289 @@ export default function Home() {
             </div>
           )
         })()}
+
+        {renderAbundanceSection()}
+      </div>
+    )
+  }
+
+  // ─── ABUNDANCE ──────────────────────────────────────────────────────────────
+  const abToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+  const abMoney = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+  const isPaycheckSource = (src: string) => /paycheck/i.test(src)
+
+  const addAbundance = async () => {
+    const amt = parseFloat(abAmount.replace(/[$,]/g, ''))
+    const est = parseFloat(abEst.replace(/[$,]/g, ''))
+    if (abKind === 'cash' && (!isFinite(amt) || amt <= 0)) return
+    if (abKind === 'item' && !abItem.trim()) return
+    setAbSaving(true)
+    const row = {
+      received_on: abDate || abToday(),
+      kind: abKind,
+      amount: abKind === 'cash' ? amt : null,
+      item_name: abKind === 'item' ? abItem.trim() : null,
+      est_value: abKind === 'item' && isFinite(est) ? est : null,
+      source: abSource,
+      note: abNote.trim() || null,
+    }
+    const { data, error } = await supabase.from('abundance_log').insert(row).select().single()
+    setAbSaving(false)
+    if (error || !data) { alert('Could not save, please try again.'); return }
+    setAbundance(prev => [...prev, data as AbundanceEntry])
+    setAbAmount(''); setAbItem(''); setAbEst(''); setAbNote(''); setAbDate(abToday())
+    setAbFlash(true); setTimeout(() => setAbFlash(false), 2000)
+  }
+
+  const updateAbundance = async (entry: AbundanceEntry) => {
+    setAbundance(prev => prev.map(e => e.id === entry.id ? entry : e))
+    await supabase.from('abundance_log').update({
+      received_on: entry.received_on, amount: entry.amount, item_name: entry.item_name, est_value: entry.est_value,
+      source: entry.source, note: entry.note, updated_at: new Date().toISOString()
+    }).eq('id', entry.id)
+  }
+
+  const deleteAbundance = async (id: string) => {
+    if (!window.confirm('Delete this entry?')) return
+    setAbundance(prev => prev.filter(e => e.id !== id))
+    await supabase.from('abundance_log').delete().eq('id', id)
+  }
+
+  const saveAbundanceSources = async (next: string[]) => {
+    setAbundanceSources(next)
+    await supabase.from('user_prefs').upsert({ key: 'abundanceSources', value: next, updated_at: new Date().toISOString() })
+  }
+
+  const renderAbundanceQuickAdd = (inFinancial: boolean) => {
+    const monthKey = abToday().slice(0, 7)
+    const monthCount = abundance.filter(e => e.received_on.slice(0, 7) === monthKey).length
+    const inputCls = 'bg-white rounded-xl px-3 py-2 text-sm border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a] min-w-0'
+    return (
+      <div className="bg-[#fffdf9] rounded-3xl p-4 border border-[#f0d9d0]">
+        <div className="flex items-center justify-between mb-3 gap-2">
+          <div>
+            <div className="text-sm font-semibold text-[#3d2c2c]">{inFinancial ? 'Add an entry' : 'Abundance'}</div>
+            <div className="text-xs text-[#b8958a]">Log anything that comes in, money or gifts</div>
+          </div>
+          <div className="text-xs text-[#7a5c5c] text-right shrink-0">
+            {abFlash ? <span className="text-[#4caf7d] font-semibold">Logged ✓</span> : <span>{monthCount} logged this month</span>}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex bg-[#fdf0ec] rounded-xl p-0.5 border border-[#f0d9d0] shrink-0">
+            {(['cash', 'item'] as const).map(k => (
+              <button key={k} onClick={() => setAbKind(k)}
+                className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${abKind === k ? 'bg-[#e8917a] text-white' : 'text-[#7a5c5c]'}`}>
+                {k === 'cash' ? 'Cash' : 'Item'}
+              </button>
+            ))}
+          </div>
+          {abKind === 'cash' ? (
+            <input value={abAmount} onChange={e => setAbAmount(e.target.value)} inputMode="decimal" placeholder="Amount"
+              onKeyDown={e => { if (e.key === 'Enter') addAbundance() }}
+              className={`${inputCls} w-28`} />
+          ) : (
+            <>
+              <input value={abItem} onChange={e => setAbItem(e.target.value)} placeholder="What was it? (free show tickets)"
+                onKeyDown={e => { if (e.key === 'Enter') addAbundance() }}
+                className={`${inputCls} flex-1 min-w-[180px]`} />
+              <input value={abEst} onChange={e => setAbEst(e.target.value)} inputMode="decimal" placeholder="Est. value (optional)"
+                className={`${inputCls} w-36`} />
+            </>
+          )}
+          <select value={abSource} onChange={e => setAbSource(e.target.value)} className={`${inputCls} w-auto`}>
+            {abundanceSources.map(src => <option key={src} value={src}>{src}</option>)}
+          </select>
+          <input type="date" value={abDate} onChange={e => setAbDate(e.target.value)} className={`${inputCls} w-auto`} />
+          <input value={abNote} onChange={e => setAbNote(e.target.value)} placeholder="Note (optional)"
+            onKeyDown={e => { if (e.key === 'Enter') addAbundance() }}
+            className={`${inputCls} flex-1 min-w-[120px]`} />
+          <button onClick={addAbundance} disabled={abSaving}
+            className="bg-[#e8917a] hover:bg-[#d4745d] disabled:opacity-50 text-white text-sm rounded-xl px-4 py-2 transition-colors shrink-0">
+            {abSaving ? 'Saving...' : 'Add'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const renderAbundanceSection = () => {
+    const today = abToday()
+    const inRange = (d: string) => abRange === 'all' ? true : abRange === 'year' ? d.slice(0, 4) === today.slice(0, 4) : d.slice(0, 7) === today.slice(0, 7)
+    const cash = abundance
+      .filter(e => e.kind === 'cash' && inRange(e.received_on) && (abIncludePaychecks || !isPaycheckSource(e.source)))
+      .sort((a, b) => a.received_on.localeCompare(b.received_on) || a.created_at.localeCompare(b.created_at))
+    const items = abundance.filter(e => e.kind === 'item' && inRange(e.received_on))
+      .sort((a, b) => b.received_on.localeCompare(a.received_on))
+    const total = cash.reduce((s, e) => s + Number(e.amount || 0), 0)
+    const itemEst = items.reduce((s, e) => s + Number(e.est_value || 0), 0)
+
+    // cumulative series by day
+    const byDay: Record<string, number> = {}
+    cash.forEach(e => { byDay[e.received_on] = (byDay[e.received_on] || 0) + Number(e.amount || 0) })
+    const days = Object.keys(byDay).sort()
+    const startStr = abRange === 'month' ? today.slice(0, 7) + '-01' : abRange === 'year' ? today.slice(0, 4) + '-01-01' : (days[0] || today)
+    const toT = (d: string) => new Date(d + 'T12:00:00').getTime()
+    const t0 = toT(startStr), t1 = Math.max(toT(today), days.length ? toT(days[days.length - 1]) : 0, t0 + 86400000)
+    let run = 0
+    const pts: { t: number; v: number }[] = [{ t: t0, v: 0 }]
+    days.forEach(d => { run += byDay[d]; pts.push({ t: toT(d), v: run }) })
+    pts.push({ t: t1, v: run })
+    const W = 600, H = 170, P = 8
+    const maxV = Math.max(run, 1)
+    const xs = (t: number) => P + ((t - t0) / (t1 - t0)) * (W - 2 * P)
+    const ys = (v: number) => H - P - (v / maxV) * (H - 2 * P)
+    let path = `M ${xs(pts[0].t)} ${ys(0)}`
+    for (let i = 1; i < pts.length; i++) { path += ` L ${xs(pts[i].t)} ${ys(pts[i - 1].v)} L ${xs(pts[i].t)} ${ys(pts[i].v)}` }
+    const area = `${path} L ${xs(t1)} ${H - P} L ${xs(t0)} ${H - P} Z`
+    const fmtDate = (t: number) => new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: abRange === 'all' ? '2-digit' : undefined })
+
+    const bySource: Record<string, number> = {}
+    cash.forEach(e => { bySource[e.source] = (bySource[e.source] || 0) + Number(e.amount || 0) })
+    const sourceRows = Object.entries(bySource).sort((a, b) => b[1] - a[1])
+    const maxSrc = Math.max(1, ...sourceRows.map(r => r[1]))
+    const cashList = [...cash].reverse()
+    const cellIn = 'bg-white rounded-lg px-2 py-1 text-xs border border-[#f0d9d0] text-[#3d2c2c] outline-none focus:border-[#e8917a] min-w-0'
+
+    return (
+      <div className="bg-[#fffdf9] rounded-3xl p-5 border border-[#f0d9d0] space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-xs uppercase tracking-[0.28em] text-[#b8958a] mb-1">Abundance</div>
+            <h3 className="text-lg font-semibold text-[#3d2c2c]">Everything that has come in</h3>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex bg-[#fdf0ec] rounded-xl p-0.5 border border-[#f0d9d0]">
+              {(['month', 'year', 'all'] as const).map(r => (
+                <button key={r} onClick={() => setAbRange(r)}
+                  className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${abRange === r ? 'bg-[#e8917a] text-white' : 'text-[#7a5c5c]'}`}>
+                  {r === 'month' ? 'Month' : r === 'year' ? 'Year' : 'All'}
+                </button>
+              ))}
+            </div>
+            <button role="switch" aria-checked={abIncludePaychecks} onClick={() => {
+              const next = !abIncludePaychecks
+              setAbIncludePaychecks(next)
+              supabase.from('user_prefs').upsert({ key: 'abundanceIncludePaychecks', value: next, updated_at: new Date().toISOString() }).then(() => {})
+            }} className="flex items-center gap-1.5">
+              <span className="text-xs text-[#7a5c5c]">Include paychecks</span>
+              <span className={`relative w-8 h-5 rounded-full transition-colors ${abIncludePaychecks ? 'bg-[#4caf7d]' : 'bg-[#e6d3cc]'}`}>
+                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${abIncludePaychecks ? 'translate-x-3' : ''}`} />
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {renderAbundanceQuickAdd(true)}
+
+        {/* Totals + chart */}
+        <div>
+          <div className="flex flex-wrap items-end gap-x-6 gap-y-1 mb-2">
+            <div>
+              <div className="text-xs text-[#b8958a]">Cash received {abRange === 'month' ? 'this month' : abRange === 'year' ? 'this year' : 'all time'}</div>
+              <div className="text-3xl font-semibold text-[#4caf7d]">{abMoney(total)}</div>
+            </div>
+            <div className="text-xs text-[#7a5c5c] pb-1">{cash.length} cash {cash.length === 1 ? 'entry' : 'entries'} · {items.length} {items.length === 1 ? 'item' : 'items'}{itemEst > 0 ? ` (est. ${abMoney(itemEst)})` : ''}</div>
+          </div>
+          {cash.length === 0 ? (
+            <div className="text-sm text-[#b8958a] italic py-6 text-center bg-white rounded-2xl border border-[#f0d9d0]">Nothing logged yet for this view. Add your first one above.</div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-[#f0d9d0] p-2">
+              <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-40" preserveAspectRatio="none" role="img" aria-label="Cash received over time">
+                <path d={area} fill="#4caf7d" opacity="0.15" />
+                <path d={path} fill="none" stroke="#4caf7d" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
+              </svg>
+              <div className="flex justify-between text-[10px] text-[#b8958a] px-1">
+                <span>{fmtDate(t0)}</span><span>Top: {abMoney(run)}</span><span>{fmtDate(t1)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* By source */}
+        {sourceRows.length > 0 && (
+          <div>
+            <div className="text-xs uppercase tracking-widest text-[#b8958a] mb-2">By source</div>
+            <div className="space-y-1.5">
+              {sourceRows.map(([src, v]) => (
+                <div key={src} className="flex items-center gap-2">
+                  <span className="text-xs text-[#3d2c2c] w-36 truncate shrink-0">{src}</span>
+                  <div className="flex-1 bg-[#fdf0ec] rounded-full h-2.5 overflow-hidden">
+                    <div className="h-full bg-[#e8917a] rounded-full" style={{ width: `${(v / maxSrc) * 100}%` }} />
+                  </div>
+                  <span className="text-xs text-[#3d2c2c] w-20 text-right shrink-0">{abMoney(v)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Cash list */}
+          <div>
+            <div className="text-xs uppercase tracking-widest text-[#b8958a] mb-2">Cash</div>
+            <div className="space-y-1.5 max-h-80 overflow-y-auto">
+              {cashList.length === 0 && <div className="text-xs text-[#b8958a] italic">None yet</div>}
+              {cashList.map(e => editingAbId === e.id && abEditDraft ? (
+                <div key={e.id} className="bg-white rounded-xl border border-[#e8917a] p-2 space-y-1.5">
+                  <div className="flex gap-1.5">
+                    <input value={abEditDraft.amount ?? ''} inputMode="decimal" onChange={ev => setAbEditDraft({ ...abEditDraft, amount: ev.target.value === '' ? null : Number(ev.target.value.replace(/[$,]/g, '')) })} className={`${cellIn} w-24`} />
+                    <select value={abEditDraft.source} onChange={ev => setAbEditDraft({ ...abEditDraft, source: ev.target.value })} className={`${cellIn} flex-1`}>
+                      {Array.from(new Set([...abundanceSources, abEditDraft.source])).map(src => <option key={src} value={src}>{src}</option>)}
+                    </select>
+                    <input type="date" value={abEditDraft.received_on} onChange={ev => setAbEditDraft({ ...abEditDraft, received_on: ev.target.value })} className={cellIn} />
+                  </div>
+                  <input value={abEditDraft.note ?? ''} placeholder="Note" onChange={ev => setAbEditDraft({ ...abEditDraft, note: ev.target.value || null })} className={`${cellIn} w-full`} />
+                  <div className="flex gap-1.5">
+                    <button onClick={async () => { if (abEditDraft.amount && abEditDraft.amount > 0) { await updateAbundance(abEditDraft); setEditingAbId(null) } }} className="text-xs bg-[#e8917a] text-white rounded-lg px-3 py-1">Save</button>
+                    <button onClick={() => setEditingAbId(null)} className="text-xs text-[#b8958a] px-2">Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div key={e.id} className="flex items-center gap-2 bg-white rounded-xl border border-[#f0d9d0] px-3 py-2 group">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-[#3d2c2c]"><span className="font-semibold text-[#4caf7d]">{abMoney(Number(e.amount || 0))}</span> <span className="text-xs text-[#7a5c5c]">{e.source}</span></div>
+                    <div className="text-[10px] text-[#b8958a] truncate">{new Date(e.received_on + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}{e.note ? ` · ${e.note}` : ''}</div>
+                  </div>
+                  <button onClick={() => { setEditingAbId(e.id); setAbEditDraft(e) }} className="text-[#d4b8b0] hover:text-[#e8917a] text-xs" title="Edit">✎</button>
+                  <button onClick={() => deleteAbundance(e.id)} className="text-[#d4b8b0] hover:text-red-400 text-sm" title="Delete">×</button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Non-cash items */}
+          <div>
+            <div className="text-xs uppercase tracking-widest text-[#b8958a] mb-2">Non-cash items</div>
+            <div className="space-y-1.5 max-h-80 overflow-y-auto">
+              {items.length === 0 && <div className="text-xs text-[#b8958a] italic">None yet</div>}
+              {items.map(e => (
+                <div key={e.id} className="flex items-center gap-2 bg-white rounded-xl border border-[#f0d9d0] px-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <input defaultValue={e.item_name ?? ''} key={`n-${e.id}-${e.item_name}`}
+                      onBlur={ev => { const v = ev.target.value.trim(); if (v && v !== e.item_name) updateAbundance({ ...e, item_name: v }) }}
+                      onKeyDown={ev => { if (ev.key === 'Enter') ev.currentTarget.blur() }}
+                      className="w-full text-sm text-[#3d2c2c] bg-transparent outline-none focus:bg-[#fdf0ec] rounded px-1 -mx-1" />
+                    <div className="text-[10px] text-[#b8958a] truncate">{e.source} · {new Date(e.received_on + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}{e.note ? ` · ${e.note}` : ''}</div>
+                  </div>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <span className="text-xs text-[#b8958a]">est. $</span>
+                    <input defaultValue={e.est_value ?? ''} key={`v-${e.id}-${e.est_value}`} inputMode="decimal" placeholder="0"
+                      onBlur={ev => {
+                        const raw = ev.target.value.replace(/[$,]/g, '').trim()
+                        const v = raw === '' ? null : Number(raw)
+                        if (v !== null && !isFinite(v)) return
+                        if (v !== (e.est_value === null ? null : Number(e.est_value))) updateAbundance({ ...e, est_value: v })
+                      }}
+                      onKeyDown={ev => { if (ev.key === 'Enter') ev.currentTarget.blur() }}
+                      className="w-16 text-xs text-[#3d2c2c] bg-[#fdf0ec] border border-[#f0d9d0] rounded px-1.5 py-0.5 outline-none focus:border-[#e8917a]" />
+                  </div>
+                  <button onClick={() => deleteAbundance(e.id)} className="text-[#d4b8b0] hover:text-red-400 text-sm" title="Delete">×</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
@@ -8226,6 +8542,40 @@ export default function Home() {
                     }} className="text-[11px] text-[#b8958a] hover:text-[#3d2c2c] disabled:opacity-20 transition-colors px-1">▼</button>
                   </div>
                 ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-widest text-[#b8958a] mb-2">Abundance Sources</div>
+              <div className="space-y-1">
+                {abundanceSources.map((src, i) => (
+                  <div key={`${src}-${i}`} className="flex items-center gap-2 bg-[#fdf0ec] rounded-xl px-3 py-1.5">
+                    <input defaultValue={src}
+                      onBlur={async e => {
+                        const v = e.target.value.trim()
+                        if (!v || v === src || abundanceSources.includes(v)) { e.target.value = src; return }
+                        const next = abundanceSources.map(x => x === src ? v : x)
+                        await saveAbundanceSources(next)
+                        if (abSource === src) setAbSource(v)
+                        setAbundance(prev => prev.map(x => x.source === src ? { ...x, source: v } : x))
+                        await supabase.from('abundance_log').update({ source: v }).eq('source', src)
+                      }}
+                      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                      className="flex-1 text-sm text-[#3d2c2c] bg-transparent outline-none focus:bg-white rounded px-1 min-w-0" />
+                    <button disabled={abundanceSources.length <= 1} onClick={async () => {
+                      const next = abundanceSources.filter(x => x !== src)
+                      await saveAbundanceSources(next)
+                      if (abSource === src) setAbSource(next[0])
+                    }} className="text-[#b8958a] hover:text-red-400 text-sm disabled:opacity-20" title="Remove">×</button>
+                  </div>
+                ))}
+                <div className="flex gap-2">
+                  <input value={newAbSource} onChange={e => setNewAbSource(e.target.value)} placeholder="Add a source"
+                    onKeyDown={async e => { if (e.key === 'Enter' && newAbSource.trim() && !abundanceSources.includes(newAbSource.trim())) { await saveAbundanceSources([...abundanceSources, newAbSource.trim()]); setNewAbSource('') } }}
+                    className="flex-1 text-sm bg-white rounded-xl px-3 py-1.5 border border-[#f0d9d0] text-[#3d2c2c] placeholder-[#b8958a] outline-none focus:border-[#e8917a] min-w-0" />
+                  <button onClick={async () => { if (newAbSource.trim() && !abundanceSources.includes(newAbSource.trim())) { await saveAbundanceSources([...abundanceSources, newAbSource.trim()]); setNewAbSource('') } }}
+                    className="text-sm bg-[#e8917a] text-white rounded-xl px-3">Add</button>
+                </div>
+                <p className="text-[10px] text-[#b8958a]">Renaming a source also updates past entries. Removing one keeps past entries as they are. The paycheck switch hides any source with "paycheck" in its name.</p>
               </div>
             </div>
             <div>
