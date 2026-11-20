@@ -4822,6 +4822,21 @@ export default function Home() {
     await Promise.all(updates.map(u => supabase.from('card_items').update({ sort_order: u.sort_order }).eq('id', u.id)))
   }
 
+  const reorderLibItemsByDrag = async (items: LibraryChecklistItem[], targetId: string) => {
+    if (!draggingItemId || draggingItemId === targetId) return
+    const dragged = items.find(i => i.id === draggingItemId)
+    if (!dragged) return
+    const origIdx = items.findIndex(i => i.id === draggingItemId)
+    const origTargetIdx = items.findIndex(i => i.id === targetId)
+    const without = items.filter(i => i.id !== draggingItemId)
+    const targetIdx = without.findIndex(i => i.id === targetId)
+    if (targetIdx < 0) return
+    without.splice(origIdx < origTargetIdx ? targetIdx + 1 : targetIdx, 0, dragged)
+    const updates = without.map((it, i) => ({ ...it, sort_order: i }))
+    setLibChecklist(prev => prev.map(c => updates.find(u => u.id === c.id) || c))
+    await Promise.all(updates.map(u => supabase.from('library_checklist').update({ sort_order: u.sort_order }).eq('id', u.id)))
+  }
+
   const moveCardItemUp = async (items: CardItem[], index: number) => {
     if (index === 0) return
     const a = items[index], b = items[index - 1]
@@ -5427,7 +5442,21 @@ export default function Home() {
                     {pIsExpanded && (
                       <div className="mt-2 pl-6 space-y-1">
                         {pItems.map((item, ii) => (
-                          <div key={item.id} className="flex items-center gap-2 group/item">
+                          <div key={item.id}
+                            draggable={editingItemId !== item.id}
+                            onDragStart={e => { e.stopPropagation(); setDraggingItemId(item.id); setDragOverItemId(null) }}
+                            onDragEnd={e => { e.stopPropagation(); setDraggingItemId(null); setDragOverItemId(null) }}
+                            onDragOver={e => { if (!draggingItemId) return; e.preventDefault(); e.stopPropagation(); setDragOverItemId(item.id) }}
+                            onDragLeave={() => setDragOverItemId(null)}
+                            onDrop={async e => {
+                              if (!draggingItemId) return
+                              e.preventDefault(); e.stopPropagation()
+                              setDragOverItemId(null)
+                              await reorderCardItemsByDrag(pItems, item.id)
+                              setDraggingItemId(null)
+                            }}
+                            className={`flex items-center gap-2 group/item rounded transition-all ${dragOverItemId === item.id && draggingItemId !== item.id ? 'bg-[#fdf0ec] ring-1 ring-[#e8917a]' : ''} ${draggingItemId === item.id ? 'opacity-40' : ''}`}>
+                            <span className="text-[10px] text-[#d4b8b0] cursor-grab active:cursor-grabbing select-none leading-none shrink-0" title="Drag to reorder">⋮⋮</span>
                             <button onClick={() => toggleCardItem(item)}
                               className={`w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-all ${item.completed ? 'bg-[#4caf7d] border-[#4caf7d]' : 'border-[#f0d9d0] bg-white'}`}>
                               {item.completed && <span className="text-white text-[8px] font-bold">✓</span>}
@@ -7062,7 +7091,21 @@ export default function Home() {
                       {isExpanded && (
                         <div className="mt-1.5 space-y-1">
                           {thisItems.map(item => (
-                            <div key={item.id} className="flex items-center gap-1.5">
+                            <div key={item.id}
+                            draggable={editingItemId !== item.id}
+                            onDragStart={e => { e.stopPropagation(); setDraggingItemId(item.id); setDragOverItemId(null) }}
+                            onDragEnd={e => { e.stopPropagation(); setDraggingItemId(null); setDragOverItemId(null) }}
+                            onDragOver={e => { if (!draggingItemId) return; e.preventDefault(); e.stopPropagation(); setDragOverItemId(item.id) }}
+                            onDragLeave={() => setDragOverItemId(null)}
+                            onDrop={async e => {
+                              if (!draggingItemId) return
+                              e.preventDefault(); e.stopPropagation()
+                              setDragOverItemId(null)
+                              await reorderCardItemsByDrag(thisItems, item.id)
+                              setDraggingItemId(null)
+                            }}
+                            className={`flex items-center gap-1.5 rounded transition-all ${dragOverItemId === item.id && draggingItemId !== item.id ? 'bg-[#fdf0ec] ring-1 ring-[#e8917a]' : ''} ${draggingItemId === item.id ? 'opacity-40' : ''}`}>
+                            <span className="text-[10px] text-[#d4b8b0] cursor-grab active:cursor-grabbing select-none leading-none shrink-0" title="Drag to reorder">⋮⋮</span>
                               <button onClick={() => toggleCardItem(item)}
                                 className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center shrink-0 transition-colors ${item.completed ? 'bg-[#4caf7d] border-[#4caf7d]' : 'border-[#d8c4bc] hover:border-[#e8917a]'}`}>
                                 {item.completed && <span className="text-white text-[8px]">✓</span>}
@@ -7726,7 +7769,21 @@ export default function Home() {
                         return (
                           <div className="mt-1 mb-1">
                             {items.map(item => (
-                              <div key={item.id} className="flex items-center gap-1.5 py-0.5 group/ci">
+                              <div key={item.id}
+                            draggable={editingLibItemId !== item.id}
+                            onDragStart={e => { e.stopPropagation(); setDraggingItemId(item.id); setDragOverItemId(null) }}
+                            onDragEnd={e => { e.stopPropagation(); setDraggingItemId(null); setDragOverItemId(null) }}
+                            onDragOver={e => { if (!draggingItemId) return; e.preventDefault(); e.stopPropagation(); setDragOverItemId(item.id) }}
+                            onDragLeave={() => setDragOverItemId(null)}
+                            onDrop={async e => {
+                              if (!draggingItemId) return
+                              e.preventDefault(); e.stopPropagation()
+                              setDragOverItemId(null)
+                              await reorderLibItemsByDrag(items, item.id)
+                              setDraggingItemId(null)
+                            }}
+                            className={`flex items-center gap-1.5 py-0.5 group/ci rounded transition-all ${dragOverItemId === item.id && draggingItemId !== item.id ? 'bg-[#fdf0ec] ring-1 ring-[#e8917a]' : ''} ${draggingItemId === item.id ? 'opacity-40' : ''}`}>
+                            <span className="text-[10px] text-[#d4b8b0] cursor-grab active:cursor-grabbing select-none leading-none shrink-0" title="Drag to reorder">⋮⋮</span>
                                 <button onClick={async () => {
                                   const updated = { ...item, completed: !item.completed }
                                   setLibChecklist(prev => prev.map(i => i.id === item.id ? updated : i))
